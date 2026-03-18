@@ -19,14 +19,18 @@ impl AppTitleBar {
         Self { title, items }
     }
 
+    pub fn with_owned(title: String, items: Vec<OwnedMenu>) -> Self {
+        Self { title, items }
+    }
+
     pub fn build(self) -> impl IntoElement {
-        let mut base = TitleBar::new().child(gpui_component::h_flex().w_full().pr_2().gap_2());
+        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
 
         for item in self.items {
-            base = base.child(Self::convert_menu(item));
+            menu_container = menu_container.child(Self::convert_menu(item)).cursor_pointer();
         }
 
-        base
+        TitleBar::new().child(menu_container)
     }
 
     fn convert_menu(menu_spec: OwnedMenu) -> impl IntoElement {

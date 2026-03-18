@@ -2,22 +2,29 @@ mod app_menus;
 
 use gpui::*;
 use gpui_component::{
-    Root,
+    Root, TitleBar,
     button::{Button, ButtonVariants},
     v_flex,
-    TitleBar,
 };
 use window_wrapper::{status_bar::status_bar, title_bar::AppTitleBar};
 
-pub struct Example;
+pub struct Example {
+    menus: Vec<OwnedMenu>,
+}
+
+impl Example {
+    pub fn new() -> Self {
+        Self {
+            menus: vec![app_menus::app_menus().owned()],
+        }
+    }
+}
+
 impl Render for Example {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
-            // .child(
-            //     // Render custom title bar on top of Root view.
-            //     standard_title_bar("App with Custom title bar", "Right Item"),
-            // )
+            .child(AppTitleBar::with_owned("App".to_string(), self.menus.clone()).build())
             .child(
                 div()
                     .id("window-body")
@@ -40,7 +47,7 @@ impl Render for Example {
 
 fn main() {
     let app = Application::new().with_assets(gpui_component_assets::Assets);
-    
+
     app.run(move |cx| {
         gpui_component::init(cx);
 
@@ -52,7 +59,7 @@ fn main() {
             };
 
             cx.open_window(window_options, |window, cx| {
-                let view = cx.new(|_| Example);
+                let view = cx.new(|_| Example::new());
                 cx.new(|cx| Root::new(view, window, cx))
             })
             .expect("Failed to open window");
