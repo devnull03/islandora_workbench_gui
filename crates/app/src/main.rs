@@ -1,3 +1,5 @@
+mod app_menus;
+
 use gpui::*;
 use gpui_component::{
     Root,
@@ -5,17 +7,17 @@ use gpui_component::{
     v_flex,
     TitleBar,
 };
-use window_wrapper::{status_bar, standard_title_bar};
+use window_wrapper::{status_bar::status_bar, title_bar::AppTitleBar};
 
 pub struct Example;
 impl Render for Example {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
-            .child(
-                // Render custom title bar on top of Root view.
-                standard_title_bar("App with Custom title bar", "Right Item"),
-            )
+            // .child(
+            //     // Render custom title bar on top of Root view.
+            //     standard_title_bar("App with Custom title bar", "Right Item"),
+            // )
             .child(
                 div()
                     .id("window-body")
@@ -38,7 +40,7 @@ impl Render for Example {
 
 fn main() {
     let app = Application::new().with_assets(gpui_component_assets::Assets);
-
+    
     app.run(move |cx| {
         gpui_component::init(cx);
 

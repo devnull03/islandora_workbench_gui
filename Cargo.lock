@@ -83,6 +83,9 @@ dependencies = [
  "gpui",
  "gpui-component",
  "gpui-component-assets",
+ "schemars",
+ "serde",
+ "serde_json",
  "window_wrapper",
 ]
 
@@ -6687,6 +6690,9 @@ version = "0.1.0"
 dependencies = [
  "gpui",
  "gpui-component",
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
