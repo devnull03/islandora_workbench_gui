@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/app",
+  "crates/window_wrapper",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+anyhow = "1"
+gpui = "0.2.2"
+gpui-component = "0.5.1"
+gpui-component-assets = "0.5.1"
