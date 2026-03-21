@@ -2,7 +2,7 @@ mod app_menus;
 
 use gpui::*;
 use gpui_component::{
-    Root, TitleBar,
+    ActiveTheme as _, Root, TitleBar,
     button::{Button, ButtonVariants},
     v_flex,
 };
@@ -21,7 +21,7 @@ impl Example {
 }
 
 impl Render for Example {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .child(AppTitleBar::with_owned("App".to_string(), self.menus.clone()).build())
@@ -39,9 +39,11 @@ impl Render for Example {
                             .primary()
                             .label("Let's Go!")
                             .on_click(|_, _, _| println!("Clicked!")),
-                    ),
+                    )
+                    .child(format!("bounds: {:?}", window.bounds()))
+                    .child(format!("size: {:?}", cx.theme()))
             )
-            .child(status_bar("Ready", "Ln 1, Col 1"))
+            .child(status_bar("Ready", "Ln 1, Col 1", window, cx))
     }
 }
 
@@ -51,13 +53,24 @@ fn main() {
     app.run(move |cx| {
         gpui_component::init(cx);
 
-        cx.spawn(async move |cx| {
-            let window_options = WindowOptions {
-                // Setup GPUI to use custom title bar
-                titlebar: Some(TitleBar::title_bar_options()),
-                ..Default::default()
-            };
+        const WINDOW_SIZE_MULTIPLIER: f32 = 1.6;
+        let bounds = Bounds::centered(
+            None,
+            size(
+                px(300.0 * WINDOW_SIZE_MULTIPLIER),
+                px(400.0 * WINDOW_SIZE_MULTIPLIER),
+            ),
+            cx,
+        );
 
+        let window_options = WindowOptions {
+            // Setup GPUI to use custom title bar
+            titlebar: Some(TitleBar::title_bar_options()),
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            ..Default::default()
+        };
+
+        cx.spawn(async move |cx| {
             cx.open_window(window_options, |window, cx| {
                 let view = cx.new(|_| Example::new());
                 cx.new(|cx| Root::new(view, window, cx))
