@@ -5,32 +5,23 @@ use gpui_component::{
     menu::{DropdownMenu, PopupMenu},
 };
 
+#[derive(IntoElement)]
 pub struct AppTitleBar {
-    title: String,
     items: Vec<OwnedMenu>,
 }
 
 impl AppTitleBar {
-    pub fn new(title: String, menu_items: Vec<Menu>) -> Self {
-        let mut items: Vec<OwnedMenu> = vec![];
-        for menu in menu_items {
-            items.push(menu.owned());
-        }
-        Self { title, items }
+    pub fn new(cx: &App) -> Self {
+        let menu_items = cx.get_menus().unwrap_or_default();
+        // let mut items: Vec<OwnedMenu> = vec![];
+        // for menu in menu_items.into_iter() {
+        //     items.push(menu.owned());
+        // }
+        Self { items: menu_items }
     }
 
-    pub fn with_owned(title: String, items: Vec<OwnedMenu>) -> Self {
-        Self { title, items }
-    }
-
-    pub fn build(self) -> impl IntoElement {
-        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
-
-        for item in self.items {
-            menu_container = menu_container.child(Self::convert_menu(item)).cursor_pointer();
-        }
-
-        TitleBar::new().child(menu_container)
+    pub fn with_owned(items: Vec<OwnedMenu>) -> Self {
+        Self { items }
     }
 
     fn convert_menu(menu_spec: OwnedMenu) -> impl IntoElement {
@@ -84,5 +75,17 @@ impl AppTitleBar {
                 submenu
             },
         ))
+    }
+}
+
+impl RenderOnce for AppTitleBar {
+    fn render(self, _: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
+
+        for item in self.items.clone() {
+            menu_container = menu_container.child(Self::convert_menu(item)).cursor_pointer();
+        }
+
+        TitleBar::new().child(menu_container)
     }
 }

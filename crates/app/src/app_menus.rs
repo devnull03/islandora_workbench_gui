@@ -6,7 +6,8 @@ use window_wrapper::{
     // MenuItem,
 };
 
-pub fn app_menus() -> Menu {
+pub fn app_menus() -> Vec<Menu> {
+    vec![
         Menu {
             name: "App".into(),
             items: vec![
@@ -28,4 +29,5 @@ pub fn app_menus() -> Menu {
         //         MenuItem::action("Open…", workspace::actions::Open),
         //     ],
         // },
+    ]
 }

@@ -2,29 +2,30 @@ mod app_menus;
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme as _, Root, TitleBar,
+    Root, TitleBar,
     button::{Button, ButtonVariants},
     v_flex,
 };
-use window_wrapper::{status_bar::status_bar, title_bar::AppTitleBar};
+use window_wrapper::{
+    status_bar::{StatusBar, StatusBarRegistry},
+    title_bar::AppTitleBar,
+};
 
-pub struct Example {
-    menus: Vec<OwnedMenu>,
-}
+use crate::app_menus::app_menus;
+
+pub struct Example {}
 
 impl Example {
     pub fn new() -> Self {
-        Self {
-            menus: vec![app_menus::app_menus().owned()],
-        }
+        Self {}
     }
 }
 
 impl Render for Example {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
-            .child(AppTitleBar::with_owned("App".to_string(), self.menus.clone()).build())
+            .child(AppTitleBar::new(cx))
             .child(
                 div()
                     .id("window-body")
@@ -33,17 +34,30 @@ impl Render for Example {
                     .flex_1()
                     .items_center()
                     .justify_center()
-                    .child("Hello, World!")
                     .child(
-                        Button::new("ok")
+                        Button::new("uhh")
                             .primary()
-                            .label("Let's Go!")
-                            .on_click(|_, _, _| println!("Clicked!")),
-                    )
-                    .child(format!("bounds: {:?}", window.bounds()))
-                    .child(format!("size: {:?}", cx.theme()))
+                            .label("test")
+                            .on_click(|_, _, _| {
+                                // if let Some(registry) = cx.try_global::<StatusBarRegistry>() {
+                                //     registry.add_left(cx.new_view(|_| DynamicItem {
+                                //         text: "Added Later!".into(),
+                                //     }));
+                                // }
+                                println!("helo");
+                            }),
+                    ),
             )
-            .child(status_bar("Ready", "Ln 1, Col 1", window, cx))
+            .child(cx.new(|_| StatusBar::new()))
+    }
+}
+
+struct WindowBoundsDebug;
+impl Render for WindowBoundsDebug {
+    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let width = window.bounds().size.width;
+        let height = window.bounds().size.height;
+        div().child(format!("{width} x {height}"))
     }
 }
 
@@ -53,7 +67,12 @@ fn main() {
     app.run(move |cx| {
         gpui_component::init(cx);
 
-        const WINDOW_SIZE_MULTIPLIER: f32 = 1.6;
+        let mut registry = StatusBarRegistry::new();
+        registry.add_right(cx.new(|_| WindowBoundsDebug));
+        cx.set_global(registry);
+
+        cx.set_menus(app_menus());
+        const WINDOW_SIZE_MULTIPLIER: f32 = 2.0;
         let bounds = Bounds::centered(
             None,
             size(
@@ -63,10 +82,13 @@ fn main() {
             cx,
         );
 
+        let min_size = Size::new(px(520.0), px(300.0));
+
         let window_options = WindowOptions {
             // Setup GPUI to use custom title bar
             titlebar: Some(TitleBar::title_bar_options()),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(min_size),
             ..Default::default()
         };
 

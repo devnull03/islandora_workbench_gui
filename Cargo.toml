@@ -4,6 +4,7 @@ members = [
   "crates/app",
   "crates/window_wrapper",
 ]
+default-members = ["crates/app"]
 
 [workspace.package]
 version = "0.1.0"
