@@ -10,7 +10,7 @@ use window_wrapper::{
 };
 
 use crate::app_menus::{app_menus, OpenSettings};
-use crate::settings::SettingsWindow;
+use crate::settings::{AppSettings, SettingsWindow};
 use crate::workspace::Workspace;
 
 pub struct App {
@@ -55,6 +55,8 @@ fn main() {
     app.run(move |cx| {
         gpui_component::init(cx);
 
+        cx.set_global(AppSettings::default());
+
         let mut registry = StatusBarRegistry::new();
         registry.add_right(cx.new(|_| WindowBoundsDebug));
         cx.set_global(registry);
@@ -65,14 +67,14 @@ fn main() {
         cx.on_action(|_: &OpenSettings, cx| {
             let bounds = Bounds::centered(
                 None,
-                size(px(400.0), px(300.0)),
+                size(px(1000.0), px(800.0)),
                 cx,
             );
 
             let window_options = WindowOptions {
                 titlebar: Some(TitleBar::title_bar_options()),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(Size::new(px(300.0), px(200.0))),
+                window_min_size: Some(Size::new(px(600.0), px(400.0))),
                 ..Default::default()
             };
 
