@@ -39,11 +39,6 @@ impl Render for Example {
                             .primary()
                             .label("test")
                             .on_click(|_, _, _| {
-                                // if let Some(registry) = cx.try_global::<StatusBarRegistry>() {
-                                //     registry.add_left(cx.new_view(|_| DynamicItem {
-                                //         text: "Added Later!".into(),
-                                //     }));
-                                // }
                                 println!("helo");
                             }),
                     ),
@@ -85,7 +80,6 @@ fn main() {
         let min_size = Size::new(px(520.0), px(300.0));
 
         let window_options = WindowOptions {
-            // Setup GPUI to use custom title bar
             titlebar: Some(TitleBar::title_bar_options()),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(min_size),

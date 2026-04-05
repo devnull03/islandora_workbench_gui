@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
   "crates/app",
-  "crates/window_wrapper",
+  "crates/workbench-integration",
+  "crates/window-wrapper",
+  "crates/islandora-preprocessor",
 ]
 default-members = ["crates/app"]
 
