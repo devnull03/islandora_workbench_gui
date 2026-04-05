@@ -1,3 +1,6 @@
+//! Islandora Workbench process integration.
+#![allow(dead_code)] // WbInfo / install path reserved for upcoming ingest wiring
+
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

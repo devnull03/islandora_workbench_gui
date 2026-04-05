@@ -9,6 +9,12 @@ pub struct StatusBarRegistry {
 
 impl Global for StatusBarRegistry {}
 
+impl Default for StatusBarRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatusBarRegistry {
     pub fn new() -> Self {
         Self {
@@ -27,6 +33,12 @@ impl StatusBarRegistry {
 }
 
 pub struct StatusBar;
+
+impl Default for StatusBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl StatusBar {
     pub fn new() -> Self {

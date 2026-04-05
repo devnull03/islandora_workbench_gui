@@ -13,6 +13,8 @@ use gpui_component::{
 };
 use workbench_integration::{run_command_streaming, StreamLine};
 
+use crate::path_picker::PathPickerBrowseRow;
+
 pub struct Workspace {
     config_path: Entity<InputState>,
     working_directory: Entity<InputState>,
@@ -50,14 +52,14 @@ impl Workspace {
 
         let input = input.clone();
         cx.spawn_in(window, async move |_, cx| {
-            if let Ok(Ok(Some(paths))) = receiver.await {
-                if let Some(path) = paths.first() {
-                    cx.update(|window, cx| {
-                        input.update(cx, |state, cx| {
-                            state.set_value(path.to_string_lossy().to_string(), window, cx);
-                        });
-                    }).ok();
-                }
+            if let Ok(Ok(Some(paths))) = receiver.await
+                && let Some(path) = paths.first()
+            {
+                cx.update(|window, cx| {
+                    input.update(cx, |state, cx| {
+                        state.set_value(path.to_string_lossy().to_string(), window, cx);
+                    });
+                }).ok();
             }
         }).detach();
     }
@@ -120,7 +122,8 @@ impl Workspace {
         }).detach();
     }
 
-    /// Run a command and stream its output to logs
+    /// Run a command and stream its output to logs (reserved for workbench CLI integration).
+    #[allow(dead_code)]
     fn run_command(&self, program: &str, args: &[&str], window: &mut Window, cx: &mut Context<Self>) {
         self.clear_logs(window, cx);
         self.append_log(&format!("[INFO] Running: {} {}", program, args.join(" ")), window, cx);
@@ -173,20 +176,22 @@ impl Render for Workspace {
                         v_flex()
                             .gap_1()
                             .child(Label::new("Config File"))
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(div().flex_1().child(Input::new(&self.config_path)))
-                                    .child(
-                                        Button::new("browse-config")
-                                            .icon(IconName::FolderOpen)
-                                            .outline()
-                                            .small()
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.get_file(window, cx, &this.config_path, "Select config file".into(), false);
-                                            }))
-                                    )
-                            )
+                            .child(PathPickerBrowseRow {
+                                input: self.config_path.clone(),
+                                browse: Button::new("browse-config")
+                                    .icon(IconName::FolderOpen)
+                                    .outline()
+                                    .small()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.get_file(
+                                            window,
+                                            cx,
+                                            &this.config_path,
+                                            "Select config file".into(),
+                                            false,
+                                        );
+                                    })),
+                            })
                             .child(
                                 Label::new("YAML configuration file for the ingest")
                                     .text_xs()
@@ -197,20 +202,22 @@ impl Render for Workspace {
                         v_flex()
                             .gap_1()
                             .child(Label::new("Working Directory"))
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(div().flex_1().child(Input::new(&self.working_directory)))
-                                    .child(
-                                        Button::new("browse-dir")
-                                            .icon(IconName::FolderOpen)
-                                            .outline()
-                                            .small()
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.get_file(window, cx, &this.working_directory, "Select working directory".into(), true);
-                                            }))
-                                    )
-                            )
+                            .child(PathPickerBrowseRow {
+                                input: self.working_directory.clone(),
+                                browse: Button::new("browse-dir")
+                                    .icon(IconName::FolderOpen)
+                                    .outline()
+                                    .small()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.get_file(
+                                            window,
+                                            cx,
+                                            &this.working_directory,
+                                            "Select working directory".into(),
+                                            true,
+                                        );
+                                    })),
+                            })
                             .child(
                                 Label::new("Directory containing assets to ingest")
                                     .text_xs()
@@ -218,27 +225,27 @@ impl Render for Workspace {
                             ),
                     )
                     .child(
-                h_flex()
-                    .justify_end()
-                    .gap_2()
-                    .child(
-                        Button::new("check")
-                            .outline()
-                            .label("Check")
-                            .on_click(|_, _, _| {
-                                println!("Check clicked");
-                            }),
+                        h_flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(
+                                Button::new("check")
+                                    .outline()
+                                    .label("Check")
+                                    .on_click(|_, _, _| {
+                                        println!("Check clicked");
+                                    }),
+                            )
+                            .child(
+                                Button::new("run-ingest")
+                                    .primary()
+                                    .label("Run Ingest")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.run_dummy_ingest(window, cx);
+                                    })),
+                            ),
                     )
-                    .child(
-                        Button::new("run-ingest")
-                            .primary()
-                            .label("Run Ingest")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.run_dummy_ingest(window, cx);
-                            })),
-                    ),
-            ) 
-            ) 
+            )
             .child(
                 v_flex()
                     .h_1_2()

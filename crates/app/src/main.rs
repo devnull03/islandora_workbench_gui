@@ -1,4 +1,5 @@
 mod app_menus;
+mod path_picker;
 mod settings;
 mod workspace;
 
@@ -9,7 +10,7 @@ use window_wrapper::{
     title_bar::AppTitleBar,
 };
 
-use crate::app_menus::{app_menus, OpenSettings};
+use crate::app_menus::{OpenSettings, app_menus};
 use crate::settings::{AppSettings, SettingsWindow};
 use crate::workspace::Workspace;
 
@@ -63,13 +64,8 @@ fn main() {
 
         cx.set_menus(app_menus());
 
-        // Handle OpenSettings action globally
         cx.on_action(|_: &OpenSettings, cx| {
-            let bounds = Bounds::centered(
-                None,
-                size(px(1000.0), px(800.0)),
-                cx,
-            );
+            let bounds = Bounds::centered(None, size(px(1000.0), px(800.0)), cx);
 
             let window_options = WindowOptions {
                 titlebar: Some(TitleBar::title_bar_options()),
@@ -87,15 +83,7 @@ fn main() {
             })
             .detach();
         });
-        const WINDOW_SIZE_MULTIPLIER: f32 = 2.0;
-        let bounds = Bounds::centered(
-            None,
-            size(
-                px(300.0 * WINDOW_SIZE_MULTIPLIER),
-                px(400.0 * WINDOW_SIZE_MULTIPLIER),
-            ),
-            cx,
-        );
+        let bounds = Bounds::centered(None, size(px(600.0), px(800.0)), cx);
 
         let min_size = Size::new(px(520.0), px(300.0));
 
