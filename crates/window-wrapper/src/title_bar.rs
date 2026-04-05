@@ -1,8 +1,6 @@
 use gpui::*;
 use gpui_component::{
-    TitleBar,
-    button::Button,
-    menu::{DropdownMenu, PopupMenu},
+    Sizable, TitleBar, button::{Button, ButtonVariants}, menu::{DropdownMenu, PopupMenu}
 };
 
 #[derive(IntoElement)]
@@ -25,7 +23,10 @@ impl AppTitleBar {
     }
 
     fn convert_menu(menu_spec: OwnedMenu) -> impl IntoElement {
-        Button::new("menu-btn")
+        let button_id: SharedString = format!("menu-btn-{}", menu_spec.name).into();
+        Button::new(button_id)
+            .small()
+            .ghost().compact()
             .label(menu_spec.name.clone())
             .dropdown_menu(move |mut menu, window, cx| {
                 for item in menu_spec.items.clone() {

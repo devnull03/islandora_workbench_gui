@@ -1,27 +1,30 @@
 mod app_menus;
+mod settings;
+mod workspace;
 
 use gpui::*;
-use gpui_component::{
-    Root, TitleBar,
-    button::{Button, ButtonVariants},
-    v_flex,
-};
+use gpui_component::{Root, TitleBar, v_flex};
 use window_wrapper::{
     status_bar::{StatusBar, StatusBarRegistry},
     title_bar::AppTitleBar,
 };
 
-use crate::app_menus::app_menus;
+use crate::app_menus::{app_menus, OpenSettings};
+use crate::settings::SettingsWindow;
+use crate::workspace::Workspace;
 
-pub struct Example {}
+pub struct App {
+    workspace: Entity<Workspace>,
+}
 
-impl Example {
-    pub fn new() -> Self {
-        Self {}
+impl App {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let workspace = cx.new(|cx| Workspace::new(window, cx));
+        Self { workspace }
     }
 }
 
-impl Render for Example {
+impl Render for App {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
@@ -29,19 +32,9 @@ impl Render for Example {
             .child(
                 div()
                     .id("window-body")
-                    .p_5()
                     .w_full()
                     .flex_1()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        Button::new("uhh")
-                            .primary()
-                            .label("test")
-                            .on_click(|_, _, _| {
-                                println!("helo");
-                            }),
-                    ),
+                    .child(self.workspace.clone()),
             )
             .child(cx.new(|_| StatusBar::new()))
     }
@@ -67,6 +60,31 @@ fn main() {
         cx.set_global(registry);
 
         cx.set_menus(app_menus());
+
+        // Handle OpenSettings action globally
+        cx.on_action(|_: &OpenSettings, cx| {
+            let bounds = Bounds::centered(
+                None,
+                size(px(400.0), px(300.0)),
+                cx,
+            );
+
+            let window_options = WindowOptions {
+                titlebar: Some(TitleBar::title_bar_options()),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_min_size: Some(Size::new(px(300.0), px(200.0))),
+                ..Default::default()
+            };
+
+            cx.spawn(async move |cx| {
+                cx.open_window(window_options, |window, cx| {
+                    let view = cx.new(|cx| SettingsWindow::new(window, cx));
+                    cx.new(|cx| Root::new(view, window, cx))
+                })
+                .ok();
+            })
+            .detach();
+        });
         const WINDOW_SIZE_MULTIPLIER: f32 = 2.0;
         let bounds = Bounds::centered(
             None,
@@ -88,7 +106,7 @@ fn main() {
 
         cx.spawn(async move |cx| {
             cx.open_window(window_options, |window, cx| {
-                let view = cx.new(|_| Example::new());
+                let view = cx.new(|cx| App::new(window, cx));
                 cx.new(|cx| Root::new(view, window, cx))
             })
             .expect("Failed to open window");
