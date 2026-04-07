@@ -11,7 +11,7 @@ use window_wrapper::{
 };
 
 use crate::app_menus::{OpenSettings, app_menus};
-use crate::settings::{AppSettings, SettingsWindow};
+use crate::settings::{AppSettings, SettingsWindow, SettingsWindowHandle};
 use crate::workspace::Workspace;
 
 pub struct App {
@@ -57,6 +57,7 @@ fn main() {
         gpui_component::init(cx);
 
         cx.set_global(AppSettings::default());
+        cx.set_global(SettingsWindowHandle::default());
 
         let mut registry = StatusBarRegistry::new();
         registry.add_right(cx.new(|_| WindowBoundsDebug));
@@ -65,6 +66,16 @@ fn main() {
         cx.set_menus(app_menus());
 
         cx.on_action(|_: &OpenSettings, cx| {
+            let state = cx.global::<SettingsWindowHandle>();
+            
+            if let Some(handle) = &state.handle {
+                if handle.update(cx, |_, _, _| {}).is_ok() {
+                    return;
+                } else {
+                    cx.global_mut::<SettingsWindowHandle>().handle = None;
+                }
+            }
+
             let bounds = Bounds::centered(None, size(px(1000.0), px(800.0)), cx);
 
             let window_options = WindowOptions {
@@ -75,11 +86,16 @@ fn main() {
             };
 
             cx.spawn(async move |cx| {
-                cx.open_window(window_options, |window, cx| {
+                let result = cx.open_window(window_options, |window, cx| {
                     let view = cx.new(|cx| SettingsWindow::new(window, cx));
                     cx.new(|cx| Root::new(view, window, cx))
-                })
-                .ok();
+                });
+                
+                if let Ok(window_handle) = result {
+                    cx.update(|cx| {
+                        cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
+                    }).ok();
+                }
             })
             .detach();
         });
