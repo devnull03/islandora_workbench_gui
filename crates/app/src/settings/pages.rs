@@ -1,9 +1,126 @@
-use gpui_component::setting::{SettingGroup, SettingPage};
+use std::{env, path::PathBuf};
+
+use gpui::*;
+use gpui_component::{
+    IconName,
+    Sizable,
+    button::Button,
+    h_flex,
+    input::InputState,
+    setting::{SettingGroup, SettingItem, SettingPage, SettingField},
+};
 
 use super::Setting;
 use super::custom_fields::{
     add_config_button, add_server_button, saved_configs_field, saved_servers_field, TASK_OPTIONS,
 };
+use super::AppSettings;
+use crate::path_picker::PathPickerApp;
+
+fn find_on_path(candidates: &[&str]) -> Option<PathBuf> {
+    let path = env::var_os("PATH")?;
+    for dir in env::split_paths(&path) {
+        for name in candidates {
+            let p = dir.join(name);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+fn exe_candidates(base: &'static str) -> Vec<&'static str> {
+    if cfg!(windows) {
+        // Avoid concat! here because `base` is not a literal.
+        if base == "python" {
+            vec!["python.exe", "python"]
+        } else if base == "uv" {
+            vec!["uv.exe", "uv"]
+        } else {
+            vec![base]
+        }
+    } else {
+        vec![base]
+    }
+}
+
+fn picker_with_path_button(
+    key: &'static str,
+    label: &'static str,
+    description: &'static str,
+    prompt: &'static str,
+    path_candidates: Vec<&'static str>,
+) -> SettingItem {
+    let prompt: SharedString = prompt.into();
+    SettingItem::new(
+        label,
+        SettingField::render(move |options, window, cx| {
+            let want = AppSettings::get(cx)
+                .values
+                .get(key)
+                .map(|v| v.text())
+                .unwrap_or_default();
+
+            let input = window.use_keyed_state(
+                SharedString::from(format!(
+                    "path-picker-pathbtn-{}-{}-{}",
+                    options.page_ix, options.group_ix, options.item_ix
+                )),
+                cx,
+                |window, cx| {
+                    InputState::new(window, cx)
+                        .placeholder("No file selected...")
+                        .default_value(want.clone())
+                },
+            );
+
+            input.update(cx, |state, cx| {
+                if state.value() != want {
+                    state.set_value(want.to_string(), window, cx);
+                }
+            });
+
+            let on_pick_key = key;
+            let on_path_key = key;
+            let path_candidates = path_candidates.clone();
+
+            h_flex()
+                .gap_2()
+                .w_full()
+                .child(PathPickerApp {
+                    layout: options.layout,
+                    field_size: options.size,
+                    button_size: Some(options.size),
+                    button_id: SharedString::from(format!("browse-{}", key)),
+                    files: true,
+                    directories: false,
+                    prompt: prompt.clone(),
+                    input: input.clone(),
+                    on_pick: std::sync::Arc::new(move |val, cx| {
+                        AppSettings::set_text(on_pick_key, val, cx);
+                    }),
+                })
+                .child(
+                    Button::new(SharedString::from(format!("get-from-path-{}", key)))
+                        .outline()
+                        .icon(IconName::Redo2)
+                        .tooltip("Get from PATH")
+                        .with_size(options.size)
+                        .on_click(move |_, _, cx| {
+                            if let Some(p) = find_on_path(&path_candidates) {
+                                AppSettings::set_text(
+                                    on_path_key,
+                                    p.to_string_lossy().to_string().into(),
+                                    cx,
+                                );
+                            }
+                        }),
+                )
+        }),
+    )
+    .description(description)
+}
 
 pub fn build_pages() -> Vec<SettingPage> {
     vec![
@@ -20,20 +137,26 @@ pub fn build_pages() -> Vec<SettingPage> {
             SettingGroup::new()
                 .title("Python Environment")
                 .items(vec![
-                    Setting::FilePicker {
-                        key: "python_path",
-                        label: "Python Path",
-                        description: "Path to Python executable",
-                        prompt: "Select Python executable",
-                    }
-                    .into(),
-                    Setting::FilePicker {
-                        key: "uv_path",
-                        label: "UV Path",
-                        description: "Path to UV package manager (optional)",
-                        prompt: "Select UV executable",
-                    }
-                    .into(),
+                    picker_with_path_button(
+                        "python_path",
+                        "Python Path",
+                        "Path to Python executable",
+                        "Select Python executable",
+                        {
+                            let mut c = exe_candidates("python");
+                            if !cfg!(windows) {
+                                c.push("python3");
+                            }
+                            c
+                        },
+                    ),
+                    picker_with_path_button(
+                        "uv_path",
+                        "UV Path",
+                        "Path to UV package manager (optional)",
+                        "Select UV executable",
+                        exe_candidates("uv"),
+                    ),
                     Setting::Switch {
                         key: "use_uv",
                         label: "Use UV",

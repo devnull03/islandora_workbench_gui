@@ -8,10 +8,11 @@ use gpui_component::{Root, TitleBar, v_flex};
 use window_wrapper::{
     status_bar::{StatusBar, StatusBarRegistry},
     title_bar::AppTitleBar,
+    OpenBrowser,
 };
 
 use crate::app_menus::{OpenSettings, app_menus};
-use crate::settings::{AppSettings, SettingsWindow, SettingsWindowHandle};
+use crate::settings::{SettingsPersistence, SettingsWindow, SettingsWindowHandle, load_app_settings, SettingsWriter};
 use crate::workspace::Workspace;
 
 pub struct App {
@@ -56,7 +57,11 @@ fn main() {
     app.run(move |cx| {
         gpui_component::init(cx);
 
-        cx.set_global(AppSettings::default());
+        let settings = load_app_settings().unwrap_or_default();
+        cx.set_global(settings);
+        cx.set_global(SettingsPersistence {
+            writer: Some(SettingsWriter::start()),
+        });
         cx.set_global(SettingsWindowHandle::default());
 
         let mut registry = StatusBarRegistry::new();
@@ -64,6 +69,10 @@ fn main() {
         cx.set_global(registry);
 
         cx.set_menus(app_menus());
+
+        cx.on_action(|action: &OpenBrowser, cx| {
+            cx.open_url(&action.url);
+        });
 
         cx.on_action(|_: &OpenSettings, cx| {
             let state = cx.global::<SettingsWindowHandle>();

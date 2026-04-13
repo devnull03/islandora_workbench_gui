@@ -103,9 +103,8 @@ impl<B: IntoElement + 'static> RenderOnce for PathPickerBrowseRow<B> {
             .child(
                 div()
                     .flex_1()
-                    .max_w(px(250.))
                     .min_w(px(0.))
-                    .child(Input::new(&self.input).disabled(true)),
+                    .child(Input::new(&self.input).disabled(true).w_full()),
             )
             .child(self.browse)
     }

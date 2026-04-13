@@ -25,18 +25,40 @@ pub fn app_menus() -> Vec<Menu> {
         Menu {
             name: "Github".into(),
             items: vec![
-                MenuItem::action(
-                    "Repository",
-                    OpenBrowser {
-                        url: "https://github.com/zed-industries/zed".into(),
-                    },
-                ),
-                MenuItem::action(
-                    "Issues",
-                    OpenBrowser {
-                        url: "https://github.com/zed-industries/zed/issues".into(),
-                    },
-                ),
+                MenuItem::submenu(Menu {
+                    name: "Islandora Workbench".into(),
+                    items: vec![
+                        MenuItem::action(
+                            "Repository",
+                            OpenBrowser {
+                                url: "https://github.com/mjordan/islandora_workbench".into(),
+                            },
+                        ),
+                        MenuItem::action(
+                            "Issues",
+                            OpenBrowser {
+                                url: "https://github.com/mjordan/islandora_workbench/issues".into(),
+                            },
+                        ),
+                    ],
+                }),
+                MenuItem::submenu(Menu {
+                    name: "GUI".into(),
+                    items: vec![
+                        MenuItem::action(
+                            "Repository",
+                            OpenBrowser {
+                                url: "https://github.com/devnull03/islandora_workbench_gui".into(),
+                            },
+                        ),
+                        MenuItem::action(
+                            "Issues",
+                            OpenBrowser {
+                                url: "https://github.com/devnull03/islandora_workbench_gui/issues".into(),
+                            },
+                        ),
+                    ],
+                }),
             ],
         },
     ]

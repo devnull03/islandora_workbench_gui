@@ -1,14 +1,15 @@
 mod custom_fields;
+mod db;
 mod pages;
+
+pub use db::{SettingsWriter, load_app_settings};
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, StyledExt, TitleBar,
-    button::Button,
-    h_flex,
+    StyledExt, TitleBar,
     input::InputState,
     label::Label,
     scroll::ScrollableElement,
@@ -60,7 +61,7 @@ impl From<Setting> for SettingItem {
                 SettingField::input(
                     move |cx: &App| AppSettings::get(cx).values.get(key).map(|v| v.text()).unwrap_or_default(),
                     move |val: SharedString, cx: &mut App| {
-                        AppSettings::get_mut(cx).values.insert(key.into(), Val::Text(val));
+                        AppSettings::set_text(key, val, cx);
                     },
                 ),
             )
@@ -71,7 +72,7 @@ impl From<Setting> for SettingItem {
                 SettingField::switch(
                     move |cx: &App| AppSettings::get(cx).values.get(key).map(|v| v.bool()).unwrap_or(false),
                     move |val: bool, cx: &mut App| {
-                        AppSettings::get_mut(cx).values.insert(key.into(), Val::Bool(val));
+                        AppSettings::set_bool(key, val, cx);
                     },
                 ),
             )
@@ -88,7 +89,7 @@ impl From<Setting> for SettingItem {
                         opts,
                         move |cx: &App| AppSettings::get(cx).values.get(key).map(|v| v.text()).unwrap_or_default(),
                         move |val: SharedString, cx: &mut App| {
-                            AppSettings::get_mut(cx).values.insert(key.into(), Val::Text(val));
+                            AppSettings::set_text(key, val, cx);
                         },
                     ),
                 )
@@ -146,7 +147,7 @@ fn build_path_picker(
                 prompt: prompt.clone(),
                 input,
                 on_pick: Arc::new(move |val, cx| {
-                    AppSettings::get_mut(cx).values.insert(key.into(), Val::Text(val));
+                    AppSettings::set_text(key, val, cx);
                 }),
             }
         }),
@@ -205,9 +206,41 @@ pub struct AppSettings {
 
 impl Global for AppSettings {}
 
+#[derive(Clone, Default)]
+pub struct SettingsPersistence {
+    pub writer: Option<SettingsWriter>,
+}
+
+impl Global for SettingsPersistence {}
+
 impl AppSettings {
     pub fn get(cx: &App) -> &Self { cx.global::<Self>() }
     pub fn get_mut(cx: &mut App) -> &mut Self { cx.global_mut::<Self>() }
+
+    /// Single mutation entrypoint so we can trigger persistence.
+    pub fn update<R>(cx: &mut App, f: impl FnOnce(&mut Self) -> R) -> R {
+        let r = {
+            let s = cx.global_mut::<Self>();
+            f(s)
+        };
+        if let Some(writer) = cx.global::<SettingsPersistence>().writer.clone() {
+            let snapshot = cx.global::<Self>().clone();
+            writer.enqueue_save(&snapshot);
+        }
+        r
+    }
+
+    pub fn set_text(key: &'static str, val: SharedString, cx: &mut App) {
+        Self::update(cx, |s| {
+            s.values.insert(key.into(), Val::Text(val));
+        });
+    }
+
+    pub fn set_bool(key: &'static str, val: bool, cx: &mut App) {
+        Self::update(cx, |s| {
+            s.values.insert(key.into(), Val::Bool(val));
+        });
+    }
 
     pub fn add_task_config(cx: &mut App) {
         let s = Self::get(cx);
@@ -219,18 +252,20 @@ impl AppSettings {
             return;
         }
 
-        let s = Self::get_mut(cx);
-        s.task_configs.push(TaskConfig { label, task_name, file_path });
-        s.values.remove("new_task_label");
-        s.values.remove("new_task_name");
-        s.values.remove("new_task_path");
+        Self::update(cx, |s| {
+            s.task_configs.push(TaskConfig { label, task_name, file_path });
+            s.values.remove("new_task_label");
+            s.values.remove("new_task_name");
+            s.values.remove("new_task_path");
+        });
     }
 
     pub fn remove_task_config(index: usize, cx: &mut App) {
-        let s = Self::get_mut(cx);
-        if index < s.task_configs.len() {
-            s.task_configs.remove(index);
-        }
+        Self::update(cx, |s| {
+            if index < s.task_configs.len() {
+                s.task_configs.remove(index);
+            }
+        });
     }
 
     pub fn add_server_config(cx: &mut App) {
@@ -243,18 +278,20 @@ impl AppSettings {
             return;
         }
 
-        let s = Self::get_mut(cx);
-        s.server_configs.push(ServerConfig { label, server_url, credentials_file });
-        s.values.remove("new_server_label");
-        s.values.remove("new_server_url");
-        s.values.remove("new_credentials_file");
+        Self::update(cx, |s| {
+            s.server_configs.push(ServerConfig { label, server_url, credentials_file });
+            s.values.remove("new_server_label");
+            s.values.remove("new_server_url");
+            s.values.remove("new_credentials_file");
+        });
     }
 
     pub fn remove_server_config(index: usize, cx: &mut App) {
-        let s = Self::get_mut(cx);
-        if index < s.server_configs.len() {
-            s.server_configs.remove(index);
-        }
+        Self::update(cx, |s| {
+            if index < s.server_configs.len() {
+                s.server_configs.remove(index);
+            }
+        });
     }
 }
 
@@ -278,7 +315,7 @@ impl SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .child(TitleBar::new().child(Label::new("Settings").font_semibold()))
@@ -286,25 +323,7 @@ impl Render for SettingsWindow {
                 div()
                     .flex_1()
                     .overflow_y_scrollbar()
-                    .child(Settings::new("app-settings").pages(build_pages()))
-            )
-            .child(
-                h_flex()
-                    .p_4()
-                    .justify_end()
-                    .border_t_1()
-                    .border_color(cx.theme().colors.border)
-                    .child(
-                        Button::new("close")
-                            .outline()
-                            .label("Close")
-                            .on_click(move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
-                                cx.update_global::<SettingsWindowHandle, _>(|state, _| {
-                                    state.handle = None;
-                                });
-                                window.remove_window();
-                            })
-                    )
+                    .child(Settings::new("app-settings").pages(build_pages())),
             )
     }
 }
