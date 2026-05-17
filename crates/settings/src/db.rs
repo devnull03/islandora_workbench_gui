@@ -3,6 +3,8 @@
 //! Implementation notes:
 //! - Stores one JSON blob in SQLite (single-row KV table).
 //! - Writes are debounced in a background thread; mutations enqueue snapshots.
+//! - Includes optional main window size and display for restore on launch (not position).
+//! - JSON includes `settings_version` for forward-compatible migrations.
 
 use std::{
     collections::HashMap,
@@ -17,7 +19,9 @@ use gpui::SharedString;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
-use super::{AppSettings, ServerConfig, TaskConfig, Val};
+use super::{
+    AppSettings, MainWindowBounds, ServerConfig, TaskConfig, Val, SETTINGS_SCHEMA_VERSION,
+};
 
 const APP_DIR: &str = "islandora_workbench_gui";
 const DB_FILE: &str = "settings.sqlite3";
@@ -43,11 +47,20 @@ struct PersistServerConfig {
     credentials_file: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+fn default_persist_settings_version() -> u32 {
+    1
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 struct PersistSettings {
+    /// Schema version of this blob; missing in older files defaults to `1`.
+    #[serde(default = "default_persist_settings_version")]
+    settings_version: u32,
     values: HashMap<String, PersistVal>,
     task_configs: Vec<PersistTaskConfig>,
     server_configs: Vec<PersistServerConfig>,
+    #[serde(default)]
+    main_window_bounds: Option<MainWindowBounds>,
 }
 
 impl From<&AppSettings> for PersistSettings {
@@ -84,7 +97,13 @@ impl From<&AppSettings> for PersistSettings {
             })
             .collect();
 
-        Self { values, task_configs, server_configs }
+        Self {
+            settings_version: SETTINGS_SCHEMA_VERSION,
+            values,
+            task_configs,
+            server_configs,
+            main_window_bounds: s.main_window_bounds.clone(),
+        }
     }
 }
 
@@ -122,17 +141,20 @@ impl From<PersistSettings> for AppSettings {
             })
             .collect();
 
-        Self { values, task_configs, server_configs }
+        Self {
+            values,
+            task_configs,
+            server_configs,
+            main_window_bounds: p.main_window_bounds,
+            settings_schema_version: p.settings_version,
+        }
     }
 }
 
-fn data_dir() -> Result<PathBuf> {
-    let base = dirs::data_local_dir().context("Failed to resolve local data dir")?;
-    Ok(base.join(APP_DIR))
-}
 
 fn db_path() -> Result<PathBuf> {
-    Ok(data_dir()?.join(DB_FILE))
+    let base = dirs::data_local_dir().context("Failed to resolve local data dir")?.join(APP_DIR);
+    Ok(base.join(DB_FILE))
 }
 
 fn ensure_schema(conn: &Connection) -> Result<()> {
@@ -183,7 +205,7 @@ fn save_app_settings_snapshot(snapshot: PersistSettings) -> Result<()> {
     let conn = open_db(&path)?;
     let json = serde_json::to_string(&snapshot).context("Serialize settings")?;
     conn.execute(
-        "INSERT INTO settings_kv(key, json) VALUES (?1, ?2)\n         ON CONFLICT(key) DO UPDATE SET json = excluded.json",
+        "INSERT INTO settings_kv(key, json) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET json = excluded.json",
         params![SETTINGS_KEY, json],
     )
     .context("Upsert settings row")?;

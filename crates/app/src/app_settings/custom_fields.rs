@@ -9,7 +9,7 @@ use gpui_component::{
     v_flex,
 };
 
-use super::{AppSettings, ServerConfig, TaskConfig};
+use settings::{AppSettings, ServerConfig, TaskConfig};
 
 pub const TASK_OPTIONS: &[(&str, &str)] = &[
     ("create", "create - Create new nodes"),

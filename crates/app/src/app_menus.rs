@@ -2,8 +2,6 @@ use gpui::*;
 
 use window_wrapper::{
     OpenBrowser,
-    // Menu,
-    // MenuItem,
 };
 
 actions!(nav, [OpenSettings]);

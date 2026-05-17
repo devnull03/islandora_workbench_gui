@@ -1,10 +1,14 @@
 mod app_menus;
-mod path_picker;
-mod settings;
+mod app_settings;
+mod select_items;
 mod workspace;
 
 use gpui::*;
 use gpui_component::{Root, TitleBar, v_flex};
+use settings::{
+    AppSettings, MainWindowBounds, SettingsPersistence, SettingsWindow, SettingsWindowHandle,
+    SettingsWriter, load_app_settings,
+};
 use window_wrapper::{
     status_bar::{StatusBar, StatusBarRegistry},
     title_bar::AppTitleBar,
@@ -12,17 +16,27 @@ use window_wrapper::{
 };
 
 use crate::app_menus::{OpenSettings, app_menus};
-use crate::settings::{SettingsPersistence, SettingsWindow, SettingsWindowHandle, load_app_settings, SettingsWriter};
+use crate::app_settings::build_pages;
 use crate::workspace::Workspace;
 
 pub struct App {
     workspace: Entity<Workspace>,
+    _main_window_bounds_sub: Subscription,
 }
 
 impl App {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let workspace = cx.new(|cx| Workspace::new(window, cx));
-        Self { workspace }
+        let _main_window_bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
+            let b = MainWindowBounds::capture_from_window(window, cx);
+            AppSettings::update(cx, |s| {
+                s.main_window_bounds = Some(b);
+            });
+        });
+        Self {
+            workspace,
+            _main_window_bounds_sub,
+        }
     }
 }
 
@@ -59,6 +73,7 @@ fn main() {
 
         let settings = load_app_settings().unwrap_or_default();
         cx.set_global(settings);
+        let (main_bounds, main_display) = AppSettings::get(cx).main_window_startup_placement(cx);
         cx.set_global(SettingsPersistence {
             writer: Some(SettingsWriter::start()),
         });
@@ -96,7 +111,7 @@ fn main() {
 
             cx.spawn(async move |cx| {
                 let result = cx.open_window(window_options, |window, cx| {
-                    let view = cx.new(|cx| SettingsWindow::new(window, cx));
+                    let view = cx.new(|cx| SettingsWindow::new(window, cx, build_pages));
                     cx.new(|cx| Root::new(view, window, cx))
                 });
                 
@@ -108,13 +123,12 @@ fn main() {
             })
             .detach();
         });
-        let bounds = Bounds::centered(None, size(px(600.0), px(800.0)), cx);
-
         let min_size = Size::new(px(520.0), px(300.0));
 
         let window_options = WindowOptions {
             titlebar: Some(TitleBar::title_bar_options()),
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_bounds: Some(WindowBounds::Windowed(main_bounds)),
+            display_id: main_display,
             window_min_size: Some(min_size),
             ..Default::default()
         };
