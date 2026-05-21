@@ -3,6 +3,7 @@ mod app_settings;
 mod select_items;
 mod workspace;
 mod helpers;
+mod status_items;
 
 use gpui::*;
 use gpui_component::{Root, TitleBar, v_flex};
@@ -11,12 +12,12 @@ use settings::{
     SettingsWriter, load_app_settings,
 };
 use window_wrapper::{
-    status_bar::{StatusBar, StatusBarRegistry},
+    status_bar::StatusBar,
     title_bar::AppTitleBar,
     OpenBrowser,
 };
 
-use crate::app_menus::{OpenSettings, app_menus};
+use crate::{app_menus::{OpenSettings, app_menus}, status_items::build_status_bar_registry};
 use crate::app_settings::build_pages;
 use crate::workspace::Workspace;
 
@@ -57,21 +58,13 @@ impl Render for App {
     }
 }
 
-struct WindowBoundsDebug;
-impl Render for WindowBoundsDebug {
-    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let width = window.bounds().size.width;
-        let height = window.bounds().size.height;
-        div().child(format!("{width} x {height}"))
-    }
-}
-
 fn main() {
     let app = Application::new().with_assets(gpui_component_assets::Assets);
 
     app.run(move |cx| {
         gpui_component::init(cx);
 
+        // Settings ------------------------------------
         let settings = load_app_settings().unwrap_or_default();
         cx.set_global(settings);
         let (main_bounds, main_display) = AppSettings::get(cx).main_window_startup_placement(cx);
@@ -79,20 +72,10 @@ fn main() {
             writer: Some(SettingsWriter::start()),
         });
         cx.set_global(SettingsWindowHandle::default());
-
-        let mut registry = StatusBarRegistry::new();
-        registry.add_right(cx.new(|_| WindowBoundsDebug));
-        cx.set_global(registry);
-
-        cx.set_menus(app_menus());
-
-        cx.on_action(|action: &OpenBrowser, cx| {
-            cx.open_url(&action.url);
-        });
-
+        
         cx.on_action(|_: &OpenSettings, cx| {
             let state = cx.global::<SettingsWindowHandle>();
-
+            
             if let Some(handle) = &state.handle {
                 if handle.update(cx, |_, _, _| {}).is_ok() {
                     return;
@@ -100,9 +83,7 @@ fn main() {
                     cx.global_mut::<SettingsWindowHandle>().handle = None;
                 }
             }
-
             let bounds = Bounds::centered(None, size(px(1000.0), px(800.0)), cx);
-
             let window_options = WindowOptions {
                 titlebar: Some(TitleBar::title_bar_options()),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -115,16 +96,25 @@ fn main() {
                     let view = cx.new(|cx| SettingsWindow::new(window, cx, build_pages));
                     cx.new(|cx| Root::new(view, window, cx))
                 });
-
+                
                 if let Ok(window_handle) = result {
                     cx.update(|cx| {
                         cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
-                    })
-                    .ok();
+                    }).ok();
                 }
             })
             .detach();
         });
+        // ----------------------------------------------
+
+        let registry = build_status_bar_registry(cx);
+        cx.set_global(registry);
+        
+        cx.set_menus(app_menus());
+
+        cx.on_action(|action: &OpenBrowser, cx| {
+            cx.open_url(&action.url);
+        });       
         let min_size = Size::new(px(520.0), px(300.0));
 
         let window_options = WindowOptions {
