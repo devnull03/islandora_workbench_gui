@@ -1,3 +1,6 @@
+mod gdrive_log;
+mod streaming;
+
 use std::path::PathBuf;
 
 use gpui::*;
@@ -11,13 +14,22 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
-    IngestParams, StreamLine, format_stream_line, language_url_from_server_base,
-    process_google_sheet_metadata, run_command_streaming, run_ingest_streaming,
+    IngestParams, language_url_from_server_base, process_google_sheet_metadata,
+    run_ingest_streaming,
 };
 
-use crate::select_items::DetailSelectItem;
+use crate::{select_items::DetailSelectItem, helpers::get_file};
+use settings::AppSettings;
 use settings::path_picker::PathPickerBrowseRow;
-use settings::{AppSettings, ServerConfig};
+
+use self::gdrive_log::{
+    sheet_preprocess_error_message, sheet_preprocess_start_message,
+    sheet_preprocess_success_messages,
+};
+use crate::helpers::{
+    reveal_in_folder, server_config_for_label, workbench_input_data_dir,
+};
+use self::streaming::spawn_stream_to_log;
 
 /// What the workspace is doing right now — drives disabled + loading on actions.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -164,8 +176,7 @@ impl Workspace {
         let settings = AppSettings::get(cx);
         let task_configs = settings.task_configs.clone();
         let server_configs = settings.server_configs.clone();
-        let task_labels: Vec<SharedString> =
-            task_configs.iter().map(|t| t.label.clone()).collect();
+        let task_labels: Vec<SharedString> = task_configs.iter().map(|t| t.label.clone()).collect();
         let server_labels: Vec<SharedString> =
             server_configs.iter().map(|s| s.label.clone()).collect();
 
@@ -219,15 +230,11 @@ impl Workspace {
         let metadata_csv = input_data_dir.join("metadata.csv");
 
         self.append_log(
-            &format!(
-                "[INFO] Running sheet preprocessor (--full, node={})…\n\
-                 [INFO] Sheet URL: {}\n\
-                 [INFO] Language mapping URL: {}\n\
-                 [INFO] Output: {} (and items CSV in the same folder)",
+            &sheet_preprocess_start_message(
                 node_id.trim(),
                 sheet_url.trim(),
-                language_url,
-                metadata_csv.display(),
+                &language_url,
+                &metadata_csv,
             ),
             window,
             cx,
@@ -254,43 +261,12 @@ impl Workspace {
                 let _ = entity.update(app, |this, cx| {
                     match &result {
                         Ok(res) => {
-                            this.append_log(
-                                &format!(
-                                    "[INFO] Sheet preprocessor finished: rows={}, cells_modified={}, validation_failures={}",
-                                    res.processing_stats.total_rows,
-                                    res.processing_stats.cells_modified,
-                                    res.processing_stats.validation_failures
-                                ),
-                                window,
-                                cx,
-                            );
-                            this.append_log(
-                                &format!("[INFO] Processed CSV: {}", res.processed_output_path),
-                                window,
-                                cx,
-                            );
-                            if let (Some(path), Some(stats)) =
-                                (res.items_output_path.as_ref(), res.items_stats.as_ref())
-                            {
-                                this.append_log(
-                                    &format!(
-                                        "[INFO] Items CSV: {} (items={}, unique_parents={}, skipped={})",
-                                        path,
-                                        stats.total_items,
-                                        stats.unique_parents,
-                                        stats.skipped_rows
-                                    ),
-                                    window,
-                                    cx,
-                                );
+                            for line in sheet_preprocess_success_messages(res) {
+                                this.append_log(&line, window, cx);
                             }
                         }
                         Err(e) => {
-                            this.append_log(
-                                &format!("[ERROR] Sheet preprocessor failed: {:#}", e),
-                                window,
-                                cx,
-                            );
+                            this.append_log(&sheet_preprocess_error_message(e), window, cx);
                         }
                     }
                     this.phase = WorkspacePhase::Idle;
@@ -301,38 +277,7 @@ impl Workspace {
         .detach();
     }
 
-    fn get_file(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        input: &Entity<InputState>,
-        prompt: SharedString,
-        is_folder: bool,
-    ) {
-        let receiver = cx.prompt_for_paths(PathPromptOptions {
-            files: !is_folder,
-            directories: is_folder,
-            multiple: false,
-            prompt: Some(prompt),
-        });
-
-        let input = input.clone();
-        cx.spawn_in(window, async move |_, cx| {
-            if let Ok(Ok(Some(paths))) = receiver.await
-                && let Some(path) = paths.first()
-            {
-                cx.update(|window, cx| {
-                    input.update(cx, |state, cx| {
-                        state.set_value(path.to_string_lossy().to_string(), window, cx);
-                    });
-                })
-                .ok();
-            }
-        })
-        .detach();
-    }
-
-    fn append_log(&self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn append_log(&self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.log_state.update(cx, |state, cx| {
             let current = state.value();
             let new_value = if current.is_empty() {
@@ -382,77 +327,10 @@ impl Workspace {
         let rx = run_ingest_streaming(params);
 
         let entity = cx.entity().clone();
-        cx.spawn_in(window, async move |_, cx| {
-            while let Ok(line) = rx.recv() {
-                let should_break = matches!(line, StreamLine::Done(_) | StreamLine::Error(_));
-                let msg = format_stream_line(&line);
-
-                cx.update(|window, cx| {
-                    entity.update(cx, |this, cx| {
-                        this.append_log(&msg, window, cx);
-                    });
-                })
-                .ok();
-
-                if should_break {
-                    break;
-                }
-            }
-            cx.update(|_, cx| {
-                entity.update(cx, |this, cx| {
-                    this.phase = WorkspacePhase::Idle;
-                    cx.notify();
-                });
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    /// Run a command and stream its output to logs (reserved for workbench CLI integration).
-    #[allow(dead_code)]
-    fn run_command(
-        &self,
-        program: &str,
-        args: &[&str],
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.clear_logs(window, cx);
-        self.append_log(
-            &format!("[INFO] Running: {} {}", program, args.join(" ")),
-            window,
-            cx,
-        );
-
-        let rx = match run_command_streaming(program, args) {
-            Ok(rx) => rx,
-            Err(e) => {
-                self.append_log(&format!("[ERROR] Failed to start: {}", e), window, cx);
-                return;
-            }
-        };
-
-        let entity = cx.entity().clone();
-        cx.spawn_in(window, async move |_, cx| {
-            while let Ok(line) = rx.recv() {
-                let should_break = matches!(line, StreamLine::Done(_) | StreamLine::Error(_));
-
-                let msg = format_stream_line(&line);
-
-                cx.update(|window, cx| {
-                    entity.update(cx, |this, cx| {
-                        this.append_log(&msg, window, cx);
-                    });
-                })
-                .ok();
-
-                if should_break {
-                    break;
-                }
-            }
-        })
-        .detach();
+        spawn_stream_to_log(entity, rx, window, cx, |this, cx| {
+            this.phase = WorkspacePhase::Idle;
+            cx.notify();
+        });
     }
 }
 
@@ -470,6 +348,7 @@ impl Render for Workspace {
 
         let process_disabled = !idle || !gdrive_ok;
         let ingest_actions_disabled = !idle || !ingest_ok;
+        // let ingest_dir = PathBuf::from(self.ingest_files_dir.read(cx).value().trim());
 
         v_flex()
             .size_full()
@@ -529,16 +408,52 @@ impl Render for Workspace {
                                     ),
                             )
                             .child(
-                                h_flex().w_full().justify_end().child(
-                                    Button::new("process-gdrive")
-                                        .outline()
-                                        .label("Process")
-                                        .loading(process_loading)
-                                        .disabled(process_disabled || process_loading)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.process_gdrive_link(window, cx);
-                                        })),
-                                ),
+                                h_flex()
+                                    .w_full()
+                                    .gap_2()
+                                    .justify_end()
+                                    .child(
+                                        Button::new("process-gdrive")
+                                            .outline()
+                                            .label("Process")
+                                            .loading(process_loading)
+                                            .disabled(process_disabled || process_loading)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.process_gdrive_link(window, cx);
+                                            })),
+                                    )
+                                    .child(
+                                        Button::new("open-gdrive-output")
+                                            .outline()
+                                            .icon(IconName::Folder)
+                                            .label("Open processed")
+                                            .disabled(ingest_actions_disabled)
+                                            .on_click(cx.listener(|_, _, window, cx| {
+                                                let Some(dir) = workbench_input_data_dir(cx) else {
+                                                    return;
+                                                };
+                                                let metadata_csv = dir.join("metadata.csv");
+                                                if !metadata_csv.is_file() {
+                                                    return;
+                                                }
+                                                let entity = cx.entity().clone();
+                                                cx.spawn_in(window, async move |_, cx| {
+                                                    if let Err(e) = reveal_in_folder(&metadata_csv)
+                                                    {
+                                                        let msg = format!(
+                                                            "[ERROR] Failed to reveal output: {e}"
+                                                        );
+                                                        cx.update(|window, cx| {
+                                                            entity.update(cx, |this, cx| {
+                                                                this.append_log(&msg, window, cx);
+                                                            });
+                                                        })
+                                                        .ok();
+                                                    }
+                                                })
+                                                .detach();
+                                            })),
+                                    ),
                             ),
                     )
                     .child(
@@ -553,7 +468,7 @@ impl Render for Workspace {
                                     .outline()
                                     .disabled(!idle)
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.get_file(
+                                        get_file(
                                             window,
                                             cx,
                                             &this.ingest_files_dir,
@@ -562,8 +477,8 @@ impl Render for Workspace {
                                         );
                                     })),
                             })
-                            .child(
-                                Label::new("CSV, media, and config files for Workbench.")
+                           .child(
+                                Label::new("Media mapped in metadata sheet")
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground),
                             ),
@@ -652,21 +567,4 @@ impl Render for Workspace {
                 ),
             )
     }
-}
-
-fn server_config_for_label<'a>(cx: &'a App, label: &SharedString) -> Option<&'a ServerConfig> {
-    AppSettings::get(cx)
-        .server_configs
-        .iter()
-        .find(|s| &s.label == label)
-}
-
-/// `{workbench_path}/input_data` from Settings (Workbench Path).
-fn workbench_input_data_dir(cx: &App) -> Option<PathBuf> {
-    let raw = AppSettings::get(cx).values.get("workbench_path")?.text();
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(PathBuf::from(trimmed).join("input_data"))
 }

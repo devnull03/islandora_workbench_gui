@@ -2,6 +2,7 @@ mod app_menus;
 mod app_settings;
 mod select_items;
 mod workspace;
+mod helpers;
 
 use gpui::*;
 use gpui_component::{Root, TitleBar, v_flex};
@@ -91,7 +92,7 @@ fn main() {
 
         cx.on_action(|_: &OpenSettings, cx| {
             let state = cx.global::<SettingsWindowHandle>();
-            
+
             if let Some(handle) = &state.handle {
                 if handle.update(cx, |_, _, _| {}).is_ok() {
                     return;
@@ -114,11 +115,12 @@ fn main() {
                     let view = cx.new(|cx| SettingsWindow::new(window, cx, build_pages));
                     cx.new(|cx| Root::new(view, window, cx))
                 });
-                
+
                 if let Ok(window_handle) = result {
                     cx.update(|cx| {
                         cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
-                    }).ok();
+                    })
+                    .ok();
                 }
             })
             .detach();
