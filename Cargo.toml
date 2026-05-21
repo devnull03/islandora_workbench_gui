@@ -22,4 +22,3 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1.0.221", features = ["derive", "rc"] }
 serde_json = { version = "1.0.144", features = ["preserve_order", "raw_value"] }
 schemars = { version = "1.0", features = ["indexmap2"] }
-workbench-preprocessor = { git = "https://github.com/south-asian-canadian-digital-archive/workbench-preprocessor" }
