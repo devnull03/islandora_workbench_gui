@@ -10,3 +10,5 @@ schemars.workspace = true
 serde_json.workspace = true
 which = "7.0"
 workbench-preprocessor = { git = "https://github.com/south-asian-canadian-digital-archive/workbench-preprocessor" }
+serde_yaml = "0.9"
+indexmap = "2.0"

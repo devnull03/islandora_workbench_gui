@@ -7785,9 +7785,11 @@ name = "workbench-integration"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "indexmap",
  "schemars",
  "serde",
  "serde_json",
+ "serde_yaml",
  "which 7.0.3",
  "workbench-preprocessor",
 ]

@@ -45,6 +45,7 @@ pub enum WorkspacePhase {
 
 pub struct Workspace {
     phase: WorkspacePhase,
+    
     gdrive_link: Entity<InputState>,
     collection_node_id: Entity<InputState>,
     ingest_files_dir: Entity<InputState>,
@@ -52,6 +53,7 @@ pub struct Workspace {
     server_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     synced_task_labels: Vec<SharedString>,
     synced_server_labels: Vec<SharedString>,
+    
     log_state: Entity<InputState>,
     /// Keep input/select subscriptions alive so typing and selections re-validate buttons.
     _subscriptions: Vec<Subscription>,

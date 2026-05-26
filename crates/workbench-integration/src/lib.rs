@@ -5,6 +5,7 @@
 
 mod stream;
 mod util;
+mod config_builder;
 
 use std::path::Path;
 use std::path::PathBuf;
