@@ -61,6 +61,10 @@ struct PersistSettings {
     server_configs: Vec<PersistServerConfig>,
     #[serde(default)]
     main_window_bounds: Option<MainWindowBounds>,
+    #[serde(default)]
+    default_task_config: Option<String>,
+    #[serde(default)]
+    default_server: Option<String>,
 }
 
 impl From<&AppSettings> for PersistSettings {
@@ -103,6 +107,8 @@ impl From<&AppSettings> for PersistSettings {
             task_configs,
             server_configs,
             main_window_bounds: s.main_window_bounds.clone(),
+            default_task_config: s.default_task_config.as_ref().map(|v| v.to_string()),
+            default_server: s.default_server.as_ref().map(|v| v.to_string()),
         }
     }
 }
@@ -146,6 +152,8 @@ impl From<PersistSettings> for AppSettings {
             task_configs,
             server_configs,
             main_window_bounds: p.main_window_bounds,
+            default_task_config: p.default_task_config.map(SharedString::from),
+            default_server: p.default_server.map(SharedString::from),
             settings_schema_version: p.settings_version,
         }
     }

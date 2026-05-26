@@ -22,6 +22,10 @@ pub use util::{
 
 pub use stream::{spawn_command_streaming, StreamLine};
 
+pub use config_builder::{WorkbenchConfigHandler};
+
+use crate::config_builder::Ready;
+
 const WORKBENCH_INSTALL_PATH: &str = "C:\\Users\\Arnav\\Projects\\islandora_workbench";
 
 struct WbInfo {
@@ -29,10 +33,6 @@ struct WbInfo {
     python_path: Option<PathBuf>,
     uv_path: Option<PathBuf>,
     use_uv: bool,
-}
-
-struct IngestInfo {
-    config_path: PathBuf,
 }
 
 impl WbInfo {
@@ -46,13 +46,6 @@ impl WbInfo {
     }
 }
 
-/// Inputs for an ingest run (check or full). Used when invoking the Workbench CLI.
-pub struct IngestParams<'a> {
-    pub check: bool,
-    pub ingest_files_dir: &'a Path,
-    pub task_label: &'a str,
-    pub server_label: &'a str,
-}
 
 pub fn process_google_sheet_metadata(
     sheet_url: &str,
@@ -85,6 +78,6 @@ pub fn process_google_sheet_metadata(
 /// Runs a Workbench ingest and streams [`StreamLine`]s (same channel shape as [`run_command_streaming`]).
 ///
 /// Replace the body with your implementation. Placeholder: [`placeholder::run_placeholder_ingest_streaming`].
-pub fn run_ingest_streaming(params: IngestParams<'_>) -> Receiver<StreamLine> {
+pub fn run_ingest_streaming(workbench_info: &WbInfo, config_file: &WorkbenchConfigHandler<Ready>) -> Receiver<StreamLine> {
     todo!()
 }

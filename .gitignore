@@ -3,6 +3,9 @@ islandora_workbench/*
 
 
 # AI stuff
-/.cursor
+.cursor/
+.claude/
 GEMINI.md
+CLAUDE.md
+
 learnt.md

@@ -303,6 +303,8 @@ pub struct AppSettings {
     pub task_configs: Vec<TaskConfig>,
     pub server_configs: Vec<ServerConfig>,
     pub main_window_bounds: Option<MainWindowBounds>,
+    pub default_task_config: Option<SharedString>,
+    pub default_server: Option<SharedString>,
     /// Schema version last read from disk (`settings_version` in JSON). See [`SETTINGS_SCHEMA_VERSION`].
     #[allow(dead_code)] // migrations / future UI; written on each save via `db`
     pub settings_schema_version: u32,
@@ -315,6 +317,8 @@ impl Default for AppSettings {
             task_configs: Vec::new(),
             server_configs: Vec::new(),
             main_window_bounds: None,
+            default_task_config: None,
+            default_server: None,
             settings_schema_version: SETTINGS_SCHEMA_VERSION,
         }
     }
@@ -446,6 +450,18 @@ impl AppSettings {
             if index < s.server_configs.len() {
                 s.server_configs.remove(index);
             }
+        });
+    }
+
+    pub fn set_default_task_config(label: Option<SharedString>, cx: &mut App) {
+        Self::update(cx, |s| {
+            s.default_task_config = label;
+        });
+    }
+
+    pub fn set_default_server(label: Option<SharedString>, cx: &mut App) {
+        Self::update(cx, |s| {
+            s.default_server = label;
         });
     }
 }

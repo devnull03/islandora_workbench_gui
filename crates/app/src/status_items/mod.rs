@@ -4,26 +4,30 @@
 pub mod ping;
 
 use gpui::*;
-use gpui_component::{Icon, IconName, button::Button};
+use gpui_component::{IconName, button::Button};
 use window_wrapper::status_bar::StatusBarRegistry;
 
-use crate::{helpers, status_items::ping::ServerPingIndicator};
+use crate::{status_items::ping::ServerPingIndicator};
 
 pub fn build_status_bar_registry(cx: &mut App) -> StatusBarRegistry {
     let mut registry = StatusBarRegistry::new();
 
-    registry.add_right(cx.new(|_| WindowBoundsDebug));
-    registry.add_left(cx.new(|_| ServerPingIndicator::new()));
-
+    registry.add_left(cx.new(|cx| ServerPingIndicator::new(cx)));
+    
+    // registry.add_right(cx.new(|_| WindowBoundsDebug));
+    registry.add_right(cx.new(|_| OpenTerminal));
+    
     registry
 }
 
 pub struct OpenTerminal;
 impl Render for OpenTerminal {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div().child(
             Button::new("Open Terminal")
                 .icon(IconName::SquareTerminal)
+                .label("Open Terminal")
+                .cursor_pointer()
                 .on_click(cx.listener(|_, _, _window, cx| {
                     todo!()
                 })),

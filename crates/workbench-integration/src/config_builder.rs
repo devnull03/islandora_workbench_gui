@@ -82,3 +82,10 @@ impl WorkbenchConfigHandler<Ready> {
         &self.config.as_ref().unwrap().credentials_file_path
     }
 }
+
+impl<S> WorkbenchConfigHandler<S> {
+    pub fn update_file_path(&mut self, file_path: &str) -> anyhow::Result<()> {
+        self.file_path = file_path.to_string();
+        Ok(())
+    }
+}

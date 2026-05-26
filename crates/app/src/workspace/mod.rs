@@ -14,7 +14,7 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
-    IngestParams, language_url_from_server_base, process_google_sheet_metadata,
+    language_url_from_server_base, process_google_sheet_metadata,
     run_ingest_streaming,
 };
 
@@ -35,12 +35,11 @@ use self::streaming::spawn_stream_to_log;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum WorkspacePhase {
     Idle,
-    /// Google Sheets “Process” (preprocessor) is running.
     GdriveBusy,
-    /// Check or Run Ingest is running (`check` matches the Check button).
-    IngestBusy {
-        check: bool,
-    },
+    Unfilled,
+    PendingCheck,
+    ReadyForIngest,
+    IngestRunning,
 }
 
 pub struct Workspace {
@@ -82,11 +81,16 @@ impl Workspace {
         // `Change`: typing / paste. `Focus`/`Blur`: moving between URL and Node fields updates readiness.
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
         // (Do not use `observe` on `InputState`: it also fires every cursor-blink tick.)
-        _subscriptions.push(cx.subscribe(&gdrive_link, |_, _, event: &InputEvent, cx| {
+        // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
+        // `reset_validation` only mutates `self.phase` so it's safe to call before the defer.
+        _subscriptions.push(cx.subscribe(&gdrive_link, |this, _, event: &InputEvent, cx| {
             if matches!(
                 event,
                 InputEvent::Change | InputEvent::Focus | InputEvent::Blur
             ) {
+                if matches!(event, InputEvent::Change) {
+                    this.reset_validation();
+                }
                 let workspace = cx.weak_entity();
                 cx.defer(move |app| {
                     let _ = workspace.update(app, |_, cx| cx.notify());
@@ -94,11 +98,14 @@ impl Workspace {
             }
         }));
         _subscriptions.push(
-            cx.subscribe(&collection_node_id, |_, _, event: &InputEvent, cx| {
+            cx.subscribe(&collection_node_id, |this, _, event: &InputEvent, cx| {
                 if matches!(
                     event,
                     InputEvent::Change | InputEvent::Focus | InputEvent::Blur
                 ) {
+                    if matches!(event, InputEvent::Change) {
+                        this.reset_validation();
+                    }
                     let workspace = cx.weak_entity();
                     cx.defer(move |app| {
                         let _ = workspace.update(app, |_, cx| cx.notify());
@@ -107,31 +114,34 @@ impl Workspace {
             }),
         );
         _subscriptions.push(
-            cx.subscribe(&ingest_files_dir, |_, _, event: &InputEvent, cx| {
+            cx.subscribe(&ingest_files_dir, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
+                    this.reset_validation();
                     cx.notify();
                 }
             }),
         );
         _subscriptions.push(cx.subscribe(
             &saved_config_select,
-            |_, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
-                if matches!(event, SelectEvent::Confirm(_)) {
-                    cx.notify();
-                }
+            |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
+                let SelectEvent::Confirm(label) = event;
+                AppSettings::set_default_task_config(label.clone(), cx);
+                this.reset_validation();
+                cx.notify();
             },
         ));
         _subscriptions.push(cx.subscribe(
             &server_select,
-            |_, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
-                if matches!(event, SelectEvent::Confirm(_)) {
-                    cx.notify();
-                }
+            |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
+                let SelectEvent::Confirm(label) = event;
+                AppSettings::set_default_server(label.clone(), cx);
+                this.reset_validation();
+                cx.notify();
             },
         ));
 
         Self {
-            phase: WorkspacePhase::Idle,
+            phase: WorkspacePhase::Unfilled,
             gdrive_link,
             collection_node_id,
             ingest_files_dir,
@@ -145,7 +155,20 @@ impl Workspace {
     }
 
     fn phase_idle(&self) -> bool {
-        matches!(self.phase, WorkspacePhase::Idle)
+        matches!(
+            self.phase,
+            WorkspacePhase::Idle | WorkspacePhase::Unfilled | WorkspacePhase::ReadyForIngest
+        )
+    }
+
+    fn reset_validation(&mut self) {
+        if matches!(
+            self.phase,
+            WorkspacePhase::GdriveBusy | WorkspacePhase::IngestRunning
+        ) {
+            return;
+        }
+        self.phase = WorkspacePhase::Unfilled;
     }
 
     /// Process needs a sheet URL, a saved server (for language mapping JSON), and Workbench path
@@ -178,11 +201,14 @@ impl Workspace {
         let settings = AppSettings::get(cx);
         let task_configs = settings.task_configs.clone();
         let server_configs = settings.server_configs.clone();
+        let default_task = settings.default_task_config.clone();
+        let default_server = settings.default_server.clone();
         let task_labels: Vec<SharedString> = task_configs.iter().map(|t| t.label.clone()).collect();
         let server_labels: Vec<SharedString> =
             server_configs.iter().map(|s| s.label.clone()).collect();
 
         if task_labels != self.synced_task_labels {
+            let first_population = self.synced_task_labels.is_empty();
             self.synced_task_labels = task_labels.clone();
             let items: Vec<DetailSelectItem> = task_configs
                 .iter()
@@ -191,9 +217,15 @@ impl Workspace {
                 .collect();
             self.saved_config_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
+                if first_population {
+                    if let Some(label) = &default_task {
+                        state.set_selected_value(label, window, cx);
+                    }
+                }
             });
         }
         if server_labels != self.synced_server_labels {
+            let first_population = self.synced_server_labels.is_empty();
             self.synced_server_labels = server_labels.clone();
             let items: Vec<DetailSelectItem> = server_configs
                 .iter()
@@ -202,6 +234,11 @@ impl Workspace {
                 .collect();
             self.server_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
+                if first_population {
+                    if let Some(label) = &default_server {
+                        state.set_selected_value(label, window, cx);
+                    }
+                }
             });
         }
     }
@@ -301,9 +338,18 @@ impl Workspace {
         if !self.phase_idle() || !self.ingest_ready(cx) {
             return;
         }
-        self.phase = WorkspacePhase::IngestBusy { check };
-        cx.notify();
 
+        if check {
+            self.phase = WorkspacePhase::PendingCheck;
+        } else {
+            // Run is only valid after a successful Check; any other state is a no-op.
+            if !matches!(self.phase, WorkspacePhase::ReadyForIngest) {
+                return;
+            }
+            self.phase = WorkspacePhase::IngestRunning;
+        }
+
+        cx.notify();
         self.clear_logs(window, cx);
 
         let ingest_files_dir = PathBuf::from(self.ingest_files_dir.read(cx).value().trim());
@@ -320,19 +366,18 @@ impl Workspace {
             .map(|s| s.to_string())
             .unwrap_or_default();
 
-        let params = IngestParams {
-            check,
-            ingest_files_dir: ingest_files_dir.as_path(),
-            task_label: task_label.as_str(),
-            server_label: server_label.as_str(),
-        };
-        let rx = run_ingest_streaming(params);
+        // let rx = run_ingest_streaming();
 
-        let entity = cx.entity().clone();
-        spawn_stream_to_log(entity, rx, window, cx, |this, cx| {
-            this.phase = WorkspacePhase::Idle;
-            cx.notify();
-        });
+        // let entity = cx.entity().clone();
+        // let is_check = check;
+        // spawn_stream_to_log(entity, rx, window, cx, move |this, cx| {
+        //     this.phase = if is_check {
+        //         WorkspacePhase::ReadyForIngest
+        //     } else {
+        //         WorkspacePhase::Unfilled
+        //     };
+        //     cx.notify();
+        // });
     }
 }
 
@@ -345,8 +390,8 @@ impl Render for Workspace {
         let ingest_ok = self.ingest_ready(cx);
 
         let process_loading = matches!(self.phase, WorkspacePhase::GdriveBusy);
-        let check_loading = matches!(self.phase, WorkspacePhase::IngestBusy { check: true });
-        let run_loading = matches!(self.phase, WorkspacePhase::IngestBusy { check: false });
+        let check_loading = matches!(self.phase, WorkspacePhase::PendingCheck);
+        let run_loading = matches!(self.phase, WorkspacePhase::IngestRunning);
 
         let process_disabled = !idle || !gdrive_ok;
         let ingest_actions_disabled = !idle || !ingest_ok;
@@ -551,7 +596,10 @@ impl Render for Workspace {
                                     .label("Run Ingest")
                                     .loading(run_loading)
                                     .disabled(
-                                        ingest_actions_disabled || check_loading || run_loading,
+                                        !matches!(
+                                            self.phase,
+                                            WorkspacePhase::ReadyForIngest
+                                        ) || run_loading,
                                     )
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.run_ingest(false, window, cx);
