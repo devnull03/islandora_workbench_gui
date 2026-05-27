@@ -14,7 +14,7 @@ pub struct Ready {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct WorkbenchConfigFile {
+pub struct WorkbenchConfigFile {
     host: String,
     credentials_file_path: PathBuf,
     input_csv: PathBuf,

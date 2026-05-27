@@ -86,6 +86,16 @@ impl Workspace {
 
         let server_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
 
+        // Restore persisted field values before subscriptions are wired up.
+        let saved_gdrive = AppSettings::get(cx).values.get("gdrive_link").map(|v| v.text());
+        let saved_ingest = AppSettings::get(cx).values.get("ingest_files_dir").map(|v| v.text());
+        if let Some(v) = saved_gdrive.filter(|v| !v.is_empty()) {
+            gdrive_link.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
+        }
+        if let Some(v) = saved_ingest.filter(|v| !v.is_empty()) {
+            ingest_files_dir.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
+        }
+
         let mut _subscriptions = Vec::new();
 
         // `Change`: typing / paste. `Focus`/`Blur`: moving between URL and Node fields updates readiness.
@@ -100,6 +110,8 @@ impl Workspace {
             ) {
                 if matches!(event, InputEvent::Change) {
                     this.reset_validation();
+                    let val = this.gdrive_link.read(cx).value();
+                    AppSettings::set_text("gdrive_link", val, cx);
                 }
                 let workspace = cx.weak_entity();
                 cx.defer(move |app| {
@@ -127,6 +139,8 @@ impl Workspace {
             cx.subscribe(&ingest_files_dir, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.reset_validation();
+                    let val = this.ingest_files_dir.read(cx).value();
+                    AppSettings::set_text("ingest_files_dir", val, cx);
                     cx.notify();
                 }
             }),
@@ -354,7 +368,8 @@ impl Workspace {
         }
 
         cx.notify();
-        self.clear_logs(window, cx);
+        let label = if check { "CHECK" } else { "RUN" };
+        self.append_log(&format!("--- {} started ---", label), window, cx);
 
         // selected_value() is the file path (stored directly in DetailSelectItem::value)
         let config_path = match self.saved_config_select.read(cx).selected_value() {
@@ -378,8 +393,24 @@ impl Workspace {
             return;
         }
 
+        let server_url = match self.server_select.read(cx).selected_value() {
+            Some(url) => url.to_string(),
+            None => {
+                self.append_log("[ERROR] No server selected", window, cx);
+                self.op = Operation::None;
+                cx.notify();
+                return;
+            }
+        };
+        let credentials_file = AppSettings::get(cx)
+            .server_configs
+            .iter()
+            .find(|s| s.server_url.as_ref() == server_url.as_str())
+            .map(|s| PathBuf::from(s.credentials_file.as_ref()))
+            .unwrap_or_default();
+
         let wb_info = WbInfo::new(PathBuf::from(workbench_path_str.trim()), use_uv);
-        let config_handler = match WorkbenchConfigHandler::new(config_path).load() {
+        let mut config_handler = match WorkbenchConfigHandler::new(config_path).load() {
             Ok(h) => h,
             Err(e) => {
                 self.append_log(&format!("[ERROR] Failed to load config: {e}"), window, cx);
@@ -388,6 +419,13 @@ impl Workspace {
                 return;
             }
         };
+
+        if let Err(e) = config_handler.update_config_fields(&server_url, credentials_file) {
+            self.append_log(&format!("[ERROR] Failed to update config: {e}"), window, cx);
+            self.op = Operation::None;
+            cx.notify();
+            return;
+        }
 
         let rx = match run_ingest_streaming(&wb_info, &config_handler, check) {
             Ok(r) => r,

@@ -57,6 +57,7 @@ impl Render for OpenTerminal {
                 .icon(IconName::SquareTerminal)
                 .label("Open Terminal")
                 .small()
+                .px_0()
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _, window, cx| {
                     println!("terminal button clicked");
@@ -75,6 +76,7 @@ impl Render for ReloadConfigs {
                 .icon(IconName::Redo2)
                 .label("Reload")
                 .small()
+                .px_0()
                 .cursor_pointer()
                 .tooltip("Reload settings and task configs from disk")
                 .on_click(cx.listener(|_, _, _, cx| {

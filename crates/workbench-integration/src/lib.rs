@@ -41,8 +41,6 @@ pub use config_builder::WorkbenchConfigHandler;
 
 use crate::config_builder::Ready;
 
-const WORKBENCH_INSTALL_PATH: &str = "C:\\Users\\Arnav\\Projects\\islandora_workbench";
-
 pub struct WbInfo {
     pub install_path: PathBuf,
     pub python_path: Option<PathBuf>,
@@ -93,25 +91,26 @@ pub fn build_workbench_command(
     workbench_info: &WbInfo,
     config_file: &WorkbenchConfigHandler<Ready>,
 ) -> anyhow::Result<Command> {
-    let (exe, base_args) = if workbench_info.use_uv {
+    let mut cmd = if workbench_info.use_uv {
         let uv = workbench_info.uv_path.as_deref()
             .and_then(|p| p.to_str())
             .unwrap_or("uv");
-        (uv, vec!["run", "python", "workbench"])
+        let mut c = Command::new(uv);
+        c.args(["run", "python", "workbench"]);
+        c
     } else {
         let python = workbench_info.python_path.as_deref()
             .and_then(|p| p.to_str())
             .unwrap_or(if cfg!(target_os = "windows") { "python" } else { "python3" });
-        (python, vec!["workbench"])
+        let mut c = Command::new(python);
+        c.arg("workbench");
+        c
     };
 
-    let mut cmd = Command::new(exe);
-    
-    cmd.args(base_args)
-       .current_dir(&workbench_info.install_path)
+    cmd.current_dir(&workbench_info.install_path)
        .arg("--config")
-       .arg(config_file.path()); 
-    
+       .arg(config_file.path());
+
     Ok(cmd)
 }
 
@@ -124,5 +123,11 @@ pub fn run_ingest_streaming(
     if is_check {
         cmd.arg("--check");
     }
+    println!(
+        "[workbench] cwd: {:?}\n[workbench] cmd: {} {}",
+        cmd.get_current_dir(),
+        cmd.get_program().to_string_lossy(),
+        cmd.get_args().map(|a| format!("{:?}", a)).collect::<Vec<_>>().join(" "),
+    );
     spawn_command_streaming(cmd).map_err(Into::into)
 }
