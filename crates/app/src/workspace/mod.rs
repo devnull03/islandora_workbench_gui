@@ -446,7 +446,7 @@ impl Render for Workspace {
                                                 )
                                                 .child(
                                                     Label::new(
-                                                        "Node id of main collection in islandora",
+                                                        "Collection nid",
                                                     )
                                                     .text_sm()
                                                     .text_color(cx.theme().muted_foreground),

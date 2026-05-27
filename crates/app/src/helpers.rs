@@ -122,10 +122,10 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Opens the default terminal with `cwd` as the working directory.
+/// Opens a terminal at `cwd`. If `command` is non-empty it is executed after `cd`.
 ///
-/// If `command` is non-empty, it is run after `cd` (via `&&`). Use an empty string for a shell
-/// opened at `cwd` only. Uses `cmd /k` on Windows and Terminal.app on macOS.
+/// Windows: tries Windows Terminal (`wt`) first, falls back to `cmd.exe`.
+/// macOS: checks `$TERM_PROGRAM` for iTerm2, falls back to Terminal.app.
 pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
     if !cwd.is_dir() {
         return Err(std::io::Error::new(
@@ -136,26 +136,51 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
 
     #[cfg(windows)]
     {
-        let script = if command.trim().is_empty() {
-            format!("cd /d \"{}\"", cwd.display())
-        } else {
-            format!("cd /d \"{}\" && {}", cwd.display(), command)
-        };
-        Command::new("cmd")
-            .args(["/C", "start", "", "cmd", "/k", &script])
-            .spawn()?;
+        let cwd_str = cwd.to_string_lossy();
+
+        // Try Windows Terminal first — it accepts --startingDirectory natively.
+        let mut wt = Command::new("wt");
+        wt.arg("--startingDirectory").arg(cwd);
+        if !command.trim().is_empty() {
+            wt.args(["cmd", "/k", command]);
+        }
+        if wt.spawn().is_ok() {
+            return Ok(());
+        }
+
+        // Fall back to cmd.exe. `start /d path` sets the new window's working directory.
+        let mut args = vec!["/C", "start", "", "/d", &cwd_str, "cmd"];
+        let script;
+        if !command.trim().is_empty() {
+            script = command.to_string();
+            args.extend_from_slice(&["/k", &script]);
+        }
+        Command::new("cmd").args(&args).spawn()?;
     }
 
     #[cfg(target_os = "macos")]
     {
-        let script = if command.trim().is_empty() {
-            format!("cd \"{}\"", cwd.display())
+        let term_prog = std::env::var("TERM_PROGRAM").unwrap_or_default();
+
+        if command.trim().is_empty() {
+            if term_prog == "iTerm.app" {
+                let escaped = escape_applescript(&cwd.to_string_lossy());
+                let osa = format!(
+                    r#"tell application "iTerm" to create window with default profile command "cd \"{}\"" "#,
+                    escaped
+                );
+                Command::new("osascript").args(["-e", &osa]).spawn()?;
+            } else {
+                // Terminal.app accepts a directory argument directly.
+                Command::new("open").args(["-a", "Terminal"]).arg(cwd).spawn()?;
+            }
         } else {
-            format!("cd \"{}\" && {}", cwd.display(), command)
-        };
-        let escaped = escape_applescript(&script);
-        let osa = format!(r#"tell application "Terminal" to do script "{}""#, escaped);
-        Command::new("osascript").args(["-e", &osa]).spawn()?;
+            let script = format!("cd \"{}\" && {}", cwd.display(), command);
+            let escaped = escape_applescript(&script);
+            let app = if term_prog == "iTerm.app" { "iTerm" } else { "Terminal" };
+            let osa = format!(r#"tell application "{}" to do script "{}""#, app, escaped);
+            Command::new("osascript").args(["-e", &osa]).spawn()?;
+        }
     }
 
     #[cfg(not(any(windows, target_os = "macos")))]

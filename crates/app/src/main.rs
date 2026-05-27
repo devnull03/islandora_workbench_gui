@@ -23,12 +23,14 @@ use crate::workspace::Workspace;
 
 pub struct App {
     workspace: Entity<Workspace>,
+    status_bar: Entity<StatusBar>,
     _main_window_bounds_sub: Subscription,
 }
 
 impl App {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let workspace = cx.new(|cx| Workspace::new(window, cx));
+        let status_bar = cx.new(|_| StatusBar::new());
         let _main_window_bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
             let b = MainWindowBounds::capture_from_window(window, cx);
             AppSettings::update(cx, |s| {
@@ -37,6 +39,7 @@ impl App {
         });
         Self {
             workspace,
+            status_bar,
             _main_window_bounds_sub,
         }
     }
@@ -54,7 +57,7 @@ impl Render for App {
                     .flex_1()
                     .child(self.workspace.clone()),
             )
-            .child(cx.new(|_| StatusBar::new()))
+            .child(self.status_bar.clone())
     }
 }
 

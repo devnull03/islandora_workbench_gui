@@ -103,10 +103,7 @@ impl Render for ServerPingIndicator {
             ServerPingState::Unreachable => {
                 (div().child(Icon::new(IconName::CircleX)), "Unreachable")
             }
-            ServerPingState::Pinging => (
-                div().child(Spinner::new().small().icon(IconName::LoaderCircle)),
-                "Pinging",
-            ),
+            ServerPingState::Pinging => (div().child(Spinner::new().small()), "Pinging"),
             ServerPingState::NotSet => (div().child(Icon::new(IconName::Globe)), "Not Set"),
         };
         div()
@@ -114,6 +111,7 @@ impl Render for ServerPingIndicator {
             .items_center()
             .justify_center()
             .gap_2()
+            .text_sm()
             .child(icon)
             .child(text)
     }
