@@ -13,13 +13,9 @@ pub enum StreamLine {
     Error(String),
 }
 
-/// Spawns a command and returns a receiver that streams stdout/stderr lines.
-pub fn spawn_command_streaming(
-    program: &str,
-    args: &[&str],
-) -> std::io::Result<Receiver<StreamLine>> {
-    let mut child = Command::new(program)
-        .args(args)
+/// Spawns a pre-built command and returns a receiver that streams stdout/stderr lines.
+pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<Receiver<StreamLine>> {
+    let mut child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;

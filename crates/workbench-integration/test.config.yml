@@ -1,0 +1,60 @@
+task: create
+host: https://islandora.ufv.ca
+# host: https://isle.dvnl.work
+credentials_file_path: credentials.yml
+input_csv: metadata.csv
+
+# content_type: islandora_object
+# subdelimiter: ";"
+# nodes_only: false
+# progress_bar: true
+ 
+fixity_algorithm: md5
+adaptive_pause: 3
+allow_missing_files: true
+remind_user_to_run_check: true
+log_file_path: './g/logs/workbench.log'
+
+timestamp_rollback: true
+rollback_file_include_node_info: true
+rollback_config_file_path: './g/rollback/config/rollback.yml'
+rollback_dir: './g/rollback/csv'
+rollback_config_filename_template: rollback_${config_filename}.yml
+
+shutdown: ['uv run python ./g/scripts/post_action_commit.py']
+
+allow_adding_terms: true
+protected_vocabularies:
+ - islandora_models
+ - islandora_display
+ - islandora_media_use
+ - issuance_modes
+ - resource_types
+ - physical_form
+ - genre
+ - copyright
+ - terms_of_use
+ - concerns_corrections
+
+id_field: accessIdentifier
+ignore_csv_columns: [machineName,id_field,file_extension,fileTitle]
+
+csv_value_templates:
+  - field_linked_agent: relators:cre:person:$csv_value
+  - field_subjects_name: person:$csv_value
+  - field_subject_name__organization: corporate_body:$csv_value
+  - field_sacda_thesaurus: subject:$csv_value
+  - file: access/$csv_value
+
+csv_field_templates:
+  - field_model: Image # temporary here, will add a mapping later
+
+query_csv_id_to_node_id_map_for_parents: true
+
+# csv_start_row: 14
+# csv_stop_row: 15
+# nodes_only: true
+
+# References ------------------------
+#  https://flvc.libguides.com/c.php?g=898356&p=9629862
+#  https://mjordan.github.io/islandora_workbench_docs/fields/#typed-relation-fields

@@ -3,12 +3,13 @@
 //! **Learning layout:** types and main API stubs live here; utilities and reference
 //! implementations are in sibling modules (`util`, `stream`, `sheet`, `placeholder`).
 
+mod config_builder;
 mod stream;
 mod util;
-mod config_builder;
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::mpsc::Receiver;
 
 use organise::process_google_sheets_and_maybe_generate_items;
@@ -16,23 +17,21 @@ use which::which;
 
 pub use organise::ProcessResult;
 
-pub use util::{
-    format_stream_line, language_url_from_server_base, run_command_capture_stdout,
-};
+pub use util::{format_stream_line, language_url_from_server_base, run_command_capture_stdout};
 
-pub use stream::{spawn_command_streaming, StreamLine};
+pub use stream::{StreamLine, spawn_command_streaming};
 
-pub use config_builder::{WorkbenchConfigHandler};
+pub use config_builder::WorkbenchConfigHandler;
 
 use crate::config_builder::Ready;
 
 const WORKBENCH_INSTALL_PATH: &str = "C:\\Users\\Arnav\\Projects\\islandora_workbench";
 
-struct WbInfo {
-    install_path: PathBuf,
-    python_path: Option<PathBuf>,
-    uv_path: Option<PathBuf>,
-    use_uv: bool,
+pub struct WbInfo {
+    pub install_path: PathBuf,
+    pub python_path: Option<PathBuf>,
+    pub uv_path: Option<PathBuf>,
+    pub use_uv: bool,
 }
 
 impl WbInfo {
@@ -45,7 +44,6 @@ impl WbInfo {
         }
     }
 }
-
 
 pub fn process_google_sheet_metadata(
     sheet_url: &str,
@@ -72,12 +70,43 @@ pub fn process_google_sheet_metadata(
         None,
         Some(node_id),
     )
-    
 }
 
-/// Runs a Workbench ingest and streams [`StreamLine`]s (same channel shape as [`run_command_streaming`]).
-///
-/// Replace the body with your implementation. Placeholder: [`placeholder::run_placeholder_ingest_streaming`].
-pub fn run_ingest_streaming(workbench_info: &WbInfo, config_file: &WorkbenchConfigHandler<Ready>) -> Receiver<StreamLine> {
-    todo!()
+
+pub fn build_workbench_command(
+    workbench_info: &WbInfo,
+    config_file: &WorkbenchConfigHandler<Ready>,
+) -> anyhow::Result<Command> {
+    let (exe, base_args) = if workbench_info.use_uv {
+        let uv = workbench_info.uv_path.as_deref()
+            .and_then(|p| p.to_str())
+            .unwrap_or("uv");
+        (uv, vec!["run", "python", "workbench"])
+    } else {
+        let python = workbench_info.python_path.as_deref()
+            .and_then(|p| p.to_str())
+            .unwrap_or(if cfg!(target_os = "windows") { "python" } else { "python3" });
+        (python, vec!["workbench"])
+    };
+
+    let mut cmd = Command::new(exe);
+    
+    cmd.args(base_args)
+       .current_dir(&workbench_info.install_path)
+       .arg("--config")
+       .arg(config_file.path()); 
+    
+    Ok(cmd)
+}
+
+pub fn run_ingest_streaming(
+    workbench_info: &WbInfo,
+    config_file: &WorkbenchConfigHandler<Ready>,
+    is_check: bool,
+) -> anyhow::Result<Receiver<StreamLine>> {
+    let mut cmd = build_workbench_command(workbench_info, config_file)?;
+    if is_check {
+        cmd.arg("--check");
+    }
+    spawn_command_streaming(cmd).map_err(Into::into)
 }
