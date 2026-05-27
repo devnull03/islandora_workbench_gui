@@ -11,6 +11,8 @@ use settings::{ServerConfig, TaskConfig};
 pub struct DetailSelectItem {
     pub label: SharedString,
     pub subtitle: SharedString,
+    /// Unique identifier: file path for task configs, server URL for servers.
+    pub value: SharedString,
     pub divider_above: bool,
 }
 
@@ -22,7 +24,7 @@ impl SelectItem for DetailSelectItem {
     }
 
     fn value(&self) -> &Self::Value {
-        &self.label
+        &self.value
     }
 
     fn render(&self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
@@ -67,6 +69,7 @@ impl From<(usize, &ServerConfig)> for DetailSelectItem {
         Self {
             label: item.label.clone(),
             subtitle: item.server_url.clone(),
+            value: item.server_url.clone(),
             divider_above: index > 0,
         }
     }
@@ -79,11 +82,12 @@ impl From<(usize, &TaskConfig)> for DetailSelectItem {
             .file_name()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
-            .unwrap_or(path_str)
+            .unwrap_or_else(|| path_str.clone())
             .into();
         Self {
             label: item.label.clone(),
             subtitle: file_name,
+            value: item.file_path.clone(),
             divider_above: index > 0,
         }
     }

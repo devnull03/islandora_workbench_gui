@@ -12,6 +12,22 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
 
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+}
+
+pub fn read_credentials(path: &Path) -> anyhow::Result<Credentials> {
+    #[derive(serde::Deserialize)]
+    struct CredFile {
+        username: String,
+        password: String,
+    }
+    let f = std::fs::File::open(path)?;
+    let c: CredFile = serde_yaml::from_reader(f)?;
+    Ok(Credentials { username: c.username, password: c.password })
+}
+
 use organise::process_google_sheets_and_maybe_generate_items;
 use which::which;
 

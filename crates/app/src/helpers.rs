@@ -4,7 +4,7 @@ use std::process::Command;
 
 use gpui::*;
 use gpui_component::input::InputState;
-use settings::{AppSettings, ServerConfig};
+use settings::AppSettings;
 
 use crate::workspace::Workspace;
 
@@ -18,12 +18,6 @@ pub fn workbench_input_data_dir(cx: &App) -> Option<PathBuf> {
     Some(PathBuf::from(trimmed).join("input_data"))
 }
 
-pub fn server_config_for_label<'a>(cx: &'a App, label: &SharedString) -> Option<&'a ServerConfig> {
-    AppSettings::get(cx)
-        .server_configs
-        .iter()
-        .find(|s| &s.label == label)
-}
 
 pub fn get_file(
     window: &mut Window,

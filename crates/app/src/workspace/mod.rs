@@ -14,6 +14,7 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
+    WbInfo, WorkbenchConfigHandler,
     language_url_from_server_base, process_google_sheet_metadata,
     run_ingest_streaming,
 };
@@ -27,24 +28,33 @@ use self::gdrive_log::{
     sheet_preprocess_success_messages,
 };
 use crate::helpers::{
-    reveal_in_folder, server_config_for_label, workbench_input_data_dir,
+    reveal_in_folder, workbench_input_data_dir,
 };
 use self::streaming::spawn_stream_to_log;
 
-/// What the workspace is doing right now — drives disabled + loading on actions.
+/// What async operation is currently running. Drives loading spinners and blanket-disables inputs.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum WorkspacePhase {
-    Idle,
+enum Operation {
+    None,
     GdriveBusy,
-    Unfilled,
-    PendingCheck,
-    ReadyForIngest,
+    CheckRunning,
     IngestRunning,
 }
 
+/// How far through the workflow the user has progressed. Drives which actions are unlocked.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum WorkflowStage {
+    Unfilled,
+    Ready,
+    GdriveProcessed,
+    CheckPassed,
+}
+
 pub struct Workspace {
-    phase: WorkspacePhase,
-    
+    op: Operation,
+    stage: WorkflowStage,
+    pending_logs: Vec<String>,
+
     gdrive_link: Entity<InputState>,
     collection_node_id: Entity<InputState>,
     ingest_files_dir: Entity<InputState>,
@@ -124,8 +134,8 @@ impl Workspace {
         _subscriptions.push(cx.subscribe(
             &saved_config_select,
             |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
-                let SelectEvent::Confirm(label) = event;
-                AppSettings::set_default_task_config(label.clone(), cx);
+                let SelectEvent::Confirm(value) = event;
+                AppSettings::set_default_task_config(value.clone(), cx);
                 this.reset_validation();
                 cx.notify();
             },
@@ -133,15 +143,17 @@ impl Workspace {
         _subscriptions.push(cx.subscribe(
             &server_select,
             |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
-                let SelectEvent::Confirm(label) = event;
-                AppSettings::set_default_server(label.clone(), cx);
+                let SelectEvent::Confirm(value) = event;
+                AppSettings::set_default_server(value.clone(), cx);
                 this.reset_validation();
                 cx.notify();
             },
         ));
 
         Self {
-            phase: WorkspacePhase::Unfilled,
+            op: Operation::None,
+            stage: WorkflowStage::Unfilled,
+            pending_logs: Vec::new(),
             gdrive_link,
             collection_node_id,
             ingest_files_dir,
@@ -154,21 +166,15 @@ impl Workspace {
         }
     }
 
-    fn phase_idle(&self) -> bool {
-        matches!(
-            self.phase,
-            WorkspacePhase::Idle | WorkspacePhase::Unfilled | WorkspacePhase::ReadyForIngest
-        )
+    fn is_idle(&self) -> bool {
+        self.op == Operation::None
     }
 
     fn reset_validation(&mut self) {
-        if matches!(
-            self.phase,
-            WorkspacePhase::GdriveBusy | WorkspacePhase::IngestRunning
-        ) {
+        if self.op != Operation::None {
             return;
         }
-        self.phase = WorkspacePhase::Unfilled;
+        self.stage = WorkflowStage::Unfilled;
     }
 
     /// Process needs a sheet URL, a saved server (for language mapping JSON), and Workbench path
@@ -180,10 +186,7 @@ impl Workspace {
         if self.collection_node_id.read(cx).value().trim().is_empty() {
             return false;
         }
-        let Some(label) = self.server_select.read(cx).selected_value() else {
-            return false;
-        };
-        if server_config_for_label(cx, label).is_none() {
+        if self.server_select.read(cx).selected_value().is_none() {
             return false;
         }
         workbench_input_data_dir(cx).is_some()
@@ -244,21 +247,16 @@ impl Workspace {
     }
 
     fn process_gdrive_link(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.phase_idle() || !self.gdrive_ready(cx) {
+        if !self.is_idle() || !self.gdrive_ready(cx) {
             return;
         }
 
-        let Some(server) = self
-            .server_select
-            .read(cx)
-            .selected_value()
-            .and_then(|label| server_config_for_label(cx, label))
-        else {
+        let Some(server_url) = self.server_select.read(cx).selected_value() else {
             return;
         };
-        let language_url = language_url_from_server_base(server.server_url.as_ref());
+        let language_url = language_url_from_server_base(server_url.as_ref());
 
-        self.phase = WorkspacePhase::GdriveBusy;
+        self.op = Operation::GdriveBusy;
         cx.notify();
 
         let Some(input_data_dir) = workbench_input_data_dir(cx) else {
@@ -303,17 +301,24 @@ impl Workspace {
                             for line in sheet_preprocess_success_messages(res) {
                                 this.append_log(&line, window, cx);
                             }
+                            this.stage = WorkflowStage::GdriveProcessed;
                         }
                         Err(e) => {
                             this.append_log(&sheet_preprocess_error_message(e), window, cx);
                         }
                     }
-                    this.phase = WorkspacePhase::Idle;
+                    this.op = Operation::None;
                     cx.notify();
                 });
             });
         })
         .detach();
+    }
+
+    /// Queue a log message from a context without `window` access. Flushed on the next render.
+    pub(crate) fn push_log(&mut self, message: String, cx: &mut Context<Self>) {
+        self.pending_logs.push(message);
+        cx.notify();
     }
 
     pub(crate) fn append_log(&self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -335,67 +340,99 @@ impl Workspace {
     }
 
     fn run_ingest(&mut self, check: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.phase_idle() || !self.ingest_ready(cx) {
+        if !self.is_idle() || !self.ingest_ready(cx) {
             return;
         }
 
         if check {
-            self.phase = WorkspacePhase::PendingCheck;
+            self.op = Operation::CheckRunning;
         } else {
-            // Run is only valid after a successful Check; any other state is a no-op.
-            if !matches!(self.phase, WorkspacePhase::ReadyForIngest) {
+            if self.stage != WorkflowStage::CheckPassed {
                 return;
             }
-            self.phase = WorkspacePhase::IngestRunning;
+            self.op = Operation::IngestRunning;
         }
 
         cx.notify();
         self.clear_logs(window, cx);
 
-        let ingest_files_dir = PathBuf::from(self.ingest_files_dir.read(cx).value().trim());
-        let task_label = self
-            .saved_config_select
-            .read(cx)
-            .selected_value()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
-        let server_label = self
-            .server_select
-            .read(cx)
-            .selected_value()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
+        // selected_value() is the file path (stored directly in DetailSelectItem::value)
+        let config_path = match self.saved_config_select.read(cx).selected_value() {
+            Some(p) => PathBuf::from(p.as_ref()),
+            None => {
+                self.append_log("[ERROR] No task config selected", window, cx);
+                self.op = Operation::None;
+                cx.notify();
+                return;
+            }
+        };
 
-        // let rx = run_ingest_streaming();
+        let settings = AppSettings::get(cx);
+        let workbench_path_str = settings.values.get("workbench_path").map(|v| v.text()).unwrap_or_default();
+        let use_uv = settings.values.get("use_uv").map(|v| v.bool()).unwrap_or(false);
 
-        // let entity = cx.entity().clone();
-        // let is_check = check;
-        // spawn_stream_to_log(entity, rx, window, cx, move |this, cx| {
-        //     this.phase = if is_check {
-        //         WorkspacePhase::ReadyForIngest
-        //     } else {
-        //         WorkspacePhase::Unfilled
-        //     };
-        //     cx.notify();
-        // });
+        if workbench_path_str.trim().is_empty() {
+            self.append_log("[ERROR] Workbench path not configured in settings", window, cx);
+            self.op = Operation::None;
+            cx.notify();
+            return;
+        }
+
+        let wb_info = WbInfo::new(PathBuf::from(workbench_path_str.trim()), use_uv);
+        let config_handler = match WorkbenchConfigHandler::new(config_path).load() {
+            Ok(h) => h,
+            Err(e) => {
+                self.append_log(&format!("[ERROR] Failed to load config: {e}"), window, cx);
+                self.op = Operation::None;
+                cx.notify();
+                return;
+            }
+        };
+
+        let rx = match run_ingest_streaming(&wb_info, &config_handler, check) {
+            Ok(r) => r,
+            Err(e) => {
+                self.append_log(&format!("[ERROR] Failed to start ingest: {e}"), window, cx);
+                self.op = Operation::None;
+                cx.notify();
+                return;
+            }
+        };
+
+        let entity = cx.entity().clone();
+        spawn_stream_to_log(entity, rx, window, cx, move |this, cx| {
+            this.op = Operation::None;
+            this.stage = if check {
+                WorkflowStage::CheckPassed
+            } else {
+                WorkflowStage::Ready
+            };
+            cx.notify();
+        });
     }
 }
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let pending = std::mem::take(&mut self.pending_logs);
+        for msg in &pending {
+            self.append_log(msg, window, cx);
+        }
+
         self.sync_select_items(window, cx);
 
-        let idle = self.phase_idle();
+        let idle = self.is_idle();
         let gdrive_ok = self.gdrive_ready(cx);
         let ingest_ok = self.ingest_ready(cx);
 
-        let process_loading = matches!(self.phase, WorkspacePhase::GdriveBusy);
-        let check_loading = matches!(self.phase, WorkspacePhase::PendingCheck);
-        let run_loading = matches!(self.phase, WorkspacePhase::IngestRunning);
+        let process_loading = self.op == Operation::GdriveBusy;
+        let check_loading = self.op == Operation::CheckRunning;
+        let run_loading = self.op == Operation::IngestRunning;
 
         let process_disabled = !idle || !gdrive_ok;
         let ingest_actions_disabled = !idle || !ingest_ok;
-        // let ingest_dir = PathBuf::from(self.ingest_files_dir.read(cx).value().trim());
+        let open_processed_enabled = idle && self.stage >= WorkflowStage::GdriveProcessed;
+        let run_enabled = idle && self.stage == WorkflowStage::CheckPassed;
 
         v_flex()
             .size_full()
@@ -474,7 +511,7 @@ impl Render for Workspace {
                                             .outline()
                                             .icon(IconName::Folder)
                                             .label("Open processed")
-                                            .disabled(ingest_actions_disabled)
+                                            .disabled(!open_processed_enabled)
                                             .on_click(cx.listener(|_, _, window, cx| {
                                                 let Some(dir) = workbench_input_data_dir(cx) else {
                                                     return;
@@ -595,12 +632,7 @@ impl Render for Workspace {
                                     .primary()
                                     .label("Run Ingest")
                                     .loading(run_loading)
-                                    .disabled(
-                                        !matches!(
-                                            self.phase,
-                                            WorkspacePhase::ReadyForIngest
-                                        ) || run_loading,
-                                    )
+                                    .disabled(!run_enabled || run_loading)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.run_ingest(false, window, cx);
                                     })),

@@ -17,7 +17,11 @@ use window_wrapper::{
     OpenBrowser,
 };
 
-use crate::{app_menus::{OpenSettings, app_menus}, status_items::build_status_bar_registry};
+use crate::{
+    app_menus::{OpenSettings, app_menus},
+    status_items::{build_status_bar_registry, PingLogEvent},
+    status_items::ping::ServerPingIndicator,
+};
 use crate::app_settings::build_pages;
 use crate::workspace::Workspace;
 
@@ -25,12 +29,26 @@ pub struct App {
     workspace: Entity<Workspace>,
     status_bar: Entity<StatusBar>,
     _main_window_bounds_sub: Subscription,
+    _ping_log_sub: Subscription,
 }
 
 impl App {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let status_bar = cx.new(|_| StatusBar::new());
+
+        let ping = cx.new(|cx| ServerPingIndicator::new(cx));
+        let _ping_log_sub = cx.subscribe(&ping, {
+            let workspace = workspace.clone();
+            move |_, _, event: &PingLogEvent, cx| {
+                workspace.update(cx, |ws, cx| {
+                    ws.push_log(event.0.clone(), cx);
+                });
+            }
+        });
+        let registry = build_status_bar_registry(ping, &mut *cx);
+        cx.set_global(registry);
+
         let _main_window_bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
             let b = MainWindowBounds::capture_from_window(window, cx);
             AppSettings::update(cx, |s| {
@@ -41,6 +59,7 @@ impl App {
             workspace,
             status_bar,
             _main_window_bounds_sub,
+            _ping_log_sub,
         }
     }
 }
@@ -110,9 +129,6 @@ fn main() {
         });
         // ----------------------------------------------
 
-        let registry = build_status_bar_registry(cx);
-        cx.set_global(registry);
-        
         cx.set_menus(app_menus());
 
         cx.on_action(|action: &OpenBrowser, cx| {
