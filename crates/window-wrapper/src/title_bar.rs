@@ -1,7 +1,12 @@
 use gpui::*;
 use gpui_component::{
-    Sizable, TitleBar, button::{Button, ButtonVariants}, menu::{DropdownMenu, PopupMenu}
+    ActiveTheme, Sizable, TitleBar,
+    button::{Button, ButtonVariants},
+    label::Label,
+    menu::{DropdownMenu, PopupMenu},
 };
+
+use crate::WindowLock;
 
 #[derive(IntoElement)]
 pub struct AppTitleBar {
@@ -80,13 +85,27 @@ impl AppTitleBar {
 }
 
 impl RenderOnce for AppTitleBar {
-    fn render(self, _: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let locked = WindowLock::is_locked(cx);
 
+        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
         for item in self.items.clone() {
             menu_container = menu_container.child(Self::convert_menu(item)).cursor_pointer();
         }
 
-        TitleBar::new().child(menu_container)
+        let mut right = gpui_component::h_flex()
+            .flex_1()
+            .justify_end()
+            .pr_4()
+            .items_center();
+        if locked {
+            right = right.child(
+                Label::new("● Ingest running")
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground),
+            );
+        }
+
+        TitleBar::new().child(menu_container).child(right)
     }
 }
