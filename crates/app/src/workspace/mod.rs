@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, StyledExt,
+    ActiveTheme, Disableable, IconName, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
     h_flex,
@@ -72,7 +72,7 @@ pub struct Workspace {
     server_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     synced_task_labels: Vec<SharedString>,
     synced_server_labels: Vec<SharedString>,
-    
+
     log_state: Entity<InputState>,
     /// Keep input/select subscriptions alive so typing and selections re-validate buttons.
     _subscriptions: Vec<Subscription>,
@@ -436,7 +436,7 @@ impl Workspace {
             }
         };
 
-        if let Err(e) = config_handler.update_config_fields(&server_url, credentials_file) {
+        if let Err(e) = config_handler.update_config_fields(&server_url, credentials_file, &wb_info.install_path) {
             self.append_log(&format!("[ERROR] Failed to update config: {e}"), window, cx);
             self.op = Operation::None;
             WindowLock::set(false, cx);
@@ -496,6 +496,9 @@ impl Render for Workspace {
         let process_loading = self.op == Operation::GdriveBusy;
         let check_loading = self.op == Operation::CheckRunning;
         let run_loading = self.op == Operation::IngestRunning;
+
+        let config_selected = self.saved_config_select.read(cx).selected_value().is_some();
+        let server_selected = self.server_select.read(cx).selected_value().is_some();
 
         let process_disabled = !idle || !gdrive_ok;
         let ingest_actions_disabled = !idle || !ingest_ok;
@@ -644,21 +647,122 @@ impl Render for Workspace {
                             h_flex()
                                 .w_full()
                                 .gap_4()
-                                .justify_around()
                                 .child(
-                                    LabeledSelect::new(
-                                        "Saved config",
-                                        &self.saved_config_select,
-                                    )
-                                    .placeholder("Select saved config…")
-                                    .description("Workbench YAML / task profile")
-                                    .disabled(!idle),
+                                    h_flex()
+                                        .flex_1()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            LabeledSelect::new(
+                                                "Saved config",
+                                                &self.saved_config_select,
+                                            )
+                                            .placeholder("Select saved config…")
+                                            .description("Workbench YAML / task profile")
+                                            .disabled(!idle),
+                                        )
+                                        .child(
+                                            Button::new("reveal-config-file")
+                                                .ghost()
+                                                .small()
+                                                .icon(IconName::FolderOpen)
+                                                .tooltip("Reveal config file")
+                                                .disabled(!config_selected)
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    let Some(val) = this
+                                                        .saved_config_select
+                                                        .read(cx)
+                                                        .selected_value()
+                                                    else {
+                                                        return;
+                                                    };
+                                                    let path = PathBuf::from(val.as_ref());
+                                                    let entity = cx.entity().clone();
+                                                    cx.spawn_in(window, async move |_, cx| {
+                                                        if let Err(e) = reveal_in_folder(&path) {
+                                                            let msg = format!(
+                                                                "[ERROR] Failed to reveal config: {e}"
+                                                            );
+                                                            cx.update(|window, cx| {
+                                                                entity.update(cx, |this, cx| {
+                                                                    this.append_log(
+                                                                        &msg, window, cx,
+                                                                    );
+                                                                });
+                                                            })
+                                                            .ok();
+                                                        }
+                                                    })
+                                                    .detach();
+                                                })),
+                                        ),
                                 )
                                 .child(
-                                    LabeledSelect::new("Ingest server", &self.server_select)
-                                        .placeholder("Select server…")
-                                        .description("Islandora endpoint for this run")
-                                        .disabled(!idle),
+                                    h_flex()
+                                        .flex_1()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            LabeledSelect::new(
+                                                "Ingest server",
+                                                &self.server_select,
+                                            )
+                                            .placeholder("Select server…")
+                                            .description("Islandora endpoint for this run")
+                                            .disabled(!idle),
+                                        )
+                                        .child(
+                                            Button::new("reveal-credentials-file")
+                                                .ghost()
+                                                .small()
+                                                .icon(IconName::FolderOpen)
+                                                .tooltip("Reveal credentials file")
+                                                .disabled(!server_selected)
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    let Some(server_url) = this
+                                                        .server_select
+                                                        .read(cx)
+                                                        .selected_value()
+                                                    else {
+                                                        return;
+                                                    };
+                                                    let Some(path) = AppSettings::get(cx)
+                                                        .server_configs
+                                                        .iter()
+                                                        .find(|s| {
+                                                            s.server_url.as_ref()
+                                                                == server_url.as_str()
+                                                        })
+                                                        .map(|s| {
+                                                            PathBuf::from(
+                                                                s.credentials_file.as_ref(),
+                                                            )
+                                                        })
+                                                    else {
+                                                        return;
+                                                    };
+                                                    if path.as_os_str().is_empty() {
+                                                        return;
+                                                    }
+                                                    let entity = cx.entity().clone();
+                                                    cx.spawn_in(window, async move |_, cx| {
+                                                        if let Err(e) = reveal_in_folder(&path) {
+                                                            let msg = format!(
+                                                                "[ERROR] Failed to reveal credentials: {e}"
+                                                            );
+                                                            cx.update(|window, cx| {
+                                                                entity.update(cx, |this, cx| {
+                                                                    this.append_log(
+                                                                        &msg, window, cx,
+                                                                    );
+                                                                });
+                                                            })
+                                                            .ok();
+                                                        }
+                                                    })
+                                                    .detach();
+                                                })),
+                                        ),
                                 ),
                         ),
                     )

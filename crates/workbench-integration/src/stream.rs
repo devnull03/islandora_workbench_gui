@@ -76,8 +76,7 @@ pub fn spawn_command_streaming(
                     } else {
                         buf.push(byte[0]);
                         let s = String::from_utf8_lossy(&buf);
-                        // DEBUG: print every partial line so we can see what the prompt looks like
-                        eprint!("\r[stdout-raw] {:?}", s);
+                        eprintln!("[stdout-partial] {:?}", s);
                         if is_yn_prompt(&s) {
                             eprintln!("\n[PROMPT DETECTED] {:?}", s);
                             if tx_stdout

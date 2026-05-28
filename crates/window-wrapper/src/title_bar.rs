@@ -1,9 +1,10 @@
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Sizable, TitleBar,
+    ActiveTheme, Icon, IconName, Sizable, TitleBar,
     button::{Button, ButtonVariants},
     label::Label,
     menu::{DropdownMenu, PopupMenu},
+    spinner::Spinner,
 };
 
 use crate::WindowLock;
@@ -31,7 +32,8 @@ impl AppTitleBar {
         let button_id: SharedString = format!("menu-btn-{}", menu_spec.name).into();
         Button::new(button_id)
             .small()
-            .ghost().compact()
+            .ghost()
+            .compact()
             .label(menu_spec.name.clone())
             .dropdown_menu(move |mut menu, window, cx| {
                 for item in menu_spec.items.clone() {
@@ -90,7 +92,9 @@ impl RenderOnce for AppTitleBar {
 
         let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
         for item in self.items.clone() {
-            menu_container = menu_container.child(Self::convert_menu(item)).cursor_pointer();
+            menu_container = menu_container
+                .child(Self::convert_menu(item))
+                .cursor_pointer();
         }
 
         let mut right = gpui_component::h_flex()
@@ -99,11 +103,17 @@ impl RenderOnce for AppTitleBar {
             .pr_4()
             .items_center();
         if locked {
-            right = right.child(
-                Label::new("● Ingest running")
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground),
-            );
+            right = right
+                .child(
+                    Spinner::new()
+                        .small()
+                        .icon(IconName::LoaderCircle).color(cx.theme().muted_foreground)
+                )
+                .child(
+                    Label::new("Ingest running")
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground),
+                );
         }
 
         TitleBar::new().child(menu_container).child(right)
