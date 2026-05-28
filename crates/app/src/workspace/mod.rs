@@ -63,6 +63,7 @@ pub struct Workspace {
     op: Operation,
     stage: WorkflowStage,
     pending_logs: Vec<String>,
+    log_expanded: bool,
 
     gdrive_link: Entity<InputState>,
     collection_node_id: Entity<InputState>,
@@ -177,6 +178,7 @@ impl Workspace {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
             pending_logs: Vec::new(),
+            log_expanded: false,
             gdrive_link,
             collection_node_id,
             ingest_files_dir,
@@ -500,6 +502,31 @@ impl Render for Workspace {
         let open_processed_enabled = idle && self.stage >= WorkflowStage::GdriveProcessed;
         let run_enabled = idle && self.stage == WorkflowStage::CheckPassed;
 
+        if self.log_expanded {
+            return div()
+                .size_full()
+                .p_4()
+                .relative()
+                .child(Input::new(&self.log_state).disabled(true).size_full())
+                .child(
+                    div()
+                        .absolute()
+                        .right_4()
+                        .top_4()
+                        .child(
+                            Button::new("collapse-log")
+                                .ghost()
+                                .icon(IconName::Minimize)
+                                .tooltip("Collapse log")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.log_expanded = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .into_any_element();
+        }
+
         v_flex()
             .size_full()
             .p_4()
@@ -680,13 +707,37 @@ impl Render for Workspace {
                     ),
             )
             .child(
-                v_flex().flex_1().min_h_0().w_full().gap_1().child(
-                    Input::new(&self.log_state)
-                        .disabled(true)
-                        .flex_1()
-                        .min_h_0()
-                        .w_full(),
-                ),
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .relative()
+                    .group("log-area")
+                    .child(
+                        Input::new(&self.log_state)
+                            .disabled(true)
+                            .size_full(),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .right_1()
+                            .top_1()
+                            .opacity(0.)
+                            .group_hover("log-area", |s| s.opacity(1.))
+                            .child(
+                                Button::new("expand-log")
+                                    .ghost()
+                                    .icon(IconName::Maximize)
+                                    .tooltip("Expand log")
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.log_expanded = true;
+                                        cx.notify();
+                                    })),
+                            ),
+                    ),
             )
+            .into_any_element()
     }
 }

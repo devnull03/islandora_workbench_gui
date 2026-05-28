@@ -154,7 +154,7 @@ impl Render for ServerPingIndicator {
             .items_center()
             .justify_center()
             .text_sm()
-            .gap_2()
+            .gap_1()
             .child(icon)
             .child(
                 Button::new("ping-btn")
