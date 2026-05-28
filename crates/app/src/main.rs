@@ -1,6 +1,6 @@
 mod app_menus;
 mod app_settings;
-mod select_items;
+mod components;
 mod workspace;
 mod helpers;
 mod status_items;
@@ -14,11 +14,11 @@ use settings::{
 use window_wrapper::{
     status_bar::StatusBar,
     title_bar::AppTitleBar,
-    OpenBrowser,
+    OpenBrowser, WindowLock,
 };
 
 use crate::{
-    app_menus::{OpenSettings, app_menus},
+    app_menus::{OpenSettings, Quit, app_menus},
     status_items::{build_status_bar_registry, PingLogEvent},
     status_items::ping::ServerPingIndicator,
 };
@@ -30,6 +30,7 @@ pub struct App {
     status_bar: Entity<StatusBar>,
     _main_window_bounds_sub: Subscription,
     _ping_log_sub: Subscription,
+    _window_lock_sub: Subscription,
 }
 
 impl App {
@@ -55,28 +56,47 @@ impl App {
                 s.main_window_bounds = Some(b);
             });
         });
+
+        // Re-render this view (and therefore AppTitleBar) whenever WindowLock changes.
+        let _window_lock_sub = cx.observe_global::<WindowLock>(|_, cx| {
+            cx.notify();
+        });
+
+        // Block the OS close button while an ingest run is in progress.
+        window.on_window_should_close(cx, |_, cx| {
+            !WindowLock::is_locked(cx)
+        });
+
         Self {
             workspace,
             status_bar,
             _main_window_bounds_sub,
             _ping_log_sub,
+            _window_lock_sub,
         }
     }
 }
 
 impl Render for App {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dialog_layer = Root::render_dialog_layer(window, cx);
+
+        div()
             .size_full()
-            .child(AppTitleBar::new(cx))
             .child(
-                div()
-                    .id("window-body")
-                    .w_full()
-                    .flex_1()
-                    .child(self.workspace.clone()),
+                v_flex()
+                    .size_full()
+                    .child(AppTitleBar::new(cx))
+                    .child(
+                        div()
+                            .id("window-body")
+                            .w_full()
+                            .flex_1()
+                            .child(self.workspace.clone()),
+                    )
+                    .child(self.status_bar.clone()),
             )
-            .child(self.status_bar.clone())
+            .children(dialog_layer)
     }
 }
 
@@ -85,6 +105,8 @@ fn main() {
 
     app.run(move |cx| {
         gpui_component::init(cx);
+
+        cx.set_global(WindowLock::default());
 
         // Settings ------------------------------------
         let settings = load_app_settings().unwrap_or_default();
@@ -133,6 +155,10 @@ fn main() {
 
         cx.on_action(|action: &OpenBrowser, cx| {
             cx.open_url(&action.url);
+        });
+
+        cx.on_action(|_: &Quit, cx| {
+            cx.quit();
         });       
         let min_size = Size::new(px(520.0), px(300.0));
 

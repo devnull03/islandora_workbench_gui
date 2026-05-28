@@ -7,10 +7,11 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, StyledExt,
     button::{Button, ButtonVariants},
+    checkbox::Checkbox,
     h_flex,
     input::{Input, InputEvent, InputState},
     label::Label,
-    select::{Select, SelectEvent, SelectState},
+    select::{SelectEvent, SelectState},
     v_flex,
 };
 use workbench_integration::{
@@ -19,9 +20,17 @@ use workbench_integration::{
     run_ingest_streaming,
 };
 
-use crate::{select_items::DetailSelectItem, helpers::get_file};
+use crate::{
+    components::{
+        labeled_input::LabeledInput,
+        labeled_select::LabeledSelect,
+        select_items::DetailSelectItem,
+    },
+    helpers::get_file,
+};
 use settings::AppSettings;
 use settings::path_picker::PathPickerBrowseRow;
+use window_wrapper::WindowLock;
 
 use self::gdrive_log::{
     sheet_preprocess_error_message, sheet_preprocess_start_message,
@@ -367,6 +376,7 @@ impl Workspace {
             self.op = Operation::IngestRunning;
         }
 
+        WindowLock::set(true, cx);
         cx.notify();
         let label = if check { "CHECK" } else { "RUN" };
         self.append_log(&format!("--- {} started ---", label), window, cx);
@@ -377,6 +387,7 @@ impl Workspace {
             None => {
                 self.append_log("[ERROR] No task config selected", window, cx);
                 self.op = Operation::None;
+                WindowLock::set(false, cx);
                 cx.notify();
                 return;
             }
@@ -389,6 +400,7 @@ impl Workspace {
         if workbench_path_str.trim().is_empty() {
             self.append_log("[ERROR] Workbench path not configured in settings", window, cx);
             self.op = Operation::None;
+            WindowLock::set(false, cx);
             cx.notify();
             return;
         }
@@ -398,6 +410,7 @@ impl Workspace {
             None => {
                 self.append_log("[ERROR] No server selected", window, cx);
                 self.op = Operation::None;
+                WindowLock::set(false, cx);
                 cx.notify();
                 return;
             }
@@ -415,6 +428,7 @@ impl Workspace {
             Err(e) => {
                 self.append_log(&format!("[ERROR] Failed to load config: {e}"), window, cx);
                 self.op = Operation::None;
+                WindowLock::set(false, cx);
                 cx.notify();
                 return;
             }
@@ -423,23 +437,32 @@ impl Workspace {
         if let Err(e) = config_handler.update_config_fields(&server_url, credentials_file) {
             self.append_log(&format!("[ERROR] Failed to update config: {e}"), window, cx);
             self.op = Operation::None;
+            WindowLock::set(false, cx);
             cx.notify();
             return;
         }
 
-        let rx = match run_ingest_streaming(&wb_info, &config_handler, check) {
+        let (rx, stdin_sink) = match run_ingest_streaming(&wb_info, &config_handler, check) {
             Ok(r) => r,
             Err(e) => {
                 self.append_log(&format!("[ERROR] Failed to start ingest: {e}"), window, cx);
                 self.op = Operation::None;
+                WindowLock::set(false, cx);
                 cx.notify();
                 return;
             }
         };
 
+        let auto_accept = AppSettings::get(cx)
+            .values
+            .get("auto_accept_prompts")
+            .map(|v| v.bool())
+            .unwrap_or(false);
+
         let entity = cx.entity().clone();
-        spawn_stream_to_log(entity, rx, window, cx, move |this, cx| {
+        spawn_stream_to_log(entity, rx, stdin_sink, auto_accept, window, cx, move |this, cx| {
             this.op = Operation::None;
+            WindowLock::set(false, cx);
             this.stage = if check {
                 WorkflowStage::CheckPassed
             } else {
@@ -462,6 +485,11 @@ impl Render for Workspace {
         let idle = self.is_idle();
         let gdrive_ok = self.gdrive_ready(cx);
         let ingest_ok = self.ingest_ready(cx);
+        let auto_accept = AppSettings::get(cx)
+            .values
+            .get("auto_accept_prompts")
+            .map(|v| v.bool())
+            .unwrap_or(false);
 
         let process_loading = self.op == Operation::GdriveBusy;
         let check_loading = self.op == Operation::CheckRunning;
@@ -492,40 +520,19 @@ impl Render for Workspace {
                                     .items_start()
                                     .child(
                                         div().w(relative(0.7)).min_w(px(0.)).child(
-                                            v_flex()
-                                                .gap_1()
-                                                .justify_start()
-                                                .child(Label::new("URL").text_sm())
-                                                .child(
-                                                    Input::new(&self.gdrive_link)
-                                                        .disabled(!idle)
-                                                        .w_full(),
-                                                )
-                                                .child(
-                                                    Label::new("Google sheets url")
-                                                        .text_sm()
-                                                        .text_color(cx.theme().muted_foreground),
-                                                ),
+                                            LabeledInput::new("URL", &self.gdrive_link)
+                                                .description("Google sheets url")
+                                                .disabled(!idle),
                                         ),
                                     )
                                     .child(
                                         div().w(relative(0.3)).min_w(px(0.)).child(
-                                            v_flex()
-                                                .gap_1()
-                                                .justify_start()
-                                                .child(Label::new("Collection nid").text_sm())
-                                                .child(
-                                                    Input::new(&self.collection_node_id)
-                                                        .disabled(!idle)
-                                                        .w_full(),
-                                                )
-                                                .child(
-                                                    Label::new(
-                                                        "Collection nid",
-                                                    )
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground),
-                                                ),
+                                            LabeledInput::new(
+                                                "Collection nid",
+                                                &self.collection_node_id,
+                                            )
+                                            .description("Collection nid")
+                                            .disabled(!idle),
                                         ),
                                     ),
                             )
@@ -612,47 +619,42 @@ impl Render for Workspace {
                                 .gap_4()
                                 .justify_around()
                                 .child(
-                                    v_flex()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .gap_1()
-                                        .child(Label::new("Saved config").text_sm())
-                                        .child(
-                                            Select::new(&self.saved_config_select)
-                                                .placeholder("Select saved config…")
-                                                .disabled(!idle)
-                                                .w_full(),
-                                        )
-                                        .child(
-                                            Label::new("Workbench YAML / task profile")
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground),
-                                        ),
+                                    LabeledSelect::new(
+                                        "Saved config",
+                                        &self.saved_config_select,
+                                    )
+                                    .placeholder("Select saved config…")
+                                    .description("Workbench YAML / task profile")
+                                    .disabled(!idle),
                                 )
                                 .child(
-                                    v_flex()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .gap_1()
-                                        .child(Label::new("Ingest server").text_sm())
-                                        .child(
-                                            Select::new(&self.server_select)
-                                                .placeholder("Select server…")
-                                                .disabled(!idle)
-                                                .w_full(),
-                                        )
-                                        .child(
-                                            Label::new("Islandora endpoint for this run")
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground),
-                                        ),
+                                    LabeledSelect::new("Ingest server", &self.server_select)
+                                        .placeholder("Select server…")
+                                        .description("Islandora endpoint for this run")
+                                        .disabled(!idle),
                                 ),
                         ),
                     )
                     .child(
                         h_flex()
-                            .justify_end()
+                            .w_full()
+                            .items_center()
                             .gap_2()
+                            .child(
+                                Checkbox::new("auto-accept-prompts")
+                                    .checked(auto_accept)
+                                    .label("Auto-accept prompts")
+                                    .disabled(!idle)
+                                    .on_click(cx.listener(|_, checked: &bool, _, cx| {
+                                        AppSettings::set_bool(
+                                            "auto_accept_prompts",
+                                            *checked,
+                                            cx,
+                                        );
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(div().flex_1())
                             .child(
                                 Button::new("check")
                                     .outline()
