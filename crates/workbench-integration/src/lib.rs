@@ -25,7 +25,10 @@ pub fn read_credentials(path: &Path) -> anyhow::Result<Credentials> {
     }
     let f = std::fs::File::open(path)?;
     let c: CredFile = serde_yaml::from_reader(f)?;
-    Ok(Credentials { username: c.username, password: c.password })
+    Ok(Credentials {
+        username: c.username,
+        password: c.password,
+    })
 }
 
 use organise::process_google_sheets_and_maybe_generate_items;
@@ -86,30 +89,34 @@ pub fn process_google_sheet_metadata(
     )
 }
 
-
 pub fn build_workbench_command(
     workbench_info: &WbInfo,
     config_file: &WorkbenchConfigHandler<Ready>,
 ) -> anyhow::Result<Command> {
     let mut cmd = if workbench_info.use_uv {
-        let uv = workbench_info.uv_path.as_deref()
+        let uv = workbench_info
+            .uv_path
+            .as_deref()
             .and_then(|p| p.to_str())
             .unwrap_or("uv");
         let mut c = Command::new(uv);
-        c.args(["run", "python", "workbench"]);
+        c.args(["run", "python", "-u", "workbench"]);
         c
     } else {
-        let python = workbench_info.python_path.as_deref()
+        let python = workbench_info
+            .python_path
+            .as_deref()
             .and_then(|p| p.to_str())
             .unwrap_or(if cfg!(target_os = "windows") { "python" } else { "python3" });
         let mut c = Command::new(python);
-        c.arg("workbench");
+        c.args(["-u", "workbench"]);
         c
     };
 
     cmd.current_dir(&workbench_info.install_path)
-       .arg("--config")
-       .arg(config_file.path());
+        .env("PYTHONUNBUFFERED", "1")
+        .arg("--config")
+        .arg(config_file.path());
 
     Ok(cmd)
 }
@@ -127,7 +134,10 @@ pub fn run_ingest_streaming(
         "[workbench] cwd: {:?}\n[workbench] cmd: {} {}",
         cmd.get_current_dir(),
         cmd.get_program().to_string_lossy(),
-        cmd.get_args().map(|a| format!("{:?}", a)).collect::<Vec<_>>().join(" "),
+        cmd.get_args()
+            .map(|a| format!("{:?}", a))
+            .collect::<Vec<_>>()
+            .join(" "),
     );
     spawn_command_streaming(cmd).map_err(Into::into)
 }
