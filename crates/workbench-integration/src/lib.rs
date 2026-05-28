@@ -38,7 +38,7 @@ pub use organise::ProcessResult;
 
 pub use util::{format_stream_line, language_url_from_server_base, run_command_capture_stdout};
 
-pub use stream::{StreamLine, spawn_command_streaming};
+pub use stream::{StdinSink, StreamLine, spawn_command_streaming};
 
 pub use config_builder::WorkbenchConfigHandler;
 
@@ -125,7 +125,7 @@ pub fn run_ingest_streaming(
     workbench_info: &WbInfo,
     config_file: &WorkbenchConfigHandler<Ready>,
     is_check: bool,
-) -> anyhow::Result<Receiver<StreamLine>> {
+) -> anyhow::Result<(Receiver<StreamLine>, StdinSink)> {
     let mut cmd = build_workbench_command(workbench_info, config_file)?;
     if is_check {
         cmd.arg("--check");

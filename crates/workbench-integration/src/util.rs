@@ -15,6 +15,7 @@ pub fn format_stream_line(line: &StreamLine) -> String {
         StreamLine::Stderr(s) => format!("[STDERR] {}", s),
         StreamLine::Done(code) => format!("[INFO] Process exited with code: {}", code),
         StreamLine::Error(e) => format!("[ERROR] {}", e),
+        StreamLine::InputRequired(s) => format!("[PROMPT] {}", s),
     }
 }
 
