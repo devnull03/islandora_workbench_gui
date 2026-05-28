@@ -4,7 +4,7 @@ use window_wrapper::{
     OpenBrowser,
 };
 
-actions!(nav, [OpenSettings]);
+actions!(nav, [OpenSettings, Quit]);
 
 pub fn app_menus() -> Vec<Menu> {
     vec![
@@ -18,6 +18,8 @@ pub fn app_menus() -> Vec<Menu> {
                         url: "https://example.com".into(),
                     },
                 ),
+                MenuItem::Separator,
+                MenuItem::action("Quit", Quit),
             ],
         },
         Menu {
