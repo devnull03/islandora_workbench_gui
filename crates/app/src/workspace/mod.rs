@@ -1,15 +1,18 @@
 mod gdrive_log;
+mod log_viewer;
 mod streaming;
+
+use log_viewer::LogViewer;
 
 use std::path::PathBuf;
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, Sizable, StyledExt,
+    Disableable, IconName, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
     h_flex,
-    input::{Input, InputEvent, InputState},
+    input::{InputEvent, InputState},
     label::Label,
     select::{SelectEvent, SelectState},
     v_flex,
@@ -62,7 +65,7 @@ enum WorkflowStage {
 pub struct Workspace {
     op: Operation,
     stage: WorkflowStage,
-    pending_logs: Vec<String>,
+    log_viewer: Entity<LogViewer>,
     log_expanded: bool,
 
     gdrive_link: Entity<InputState>,
@@ -73,14 +76,13 @@ pub struct Workspace {
     synced_task_labels: Vec<SharedString>,
     synced_server_labels: Vec<SharedString>,
 
-    log_state: Entity<InputState>,
     /// Keep input/select subscriptions alive so typing and selections re-validate buttons.
     _subscriptions: Vec<Subscription>,
 }
 
 impl Workspace {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let log_state = cx.new(|cx| InputState::new(window, cx).multi_line(true));
+        let log_viewer = cx.new(LogViewer::new);
 
         let gdrive_link = cx.new(|cx| InputState::new(window, cx).placeholder("Sheets URL…"));
 
@@ -177,7 +179,7 @@ impl Workspace {
         Self {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
-            pending_logs: Vec::new(),
+            log_viewer,
             log_expanded: false,
             gdrive_link,
             collection_node_id,
@@ -186,7 +188,6 @@ impl Workspace {
             server_select,
             synced_task_labels: Vec::new(),
             synced_server_labels: Vec::new(),
-            log_state,
             _subscriptions,
         }
     }
@@ -340,28 +341,16 @@ impl Workspace {
         .detach();
     }
 
-    /// Queue a log message from a context without `window` access. Flushed on the next render.
     pub(crate) fn push_log(&mut self, message: String, cx: &mut Context<Self>) {
-        self.pending_logs.push(message);
-        cx.notify();
+        self.log_viewer.update(cx, |lv, cx| lv.append(&message, cx));
     }
 
-    pub(crate) fn append_log(&self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.log_state.update(cx, |state, cx| {
-            let current = state.value();
-            let new_value = if current.is_empty() {
-                message.to_string()
-            } else {
-                format!("{}\n{}", current, message)
-            };
-            state.set_value(new_value, window, cx);
-        });
+    pub(crate) fn append_log(&self, message: &str, _window: &mut Window, cx: &mut Context<Self>) {
+        self.log_viewer.update(cx, |lv, cx| lv.append(message, cx));
     }
 
-    fn clear_logs(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.log_state.update(cx, |state, cx| {
-            state.set_value("".to_string(), window, cx);
-        });
+    fn clear_logs(&self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.log_viewer.update(cx, |lv, cx| lv.clear(cx));
     }
 
     fn run_ingest(&mut self, check: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -477,11 +466,6 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let pending = std::mem::take(&mut self.pending_logs);
-        for msg in &pending {
-            self.append_log(msg, window, cx);
-        }
-
         self.sync_select_items(window, cx);
 
         let idle = self.is_idle();
@@ -506,11 +490,18 @@ impl Render for Workspace {
         let run_enabled = idle && self.stage == WorkflowStage::CheckPassed;
 
         if self.log_expanded {
+            // Compute the workspace's usable height: full viewport minus the
+            // AppTitleBar (TITLE_BAR_HEIGHT = 34px) and the StatusBar (~30px).
+            // Using an explicit pixel height instead of size_full() so the
+            // LogViewer entity view has a concrete reference for its own h_full().
+            let workspace_h = window.viewport_size().height - px(34. + 30.);
             return div()
-                .size_full()
+                .w_full()
+                .h(workspace_h)
+                .overflow_hidden()
                 .p_4()
                 .relative()
-                .child(Input::new(&self.log_state).disabled(true).size_full())
+                .child(self.log_viewer.clone())
                 .child(
                     div()
                         .absolute()
@@ -537,32 +528,55 @@ impl Render for Workspace {
             .child(
                 v_flex()
                     .w_full()
+                    .flex_1()
                     .gap_3()
                     .child(
                         v_flex()
-                            .gap_2()
                             .w_full()
-                            .child(Label::new("Metadata sheet").font_semibold())
+                            .gap_2()
+                            .child(Label::new("Metadata").font_semibold())
                             .child(
                                 h_flex()
-                                    .gap_2()
                                     .w_full()
+                                    .gap_2()
                                     .items_start()
                                     .child(
-                                        div().w(relative(0.7)).min_w(px(0.)).child(
-                                            LabeledInput::new("URL", &self.gdrive_link)
-                                                .description("Google sheets url")
+                                        div().flex_1().min_w(px(0.)).child(
+                                            LabeledInput::new("Sheets URL", &self.gdrive_link)
                                                 .disabled(!idle),
                                         ),
                                     )
                                     .child(
-                                        div().w(relative(0.3)).min_w(px(0.)).child(
-                                            LabeledInput::new(
-                                                "Collection nid",
-                                                &self.collection_node_id,
-                                            )
-                                            .description("Collection nid")
-                                            .disabled(!idle),
+                                        div().flex_1().min_w(px(0.)).child(
+                                            v_flex()
+                                                .w_full()
+                                                .gap_1()
+                                                .child(Label::new("Ingest dir").text_sm())
+                                                .child(PathPickerBrowseRow {
+                                                    input: self.ingest_files_dir.clone(),
+                                                    browse: Button::new("browse-ingest-dir")
+                                                        .icon(IconName::FolderOpen)
+                                                        .outline()
+                                                        .disabled(!idle)
+                                                        .on_click(cx.listener(
+                                                            |this, _, window, cx| {
+                                                                get_file(
+                                                                    window,
+                                                                    cx,
+                                                                    &this.ingest_files_dir,
+                                                                    "Select directory for ingest files"
+                                                                        .into(),
+                                                                    true,
+                                                                );
+                                                            },
+                                                        )),
+                                                }),
+                                        ),
+                                    )
+                                    .child(
+                                        div().w(px(80.)).child(
+                                            LabeledInput::new("nid", &self.collection_node_id)
+                                                .disabled(!idle),
                                         ),
                                     ),
                             )
@@ -616,34 +630,9 @@ impl Render for Workspace {
                             ),
                     )
                     .child(
-                        v_flex()
-                            .gap_1()
-                            .w_full()
-                            .child(Label::new("Ingest").font_semibold())
-                            .child(PathPickerBrowseRow {
-                                input: self.ingest_files_dir.clone(),
-                                browse: Button::new("browse-ingest-dir")
-                                    .icon(IconName::FolderOpen)
-                                    .outline()
-                                    .disabled(!idle)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        get_file(
-                                            window,
-                                            cx,
-                                            &this.ingest_files_dir,
-                                            "Select directory for ingest files".into(),
-                                            true,
-                                        );
-                                    })),
-                            })
-                           .child(
-                                Label::new("Media mapped in metadata sheet")
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground),
-                            ),
-                    )
-                    .child(
-                        v_flex().gap_2().w_full().child(
+                        v_flex().gap_2().w_full()
+                            .child(Label::new("Server").font_semibold())
+                            .child(
                             h_flex()
                                 .w_full()
                                 .gap_4()
@@ -812,16 +801,13 @@ impl Render for Workspace {
             )
             .child(
                 div()
-                    .flex_1()
-                    .min_h_0()
+                    .h_full()
+                    .max_h(rems(16.))
                     .w_full()
                     .relative()
                     .group("log-area")
-                    .child(
-                        Input::new(&self.log_state)
-                            .disabled(true)
-                            .size_full(),
-                    )
+                    .overflow_hidden()
+                    .child(self.log_viewer.clone())
                     .child(
                         div()
                             .absolute()

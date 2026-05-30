@@ -1,6 +1,6 @@
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Sizable, TitleBar,
+    ActiveTheme, IconName, Sizable, TitleBar,
     button::{Button, ButtonVariants},
     label::Label,
     menu::{DropdownMenu, PopupMenu},
@@ -101,6 +101,7 @@ impl RenderOnce for AppTitleBar {
             .flex_1()
             .justify_end()
             .pr_4()
+            .gap_1()
             .items_center();
         if locked {
             right = right

@@ -1,4 +1,4 @@
-use gpui::*;
+use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     ActiveTheme,
     input::{Input, InputState},
@@ -42,10 +42,12 @@ impl RenderOnce for LabeledInput {
             .justify_start()
             .child(Label::new(self.label).text_sm())
             .child(Input::new(&self.input).disabled(self.disabled).w_full())
-            .child(
-                Label::new(self.description)
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground),
-            )
+            .when(!self.description.is_empty(), |s| {
+                s.child(
+                    Label::new(self.description)
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground),
+                )
+            })
     }
 }
