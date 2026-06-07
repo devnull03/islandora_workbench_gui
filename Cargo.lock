@@ -127,7 +127,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "app"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -5587,7 +5587,7 @@ dependencies = [
 
 [[package]]
 name = "settings"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -7235,7 +7235,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "window-wrapper"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "gpui",
  "gpui-component",
@@ -7845,7 +7845,7 @@ dependencies = [
 
 [[package]]
 name = "workbench-integration"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "indexmap",

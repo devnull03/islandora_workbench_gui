@@ -9,7 +9,7 @@ members = [
 default-members = ["crates/app"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
 
 [workspace.dependencies]
