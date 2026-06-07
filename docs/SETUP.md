@@ -10,9 +10,11 @@ release, since a release depends on several pieces being configured ahead of tim
 
 | Branch | Contents | Purpose |
 |---|---|---|
-| `main` | The Rust **GPUI** desktop app (`crates/*`) + release pipeline | Default branch; source of truth for the app and for tag-driven releases. |
-| `dev` | Same app, integration branch | Where day-to-day work lands and CI runs before promoting to `main`. |
+| `main` | The Rust **GPUI** desktop app (`crates/*`) + release pipeline | Default branch and source of truth. Routine work lands here directly via short-lived **feature branches** (no PR required); tag-driven releases are cut from here. |
 | `site` | An **Astro** static site (no Rust) | The public releases page deployed to GitHub Pages. Independent of the app. |
+
+> The legacy `dev` integration branch is **deprecated** — branch features off
+> `main` and land them back on `main` directly.
 
 Workspace crates (versions are inherited from `[workspace.package].version`):
 `crates/app` (binary `app`), `crates/settings`, `crates/workbench-integration`,
@@ -22,7 +24,7 @@ Workspace crates (versions are inherited from `[workspace.package].version`):
 
 ## 2. Local prerequisites
 
-**App (on `main`/`dev`):**
+**App (on `main`):**
 - Rust **stable** toolchain — `rust-toolchain.toml` pins the channel and pulls in
   `rustfmt` + `clippy`. Run `rustup update stable` periodically to match CI.
 - The app only targets **Windows + macOS** (gpui needs heavy system libs on Linux),
@@ -52,9 +54,10 @@ produce nothing visible.
    allow workflows to write (the release job needs `contents: write`; the site
    dispatcher needs `actions: write`). These are also declared per-workflow.
 
-3. **Branch protection (recommended).** Protect `main`: require the `CI` checks
-   (Windows + macOS) to pass before merge. Note the release **tag** push is not a
-   PR, so it bypasses protection by design.
+3. **Branch protection (optional).** This repo pushes directly to `main`, so there
+   is no PR gate by default. If you want one later, protect `main` and require the
+   `CI` checks — but note `ci.yml` only runs on PRs / `dev` pushes today (§4), and
+   tag pushes bypass protection by design.
 
 4. **Code signing (optional, currently OFF).** Releases are **unsigned**:
    - Windows: SmartScreen "unknown publisher" warning.
@@ -76,17 +79,23 @@ Four workflows, two on `main`, one on `site`, and CI on `dev`/PRs.
 - **Triggers:** push to `dev`; PRs targeting `dev` or `main`.
 - **Does:** on Windows + macOS, runs `cargo fmt --check`, `cargo clippy … -D warnings`,
   `cargo test`, `cargo build`. Cancels superseded runs to save minutes.
-- **Why it matters:** a PR into `main` (including a release-prep PR) must be green.
+- **Heads-up:** it does **not** run on direct pushes to `main`. With the
+  feature-branch-straight-to-`main` flow, run `cargo fmt`/`clippy`/`test` locally
+  first, or open a PR (which does trigger it). To gate direct pushes, add
+  `push: [main]` to the triggers.
 
 ### `release.yml` — build & publish artifacts (on `main`)
 - **Trigger:** pushing a tag matching `v*`. Merging to `main` alone does nothing.
 - **Guard:** the `version` job asserts the tag (minus `v`) **exactly equals**
   `Cargo.toml`'s `[workspace.package].version`. Mismatch ⇒ the build fails fast.
 - **Builds:**
-  - macOS: universal (x86_64 + aarch64) binary → `.app` → `.dmg`
-    (`scripts/bundle-mac.sh`).
+  - macOS: the two arches (x86_64 + aarch64) build **in parallel** (a matrix on
+    separate runners with per-target caches); a `bundle-macos` job then `lipo`s them
+    into a universal `.app` → `.dmg` (`scripts/bundle-mac.sh`).
   - Windows: `.exe` → portable `*-x86_64.zip` + NSIS `*-setup.exe`
-    (`scripts/installer.nsi`).
+    (`scripts/installer.nsi`). The job derives a numeric `VIProductVersion`
+    (`X.X.X.X`) from the tag, so semver pre-releases (e.g. `0.1.0-alpha.1`) package
+    cleanly instead of tripping NSIS's strict version format.
 - **Publishes:** a **DRAFT** release with the artifacts + `SHA256SUMS.txt`. It does
   **not** set the pre-release flag — you choose that when you publish (§5).
 
@@ -119,7 +128,8 @@ tag vX.Y.Z ─▶ release.yml (build dmg/zip/exe) ─▶ DRAFT release
 
 ## 5. Cutting a release (runbook)
 
-1. **Land the code** on `main` (via PR; CI green).
+1. **Land the code** on `main` (push your feature branch to `main`). Run
+   `cargo fmt`/`clippy`/`test` locally first — direct pushes skip CI (§4).
 2. **Bump the version** in `Cargo.toml` `[workspace.package].version` (inherited by
    all crates), and sync the lockfile (`cargo metadata` or any cargo build updates
    the member versions in `Cargo.lock`). Commit to `main`.
@@ -138,7 +148,8 @@ tag vX.Y.Z ─▶ release.yml (build dmg/zip/exe) ─▶ DRAFT release
 ### Pre-releases (alpha / rc / beta)
 - Use a **semver pre-release version**, e.g. `0.1.0-alpha.1`, in `Cargo.toml`, and
   tag `v0.1.0-alpha.1` (the version guard requires the match — `0.1.0-alpha.1`
-  is a valid Cargo version).
+  is a valid Cargo version). The Windows installer's numeric version is derived
+  automatically (§4), so the `-alpha.N` suffix needs no manual handling.
 - When publishing the draft, **check "Set as a pre-release"** (API `prerelease: true`).
   The site renders it with a **"Pre-release"** badge and never awards it the
   **"Latest"** badge — "Latest" only goes to the newest *stable* (non-pre-release)
