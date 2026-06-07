@@ -25,6 +25,11 @@ Unicode true
 !ifndef OUTFILE
   !define OUTFILE "Islandora-Workbench-${VERSION}-setup.exe"
 !endif
+; VIProductVersion needs a strict numeric X.X.X.X. CI derives this from VERSION
+; (stripping any pre-release suffix); the fallback covers local/manual compiles.
+!ifndef VIVERSION
+  !define VIVERSION "0.0.0.0"
+!endif
 
 !define APPNAME   "Islandora Workbench"
 !define EXENAME   "islandora-workbench.exe"
@@ -54,7 +59,7 @@ SetCompressor /SOLID lzma
 
 !insertmacro MUI_LANGUAGE "English"
 
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${VIVERSION}"
 VIAddVersionKey "ProductName"     "${APPNAME}"
 VIAddVersionKey "CompanyName"     "${COMPANY}"
 VIAddVersionKey "FileDescription" "${APPNAME} Installer"

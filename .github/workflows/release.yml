@@ -23,6 +23,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
+      vi_version: ${{ steps.v.outputs.vi_version }}
     steps:
       - uses: actions/checkout@v4
       - name: Derive and verify version
@@ -39,6 +40,12 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # NSIS VIProductVersion must be a strict numeric X.X.X.X. Strip any
+          # pre-release/build suffix (e.g. -alpha.1, +meta) and pad to 4 parts.
+          core="${version%%-*}"; core="${core%%+*}"
+          IFS=. read -r a b c d <<< "$core"
+          vi_version="${a:-0}.${b:-0}.${c:-0}.${d:-0}"
+          echo "vi_version=$vi_version" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # macOS: universal (x86_64 + aarch64) binary -> .app -> .dmg
@@ -105,6 +112,7 @@ jobs:
           $nsis = "C:\Program Files (x86)\NSIS\makensis.exe"
           & $nsis `
             "/DVERSION=$ver" `
+            "/DVIVERSION=${{ needs.version.outputs.vi_version }}" `
             "/DSRCEXE=$PWD\dist\islandora-workbench.exe" `
             "/DICONFILE=$PWD\assets\icons\app-icon.ico" `
             "/DOUTFILE=$PWD\dist\Islandora-Workbench-$ver-setup.exe" `
