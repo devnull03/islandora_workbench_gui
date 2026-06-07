@@ -1,6 +1,0 @@
-task: create
-
-host: https://islandora.ufv.ca
-credentials_file_path: credentials.yml
-
-input_csv: metadata.csv

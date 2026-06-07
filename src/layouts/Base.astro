@@ -1,0 +1,46 @@
+---
+// Importing the stylesheet (rather than <link href="...">) lets Astro fingerprint
+// it and rewrite the URL under `base`, so it never 404s on the project subpath.
+import '../styles/global.css';
+
+const REPO = 'devnull03/islandora_workbench_gui';
+const { title = 'Islandora Workbench GUI — Releases' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta
+      name="description"
+      content="Download the latest Islandora Workbench GUI builds for Windows and macOS."
+    />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="site">
+        <h1>Islandora Workbench GUI</h1>
+        <p class="tagline">Desktop builds for Windows and macOS.</p>
+        <p>
+          <a href={`https://github.com/${REPO}`}>View the project on GitHub</a>
+        </p>
+      </header>
+
+      <main>
+        <slot />
+      </main>
+
+      <footer class="site">
+        <p>
+          Builds are <strong>unsigned</strong>: your OS may warn on first launch.
+          See the
+          <a href={`https://github.com/${REPO}/releases`}>full Releases page</a>
+          for every version and asset.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
