@@ -108,7 +108,8 @@ impl RenderOnce for AppTitleBar {
                 .child(
                     Spinner::new()
                         .small()
-                        .icon(IconName::LoaderCircle).color(cx.theme().muted_foreground)
+                        .icon(IconName::LoaderCircle)
+                        .color(cx.theme().muted_foreground),
                 )
                 .child(
                     Label::new("Ingest running")

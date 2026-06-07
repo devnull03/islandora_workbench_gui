@@ -15,7 +15,10 @@ use crate::helpers;
 
 pub use ping::PingLogEvent;
 
-pub fn build_status_bar_registry(ping: Entity<ServerPingIndicator>, cx: &mut App) -> StatusBarRegistry {
+pub fn build_status_bar_registry(
+    ping: Entity<ServerPingIndicator>,
+    cx: &mut App,
+) -> StatusBarRegistry {
     let mut registry = StatusBarRegistry::new();
 
     registry.add_left(ping);
@@ -42,7 +45,7 @@ impl OpenTerminal {
         }
 
         println!("spawning terminal at: {:?}", path);
-        
+
         cx.spawn(async move |_this, _cx| {
             let _ = helpers::spawn_terminal_at(&path, "");
         })

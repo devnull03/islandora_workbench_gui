@@ -26,8 +26,12 @@ impl StdinSink {
 
 fn is_yn_prompt(s: &str) -> bool {
     let lower = s.to_lowercase();
-    lower.contains("[y/n]") || lower.contains("[yes/no]") || lower.contains("[y/n]:") ||    
-    lower.contains("(y/n)") || lower.contains("(yes/no)") || lower.contains("(y/n):")
+    lower.contains("[y/n]")
+        || lower.contains("[yes/no]")
+        || lower.contains("[y/n]:")
+        || lower.contains("(y/n)")
+        || lower.contains("(yes/no)")
+        || lower.contains("(y/n):")
 }
 
 /// Spawns a pre-built command and returns a receiver that streams stdout/stderr lines,

@@ -4,9 +4,7 @@ mod custom_fields;
 
 use gpui_component::setting::{SettingGroup, SettingPage};
 
-use settings::{
-    Setting, picker_with_path_button
-};
+use settings::{Setting, picker_with_path_button};
 
 use custom_fields::{
     TASK_OPTIONS, add_config_button, add_server_button, saved_configs_field, saved_servers_field,

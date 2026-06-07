@@ -1,8 +1,6 @@
 use gpui::*;
 
-use window_wrapper::{
-    OpenBrowser,
-};
+use window_wrapper::OpenBrowser;
 
 actions!(nav, [OpenSettings, Quit]);
 
@@ -54,7 +52,8 @@ pub fn app_menus() -> Vec<Menu> {
                         MenuItem::action(
                             "Issues",
                             OpenBrowser {
-                                url: "https://github.com/devnull03/islandora_workbench_gui/issues".into(),
+                                url: "https://github.com/devnull03/islandora_workbench_gui/issues"
+                                    .into(),
                             },
                         ),
                     ],

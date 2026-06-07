@@ -1,6 +1,5 @@
-pub mod title_bar;
 pub mod status_bar;
-
+pub mod title_bar;
 
 use gpui::*;
 pub use gpui_component::TitleBar;

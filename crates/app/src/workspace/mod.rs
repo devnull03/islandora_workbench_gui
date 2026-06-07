@@ -18,16 +18,13 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
-    WbInfo, WorkbenchConfigHandler,
-    language_url_from_server_base, process_google_sheet_metadata,
+    WbInfo, WorkbenchConfigHandler, language_url_from_server_base, process_google_sheet_metadata,
     run_ingest_streaming,
 };
 
 use crate::{
     components::{
-        labeled_input::LabeledInput,
-        labeled_select::LabeledSelect,
-        select_items::DetailSelectItem,
+        labeled_input::LabeledInput, labeled_select::LabeledSelect, select_items::DetailSelectItem,
     },
     helpers::get_file,
 };
@@ -39,10 +36,8 @@ use self::gdrive_log::{
     sheet_preprocess_error_message, sheet_preprocess_start_message,
     sheet_preprocess_success_messages,
 };
-use crate::helpers::{
-    reveal_in_folder, workbench_input_data_dir,
-};
 use self::streaming::spawn_stream_to_log;
+use crate::helpers::{reveal_in_folder, workbench_input_data_dir};
 
 /// What async operation is currently running. Drives loading spinners and blanket-disables inputs.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,8 +94,14 @@ impl Workspace {
         let server_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
 
         // Restore persisted field values before subscriptions are wired up.
-        let saved_gdrive = AppSettings::get(cx).values.get("gdrive_link").map(|v| v.text());
-        let saved_ingest = AppSettings::get(cx).values.get("ingest_files_dir").map(|v| v.text());
+        let saved_gdrive = AppSettings::get(cx)
+            .values
+            .get("gdrive_link")
+            .map(|v| v.text());
+        let saved_ingest = AppSettings::get(cx)
+            .values
+            .get("ingest_files_dir")
+            .map(|v| v.text());
         if let Some(v) = saved_gdrive.filter(|v| !v.is_empty()) {
             gdrive_link.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
         }
@@ -115,24 +116,27 @@ impl Workspace {
         // (Do not use `observe` on `InputState`: it also fires every cursor-blink tick.)
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
         // `reset_validation` only mutates `self.phase` so it's safe to call before the defer.
-        _subscriptions.push(cx.subscribe(&gdrive_link, |this, _, event: &InputEvent, cx| {
-            if matches!(
-                event,
-                InputEvent::Change | InputEvent::Focus | InputEvent::Blur
-            ) {
-                if matches!(event, InputEvent::Change) {
-                    this.reset_validation();
-                    let val = this.gdrive_link.read(cx).value();
-                    AppSettings::set_text("gdrive_link", val, cx);
-                }
-                let workspace = cx.weak_entity();
-                cx.defer(move |app| {
-                    let _ = workspace.update(app, |_, cx| cx.notify());
-                });
-            }
-        }));
         _subscriptions.push(
-            cx.subscribe(&collection_node_id, |this, _, event: &InputEvent, cx| {
+            cx.subscribe(&gdrive_link, |this, _, event: &InputEvent, cx| {
+                if matches!(
+                    event,
+                    InputEvent::Change | InputEvent::Focus | InputEvent::Blur
+                ) {
+                    if matches!(event, InputEvent::Change) {
+                        this.reset_validation();
+                        let val = this.gdrive_link.read(cx).value();
+                        AppSettings::set_text("gdrive_link", val, cx);
+                    }
+                    let workspace = cx.weak_entity();
+                    cx.defer(move |app| {
+                        let _ = workspace.update(app, |_, cx| cx.notify());
+                    });
+                }
+            }),
+        );
+        _subscriptions.push(cx.subscribe(
+            &collection_node_id,
+            |this, _, event: &InputEvent, cx| {
                 if matches!(
                     event,
                     InputEvent::Change | InputEvent::Focus | InputEvent::Blur
@@ -145,8 +149,8 @@ impl Workspace {
                         let _ = workspace.update(app, |_, cx| cx.notify());
                     });
                 }
-            }),
-        );
+            },
+        ));
         _subscriptions.push(
             cx.subscribe(&ingest_files_dir, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -385,11 +389,23 @@ impl Workspace {
         };
 
         let settings = AppSettings::get(cx);
-        let workbench_path_str = settings.values.get("workbench_path").map(|v| v.text()).unwrap_or_default();
-        let use_uv = settings.values.get("use_uv").map(|v| v.bool()).unwrap_or(false);
+        let workbench_path_str = settings
+            .values
+            .get("workbench_path")
+            .map(|v| v.text())
+            .unwrap_or_default();
+        let use_uv = settings
+            .values
+            .get("use_uv")
+            .map(|v| v.bool())
+            .unwrap_or(false);
 
         if workbench_path_str.trim().is_empty() {
-            self.append_log("[ERROR] Workbench path not configured in settings", window, cx);
+            self.append_log(
+                "[ERROR] Workbench path not configured in settings",
+                window,
+                cx,
+            );
             self.op = Operation::None;
             WindowLock::set(false, cx);
             cx.notify();
@@ -425,7 +441,11 @@ impl Workspace {
             }
         };
 
-        if let Err(e) = config_handler.update_config_fields(&server_url, credentials_file, &wb_info.install_path) {
+        if let Err(e) = config_handler.update_config_fields(
+            &server_url,
+            credentials_file,
+            &wb_info.install_path,
+        ) {
             self.append_log(&format!("[ERROR] Failed to update config: {e}"), window, cx);
             self.op = Operation::None;
             WindowLock::set(false, cx);
@@ -451,16 +471,24 @@ impl Workspace {
             .unwrap_or(false);
 
         let entity = cx.entity().clone();
-        spawn_stream_to_log(entity, rx, stdin_sink, auto_accept, window, cx, move |this, cx| {
-            this.op = Operation::None;
-            WindowLock::set(false, cx);
-            this.stage = if check {
-                WorkflowStage::CheckPassed
-            } else {
-                WorkflowStage::Ready
-            };
-            cx.notify();
-        });
+        spawn_stream_to_log(
+            entity,
+            rx,
+            stdin_sink,
+            auto_accept,
+            window,
+            cx,
+            move |this, cx| {
+                this.op = Operation::None;
+                WindowLock::set(false, cx);
+                this.stage = if check {
+                    WorkflowStage::CheckPassed
+                } else {
+                    WorkflowStage::Ready
+                };
+                cx.notify();
+            },
+        );
     }
 }
 
@@ -503,20 +531,16 @@ impl Render for Workspace {
                 .relative()
                 .child(self.log_viewer.clone())
                 .child(
-                    div()
-                        .absolute()
-                        .right_4()
-                        .top_4()
-                        .child(
-                            Button::new("collapse-log")
-                                .ghost()
-                                .icon(IconName::Minimize)
-                                .tooltip("Collapse log")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.log_expanded = false;
-                                    cx.notify();
-                                })),
-                        ),
+                    div().absolute().right_4().top_4().child(
+                        Button::new("collapse-log")
+                            .ghost()
+                            .icon(IconName::Minimize)
+                            .tooltip("Collapse log")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.log_expanded = false;
+                                cx.notify();
+                            })),
+                    ),
                 )
                 .into_any_element();
         }

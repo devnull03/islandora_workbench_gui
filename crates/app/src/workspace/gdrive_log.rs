@@ -33,10 +33,7 @@ pub fn sheet_preprocess_success_messages(res: &ProcessResult) -> Vec<String> {
     if let (Some(path), Some(stats)) = (res.items_output_path.as_ref(), res.items_stats.as_ref()) {
         lines.push(format!(
             "[INFO] Items CSV: {} (items={}, unique_parents={}, skipped={})",
-            path,
-            stats.total_items,
-            stats.unique_parents,
-            stats.skipped_rows
+            path, stats.total_items, stats.unique_parents, stats.skipped_rows
         ));
     }
     lines

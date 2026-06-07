@@ -1,9 +1,9 @@
 mod app_menus;
 mod app_settings;
 mod components;
-mod workspace;
 mod helpers;
 mod status_items;
+mod workspace;
 
 use gpui::*;
 use gpui_component::{Root, TitleBar, v_flex};
@@ -11,19 +11,15 @@ use settings::{
     AppSettings, MainWindowBounds, SettingsPersistence, SettingsWindow, SettingsWindowHandle,
     SettingsWriter, load_app_settings,
 };
-use window_wrapper::{
-    status_bar::StatusBar,
-    title_bar::AppTitleBar,
-    OpenBrowser, WindowLock,
-};
+use window_wrapper::{OpenBrowser, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar};
 
-use crate::{
-    app_menus::{OpenSettings, Quit, app_menus},
-    status_items::{build_status_bar_registry, PingLogEvent},
-    status_items::ping::ServerPingIndicator,
-};
 use crate::app_settings::build_pages;
 use crate::workspace::Workspace;
+use crate::{
+    app_menus::{OpenSettings, Quit, app_menus},
+    status_items::ping::ServerPingIndicator,
+    status_items::{PingLogEvent, build_status_bar_registry},
+};
 
 pub struct App {
     workspace: Entity<Workspace>,
@@ -63,9 +59,7 @@ impl App {
         });
 
         // Block the OS close button while an ingest run is in progress.
-        window.on_window_should_close(cx, |_, cx| {
-            !WindowLock::is_locked(cx)
-        });
+        window.on_window_should_close(cx, |_, cx| !WindowLock::is_locked(cx));
 
         Self {
             workspace,
@@ -116,10 +110,10 @@ fn main() {
             writer: Some(SettingsWriter::start()),
         });
         cx.set_global(SettingsWindowHandle::default());
-        
+
         cx.on_action(|_: &OpenSettings, cx| {
             let state = cx.global::<SettingsWindowHandle>();
-            
+
             if let Some(handle) = &state.handle {
                 if handle.update(cx, |_, _, _| {}).is_ok() {
                     return;
@@ -140,11 +134,12 @@ fn main() {
                     let view = cx.new(|cx| SettingsWindow::new(window, cx, build_pages));
                     cx.new(|cx| Root::new(view, window, cx))
                 });
-                
+
                 if let Ok(window_handle) = result {
                     cx.update(|cx| {
                         cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
-                    }).ok();
+                    })
+                    .ok();
                 }
             })
             .detach();
@@ -159,7 +154,7 @@ fn main() {
 
         cx.on_action(|_: &Quit, cx| {
             cx.quit();
-        });       
+        });
         let min_size = Size::new(px(520.0), px(300.0));
 
         let window_options = WindowOptions {

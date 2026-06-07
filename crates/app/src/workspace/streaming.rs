@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use gpui::*;
 use gpui_component::{
@@ -28,8 +28,12 @@ pub fn spawn_stream_to_log(
     cx.spawn_in(window, async move |_, cx| {
         loop {
             let rx2 = rx.clone();
-            let line = cx.background_spawn(async move { rx2.lock().unwrap().recv() }).await;
-            let Ok(line) = line else { break; };
+            let line = cx
+                .background_spawn(async move { rx2.lock().unwrap().recv() })
+                .await;
+            let Ok(line) = line else {
+                break;
+            };
 
             match &line {
                 StreamLine::InputRequired(prompt) => {
@@ -72,19 +76,18 @@ pub fn spawn_stream_to_log(
                                         let sy = sink_yes.clone();
                                         let sn = sink_no.clone();
                                         vec![
-                                            Button::new("yes")
-                                                .label("Yes")
-                                                .primary()
-                                                .on_click(move |_, window, cx| {
+                                            Button::new("yes").label("Yes").primary().on_click(
+                                                move |_, window, cx| {
                                                     sy.send("y");
                                                     window.close_dialog(cx);
-                                                }),
-                                            Button::new("no")
-                                                .label("No")
-                                                .on_click(move |_, window, cx| {
+                                                },
+                                            ),
+                                            Button::new("no").label("No").on_click(
+                                                move |_, window, cx| {
                                                     sn.send("n");
                                                     window.close_dialog(cx);
-                                                }),
+                                                },
+                                            ),
                                         ]
                                     })
                             });
@@ -94,8 +97,7 @@ pub fn spawn_stream_to_log(
                     // Don't break — keep draining while the dialog is open.
                 }
                 _ => {
-                    let should_break =
-                        matches!(&line, StreamLine::Done(_) | StreamLine::Error(_));
+                    let should_break = matches!(&line, StreamLine::Done(_) | StreamLine::Error(_));
                     let msg = format_stream_line(&line);
                     println!("[stream] received: {}", msg);
 

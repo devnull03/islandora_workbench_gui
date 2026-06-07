@@ -1,11 +1,11 @@
-use gpui::*;
 use gpui::prelude::FluentBuilder;
+use gpui::*;
 use gpui_component::{
     ActiveTheme, IconName, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     h_flex,
     label::Label,
-    setting::{SettingItem, SettingField},
+    setting::{SettingField, SettingItem},
     v_flex,
 };
 
@@ -19,9 +19,15 @@ pub const TASK_OPTIONS: &[(&str, &str)] = &[
     ("add_media", "add_media - Add media to nodes"),
     ("update_media", "update_media - Update existing media"),
     ("delete_media", "delete_media - Delete media"),
-    ("delete_media_by_node", "delete_media_by_node - Delete media by node"),
+    (
+        "delete_media_by_node",
+        "delete_media_by_node - Delete media by node",
+    ),
     ("export_csv", "export_csv - Export content to CSV"),
-    ("get_data_from_view", "get_data_from_view - Get data from view"),
+    (
+        "get_data_from_view",
+        "get_data_from_view - Get data from view",
+    ),
 ];
 
 // --- Task Config UI ---

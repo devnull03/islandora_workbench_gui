@@ -107,7 +107,11 @@ pub fn build_workbench_command(
             .python_path
             .as_deref()
             .and_then(|p| p.to_str())
-            .unwrap_or(if cfg!(target_os = "windows") { "python" } else { "python3" });
+            .unwrap_or(if cfg!(target_os = "windows") {
+                "python"
+            } else {
+                "python3"
+            });
         let mut c = Command::new(python);
         c.args(["-u", "workbench"]);
         c
