@@ -1,0 +1,6 @@
+# Pin the project to the stable channel and auto-install the components CI needs.
+# `stable` floats to the latest stable release (so new clippy lints can appear on
+# a `rustup update`); run `rustup update stable` periodically to stay in sync with CI.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
