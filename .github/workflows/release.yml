@@ -48,35 +48,60 @@ jobs:
           echo "vi_version=$vi_version" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
-  # macOS: universal (x86_64 + aarch64) binary -> .app -> .dmg
+  # macOS: build each arch in parallel (separate runners + caches).
   # ---------------------------------------------------------------------------
   build-macos:
     needs: version
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin, aarch64-apple-darwin
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - name: Build (x86_64)
-        run: cargo build --release -p app --target x86_64-apple-darwin
-      - name: Build (aarch64)
-        run: cargo build --release -p app --target aarch64-apple-darwin
+      - name: Build
+        run: cargo build --release -p app --target ${{ matrix.target }}
+
+      - name: Upload arch binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-bin-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/app
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # macOS: lipo the two arch binaries -> universal .app -> .dmg
+  # ---------------------------------------------------------------------------
+  bundle-macos:
+    needs: [version, build-macos]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download arch binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macos-bin-*
+          path: macos-bins
 
       - name: Merge into universal binary
         run: |
           lipo -create \
-            target/x86_64-apple-darwin/release/app \
-            target/aarch64-apple-darwin/release/app \
-            -output target/universal-app
-          lipo -info target/universal-app
+            macos-bins/macos-bin-x86_64-apple-darwin/app \
+            macos-bins/macos-bin-aarch64-apple-darwin/app \
+            -output universal-app
+          lipo -info universal-app
 
       - name: Bundle .app and .dmg
         run: |
           chmod +x scripts/bundle-mac.sh
-          scripts/bundle-mac.sh target/universal-app "${{ needs.version.outputs.version }}"
+          scripts/bundle-mac.sh universal-app "${{ needs.version.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -132,13 +157,18 @@ jobs:
   # Collect artifacts, checksum them, publish a DRAFT release.
   # ---------------------------------------------------------------------------
   release:
-    needs: [version, build-macos, build-windows]
+    needs: [version, bundle-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      # Only the final artifacts — not the intermediate per-arch macOS binaries.
       - uses: actions/download-artifact@v4
         with:
+          name: macos-dmg
           path: dist
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: dist
 
       - name: Generate checksums
         run: |
