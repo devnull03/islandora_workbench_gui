@@ -128,11 +128,9 @@ impl Render for LogViewer {
                                         this.selected_text().unwrap_or_else(|| this.all_text());
                                     cx.write_to_clipboard(ClipboardItem::new_string(text));
                                 }
-                                "a" => {
-                                    if !this.lines.is_empty() {
-                                        this.selected_range = Some((0, this.lines.len() - 1));
-                                        cx.notify();
-                                    }
+                                "a" if !this.lines.is_empty() => {
+                                    this.selected_range = Some((0, this.lines.len() - 1));
+                                    cx.notify();
                                 }
                                 _ => {}
                             }
