@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger site deploy
-        run: gh workflow run deploy-site.yml --ref site
+        # --repo is required: this job has no checkout, so gh can't infer the
+        # repository from a local git remote.
+        run: gh workflow run deploy-site.yml --ref site --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ github.token }}
