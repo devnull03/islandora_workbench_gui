@@ -52,6 +52,7 @@ impl LogViewer {
         cx.notify();
     }
 
+    #[allow(dead_code)] // paired with Workspace::clear_logs, kept for upcoming use
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.lines.clear();
         self.selected_range = None;
@@ -156,18 +157,18 @@ impl Render for LogViewer {
                             cx.notify();
                             return;
                         }
-                        if let Some(anchor) = this.drag_anchor {
-                            if this.container_top.is_some() {
-                                let idx = this.line_idx_from_event_y(event.position.y);
-                                let (s, e) = if anchor <= idx {
-                                    (anchor, idx)
-                                } else {
-                                    (idx, anchor)
-                                };
-                                if this.selected_range != Some((s, e)) {
-                                    this.selected_range = Some((s, e));
-                                    cx.notify();
-                                }
+                        if let Some(anchor) = this.drag_anchor
+                            && this.container_top.is_some()
+                        {
+                            let idx = this.line_idx_from_event_y(event.position.y);
+                            let (s, e) = if anchor <= idx {
+                                (anchor, idx)
+                            } else {
+                                (idx, anchor)
+                            };
+                            if this.selected_range != Some((s, e)) {
+                                this.selected_range = Some((s, e));
+                                cx.notify();
                             }
                         }
                     });

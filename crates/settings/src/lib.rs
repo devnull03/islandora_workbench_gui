@@ -410,12 +410,14 @@ impl AppSettings {
         const MIN_H: f32 = 250.0;
         const DEFAULT_W: f32 = 600.0;
         const DEFAULT_H: f32 = 800.0;
-        if let Some(b) = &self.main_window_bounds {
-            if b.width.is_finite() && b.height.is_finite() && b.width >= MIN_W && b.height >= MIN_H
-            {
-                let bounds = Bounds::centered(display, size(px(b.width), px(b.height)), cx);
-                return (bounds, display);
-            }
+        if let Some(b) = &self.main_window_bounds
+            && b.width.is_finite()
+            && b.height.is_finite()
+            && b.width >= MIN_W
+            && b.height >= MIN_H
+        {
+            let bounds = Bounds::centered(display, size(px(b.width), px(b.height)), cx);
+            return (bounds, display);
         }
         let bounds = Bounds::centered(display, size(px(DEFAULT_W), px(DEFAULT_H)), cx);
         (bounds, display)
@@ -429,7 +431,7 @@ impl AppSettings {
         };
         if let Some(writer) = cx.global::<SettingsPersistence>().writer.clone() {
             let snapshot = cx.global::<Self>();
-            writer.enqueue_save(&snapshot);
+            writer.enqueue_save(snapshot);
         }
         r
     }

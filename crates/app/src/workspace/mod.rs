@@ -250,10 +250,8 @@ impl Workspace {
                 .collect();
             self.saved_config_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
-                if first_population {
-                    if let Some(label) = &default_task {
-                        state.set_selected_value(label, window, cx);
-                    }
+                if first_population && let Some(label) = &default_task {
+                    state.set_selected_value(label, window, cx);
                 }
             });
         }
@@ -267,10 +265,8 @@ impl Workspace {
                 .collect();
             self.server_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
-                if first_population {
-                    if let Some(label) = &default_server {
-                        state.set_selected_value(label, window, cx);
-                    }
+                if first_population && let Some(label) = &default_server {
+                    state.set_selected_value(label, window, cx);
                 }
             });
         }
@@ -325,7 +321,7 @@ impl Workspace {
                 .await;
 
             let _ = cx.update(|window, app| {
-                let _ = entity.update(app, |this, cx| {
+                entity.update(app, |this, cx| {
                     match &result {
                         Ok(res) => {
                             for line in sheet_preprocess_success_messages(res) {
@@ -353,6 +349,7 @@ impl Workspace {
         self.log_viewer.update(cx, |lv, cx| lv.append(message, cx));
     }
 
+    #[allow(dead_code)] // for an upcoming "clear logs" action
     fn clear_logs(&self, _window: &mut Window, cx: &mut Context<Self>) {
         self.log_viewer.update(cx, |lv, cx| lv.clear(cx));
     }

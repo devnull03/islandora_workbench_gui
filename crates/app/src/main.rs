@@ -34,7 +34,7 @@ impl App {
         let workspace = cx.new(|cx| Workspace::new(window, cx));
         let status_bar = cx.new(|_| StatusBar::new());
 
-        let ping = cx.new(|cx| ServerPingIndicator::new(cx));
+        let ping = cx.new(ServerPingIndicator::new);
         let _ping_log_sub = cx.subscribe(&ping, {
             let workspace = workspace.clone();
             move |_, _, event: &PingLogEvent, cx| {

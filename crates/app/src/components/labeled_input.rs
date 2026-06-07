@@ -24,6 +24,7 @@ impl LabeledInput {
         }
     }
 
+    #[allow(dead_code)] // builder method kept for upcoming use
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
         self.description = description.into();
         self
