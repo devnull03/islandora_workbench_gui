@@ -11,4 +11,9 @@ serde_json.workspace = true
 which = "7.0"
 workbench-preprocessor = { git = "https://github.com/south-asian-canadian-digital-archive/workbench-preprocessor" }
 serde_yaml = "0.9"
-indexmap = "2.0"
+# serde feature is required by the IndexMap fields in config_builder; previously only present via
+# workspace feature unification, which broke when building/testing this crate in isolation.
+indexmap = { version = "2.0", features = ["serde"] }
+# Download (ureq) + extract (zip) the workbench repo zipball for first-run provisioning.
+ureq.workspace = true
+zip = "2"

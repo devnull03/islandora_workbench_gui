@@ -39,6 +39,9 @@ fn is_yn_prompt(s: &str) -> bool {
 pub fn spawn_command_streaming(
     mut cmd: Command,
 ) -> std::io::Result<(Receiver<StreamLine>, StdinSink)> {
+    // Stop a blank console window flashing on Windows when the GUI spawns workbench (we already
+    // pipe stdin/stdout/stderr, so the child never needs a console of its own).
+    crate::util::apply_no_window(&mut cmd);
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -80,7 +83,7 @@ pub fn spawn_command_streaming(
                     } else {
                         buf.push(byte[0]);
                         let s = String::from_utf8_lossy(&buf);
-                        eprintln!("[stdout-partial] {:?}", s);
+                        // eprintln!("[stdout-partial] {:?}", s);
                         if is_yn_prompt(&s) {
                             eprintln!("\n[PROMPT DETECTED] {:?}", s);
                             if tx_stdout

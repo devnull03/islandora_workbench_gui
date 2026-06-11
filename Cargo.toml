@@ -12,6 +12,19 @@ default-members = ["crates/app"]
 version = "0.1.0-alpha.1"
 edition = "2024"
 
+# Release artifacts ship to end users, so trade build time for a smaller, faster
+# binary. opt-level stays at the default 3 (max speed) — this is a GUI app, so we
+# get size from stripping + LTO rather than size-optimized codegen.
+#   strip:         drop debug/symbol tables (no runtime cost, big size win)
+#   lto = "thin":  cross-crate inlining/dead-code removal (smaller + faster)
+#   codegen-units: 1 unit = whole-crate optimization (smaller/faster, slower build)
+# panic is intentionally left at the default "unwind" — "abort" can break GPUI's
+# panic-catching executors, so it's excluded.
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+
 [workspace.dependencies]
 anyhow = "1"
 gpui = "0.2.2"

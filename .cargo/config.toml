@@ -1,0 +1,6 @@
+# Use the LLD linker (ships with the Rust toolchain as rust-lld, no install) for
+# the Windows MSVC target. Linking dominates incremental builds, and LLD is much
+# faster than the default MSVC link.exe. Scoped to this target only: the macOS
+# release targets keep their (already fast) default linker.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

@@ -20,6 +20,25 @@ pub fn format_stream_line(line: &StreamLine) -> String {
 }
 
 pub fn run_command_capture_stdout(program: &str, args: &[&str]) -> std::io::Result<String> {
-    let output = Command::new(program).args(args).output()?;
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    apply_no_window(&mut cmd);
+    let output = cmd.output()?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Suppress the console window Windows would otherwise allocate for a console child process when
+/// the parent (the GUI, which has no console of its own in release builds) spawns it. Without this,
+/// every workbench run / server ping flashes a blank terminal. No-op off Windows.
+pub(crate) fn apply_no_window(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
 }

@@ -1,3 +1,8 @@
+// On Windows, suppress the console window for release builds (the GUI is the only
+// surface users want). Debug builds keep the console so stdout/logs stay visible.
+// The attribute is a no-op on non-Windows targets.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod app_menus;
 mod app_settings;
 mod components;
