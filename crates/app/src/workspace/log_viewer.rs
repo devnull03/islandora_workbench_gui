@@ -6,7 +6,7 @@ const LINE_HEIGHT: f32 = 22.0;
 
 fn line_color(line: &str, cx: &App) -> Hsla {
     let t = cx.theme();
-    if line.starts_with("[ERROR]") {
+    if line.starts_with("[ERROR]") || line.starts_with("[Server]") {
         t.red
     } else if line.starts_with("[STDERR]") || line.starts_with("[WARN]") {
         t.yellow
@@ -14,7 +14,10 @@ fn line_color(line: &str, cx: &App) -> Hsla {
         t.blue
     } else if line.starts_with("[AUTO-ACCEPT]") {
         t.green
-    } else if line.starts_with("[INFO]") || (line.starts_with("---") && line.ends_with("---")) {
+    } else if line.starts_with("[INFO]")
+        || line.starts_with("[Source]")
+        || (line.starts_with("---") && line.ends_with("---"))
+    {
         t.muted_foreground
     } else {
         t.foreground

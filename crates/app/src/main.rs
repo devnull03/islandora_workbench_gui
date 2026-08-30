@@ -86,10 +86,16 @@ impl Render for App {
                     .size_full()
                     .child(AppTitleBar::new(cx))
                     .child(
+                        // `min_h(0)` is load-bearing: a flex item's min height defaults to its
+                        // content, so without it a tall workspace refuses to shrink and shoves
+                        // the status bar past the bottom of the viewport. With it the body is
+                        // clipped to the space left over and the workspace scrolls internally.
                         div()
                             .id("window-body")
                             .w_full()
                             .flex_1()
+                            .min_h(px(0.))
+                            .overflow_hidden()
                             .child(self.workspace.clone()),
                     )
                     .child(self.status_bar.clone()),

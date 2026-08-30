@@ -33,9 +33,13 @@ A **Profile** switcher sits above step 1, hidden until a second profile exists (
 
 ## Files
 
-- `crates/app/src/workspace/mod.rs` — the `Metadata` and `Server` blocks in `render`
-  (roughly lines 657-900 as of this writing), plus the `collection_node_id` field and its
-  subscription in `Workspace::new`.
+- `crates/app/src/workspace/steps.rs` — the three step renderers. Split out of `mod.rs` on
+  31 August 2026, along with `run.rs` (the check / run / provision pipeline); `mod.rs` now holds
+  only state, wiring and the top-level scroll layout. The numbered-step chrome is
+  `ui::StepSection` and the label-over-control pair is `ui::LabeledField` — add steps with those
+  rather than open-coding the header row again.
+- `crates/app/src/workspace/mod.rs` — `Workspace::new` (field wiring and subscriptions).
+  `collection_node_id` is already gone from the window.
 - `crates/workbench-integration/src/lib.rs` — `process_google_sheet_metadata` currently takes
   `node_id` and hard-codes the SACDA path. It becomes "run the selected preprocess script
   against the selected source".
