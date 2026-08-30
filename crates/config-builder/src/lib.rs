@@ -52,6 +52,12 @@ pub struct ConfigBuilderWindows {
 
 impl Global for ConfigBuilderWindows {}
 
+/// Width of the read-only YAML preview, and of the editor column beside it. The window is sized
+/// as the sum, and grows and shrinks by the panel's width when it is shown or hidden — the panel
+/// appearing must not squeeze the editors it exists to explain.
+pub(crate) const YAML_PANEL_WIDTH: Pixels = px(340.);
+const EDITOR_WIDTH: Pixels = px(540.);
+
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
 pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
     if let Some(handle) = cx.global::<ConfigBuilderWindows>().open.get(&path).copied() {
@@ -64,7 +70,8 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
         cx.global_mut::<ConfigBuilderWindows>().open.remove(&path);
     }
 
-    let bounds = Bounds::centered(None, size(px(880.0), px(820.0)), cx);
+    // Opens with the YAML panel showing, so the starting width includes it.
+    let bounds = Bounds::centered(None, size(EDITOR_WIDTH + YAML_PANEL_WIDTH, px(820.0)), cx);
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -539,8 +546,9 @@ impl ConfigBuilder {
                     } else {
                         "Show YAML"
                     })
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.yaml_open = !this.yaml_open;
+                        this.resize_for_yaml(window);
                         cx.notify();
                     })),
             )
@@ -574,4 +582,19 @@ impl ConfigBuilder {
 
 fn plural(n: usize) -> &'static str {
     if n == 1 { "" } else { "s" }
+}
+
+impl ConfigBuilder {
+    /// Grow or shrink the window by the panel's width when the panel is toggled, keeping the
+    /// editor column the size it was. Clamped to the display so a wide window on a small screen
+    /// does not push its own controls off the edge.
+    fn resize_for_yaml(&self, window: &mut Window) {
+        let current = window.bounds().size;
+        let target = if self.yaml_open {
+            current.width + YAML_PANEL_WIDTH
+        } else {
+            current.width - YAML_PANEL_WIDTH
+        };
+        window.resize(size(target.max(px(520.)), current.height));
+    }
 }

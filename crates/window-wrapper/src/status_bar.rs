@@ -1,34 +1,40 @@
-use gpui::*;
-use gpui_component::ActiveTheme as _;
+//! The status bar: three regions of registered components, with rules drawn between neighbours.
+//!
+//! Ported from the qrate window-wrapper. The occupancy question in [`crate::bar::BarItem`] is
+//! what makes the dividers work — an item that renders to nothing would otherwise strand a rule
+//! next to empty space.
 
-/// A global registry for status bar items.
-pub struct StatusBarRegistry {
-    left_items: Vec<AnyView>,
-    right_items: Vec<AnyView>,
-}
+use gpui::prelude::FluentBuilder as _;
+use gpui::*;
+use gpui_component::{ActiveTheme as _, divider::Divider, h_flex};
+
+use crate::bar::{BarItem, BarItems, BarRegistry};
+
+#[derive(Default)]
+pub struct StatusBarRegistry(BarItems);
 
 impl Global for StatusBarRegistry {}
 
-impl Default for StatusBarRegistry {
-    fn default() -> Self {
-        Self::new()
+impl BarRegistry for StatusBarRegistry {
+    fn items(&self) -> &BarItems {
+        &self.0
+    }
+    fn items_mut(&mut self) -> &mut BarItems {
+        &mut self.0
     }
 }
 
 impl StatusBarRegistry {
     pub fn new() -> Self {
-        Self {
-            left_items: Vec::new(),
-            right_items: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn add_left(&mut self, view: impl Into<AnyView>) {
-        self.left_items.push(view.into());
+        self.0.add_left(view);
     }
 
     pub fn add_right(&mut self, view: impl Into<AnyView>) {
-        self.right_items.push(view.into());
+        self.0.add_right(view);
     }
 }
 
@@ -48,34 +54,56 @@ impl StatusBar {
 
 impl Render for StatusBar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut left_items = Vec::new();
-        let mut right_items = Vec::new();
+        let group = |items: &Vec<BarItem>, cx: &App| {
+            let mut children: Vec<AnyElement> = Vec::new();
+            for item in items.iter().filter(|item| item.occupied(cx)) {
+                if !children.is_empty() {
+                    children.push(Divider::vertical().h_3().into_any_element());
+                }
+                children.push(item.view.clone().into_any_element());
+            }
+            h_flex().gap_3().items_center().children(children)
+        };
 
-        if let Some(registry) = cx.try_global::<StatusBarRegistry>() {
-            left_items = registry.left_items.clone();
-            right_items = registry.right_items.clone();
-        }
+        let items = cx.try_global::<StatusBarRegistry>().map(|r| r.items());
+        let occupied = |side: fn(&BarItems) -> &Vec<BarItem>| {
+            items.is_some_and(|items| side(items).iter().any(|item| item.occupied(cx)))
+        };
+        let (left, centre, right) = match items {
+            Some(items) => (
+                group(&items.left, cx),
+                group(&items.centre, cx),
+                group(&items.right, cx),
+            ),
+            None => (h_flex(), h_flex(), h_flex()),
+        };
 
-        let mut left_flex = gpui_component::h_flex().gap_3().items_center();
-        for item in left_items {
-            left_flex = left_flex.child(item);
-        }
-
-        let mut right_flex = gpui_component::h_flex().gap_3().items_center();
-        for item in right_items {
-            right_flex = right_flex.child(item);
-        }
-
-        gpui_component::h_flex()
+        h_flex()
             .id("status-bar")
-            .bg(cx.theme().title_bar)
             .w_full()
+            .flex_shrink_0()
             .px_3()
             .py_1()
+            .gap_3()
+            .items_center()
             .justify_between()
+            .bg(cx.theme().title_bar)
+            .text_xs()
+            .text_color(cx.theme().foreground)
             .border_t_1()
             .border_color(cx.theme().title_bar_border)
-            .child(left_flex)
-            .child(right_flex)
+            .child(left)
+            .child(
+                h_flex()
+                    .flex_1()
+                    .gap_3()
+                    .items_center()
+                    .when(
+                        occupied(|items| &items.left) && occupied(|items| &items.centre),
+                        |row| row.child(Divider::vertical().h_3()),
+                    )
+                    .child(centre),
+            )
+            .child(right)
     }
 }

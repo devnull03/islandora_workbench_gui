@@ -65,6 +65,8 @@ mod tests {
             Some("#141414")
         );
         assert_eq!(dark.radius, Some(4));
-        assert_eq!(dark.font_size, Some(13.));
+        // Font sizes are deliberately absent: the gpui-component defaults scale with the
+        // platform, and pinning them made the whole app read a size too small.
+        assert_eq!(dark.font_size, None);
     }
 }

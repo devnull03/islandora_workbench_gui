@@ -1,6 +1,8 @@
+pub mod bar;
 pub mod status_bar;
 pub mod title_bar;
 
+pub use bar::{BarItem, BarItems, BarRegistry};
 use gpui::*;
 pub use gpui_component::TitleBar;
 

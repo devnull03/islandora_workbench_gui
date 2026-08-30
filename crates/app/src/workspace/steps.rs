@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Sizable,
@@ -19,18 +20,56 @@ use gpui_component::{
 use settings::AppSettings;
 use ui::{LabeledField, StepSection};
 
+use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
 use crate::helpers::{get_file, reveal_in_folder, workbench_input_data_dir};
 use config_builder::open_config_builder;
 
 impl Workspace {
+    /// The one field that changes with the source: a URL to paste, or a file to browse for.
+    /// Both keep their own state, so switching back and forth loses nothing.
+    fn render_source_field(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let idle = self.is_idle();
+        let is_csv = self.source_key(cx) == SOURCE_CSV;
+        let state = self.source_field(cx).clone();
+
+        LabeledField::new(if is_csv { "Source CSV" } else { "Sheet URL" }).child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(Input::new(&state).small().w_full().disabled(!idle)),
+                )
+                .when(is_csv, |row| {
+                    row.child(
+                        Button::new("browse-source-csv")
+                            .icon(IconName::FolderOpen)
+                            .outline()
+                            .disabled(!idle)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                get_file(
+                                    window,
+                                    cx,
+                                    &this.source_csv,
+                                    "Select the source CSV".into(),
+                                    false,
+                                );
+                            })),
+                    )
+                }),
+        )
+    }
+
     /// Step 1 — where the metadata CSV comes from. Optional: a config that already points at a
     /// prepared CSV can skip straight to step 2.
     pub(super) fn render_input_source(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let idle = self.is_idle();
-        let loading = self.op == Operation::GdriveBusy;
+        let loading = self.op == Operation::Preprocessing;
         let process_disabled = !idle || !self.process_ready(cx);
-        let processed = idle && self.stage >= WorkflowStage::GdriveProcessed;
+        let processed = idle && self.stage >= WorkflowStage::SourceProcessed;
         let border = cx.theme().colors.border;
         let secondary = cx.theme().colors.secondary;
         let muted = cx.theme().colors.muted_foreground;
@@ -51,14 +90,7 @@ impl Workspace {
                     .border_1()
                     .border_color(border)
                     .bg(secondary)
-                    .child(
-                        LabeledField::new("Sheet URL").child(
-                            Input::new(&self.gdrive_link)
-                                .small()
-                                .w_full()
-                                .disabled(!idle),
-                        ),
-                    )
+                    .child(self.render_source_field(cx))
                     .child(
                         LabeledField::new("Ingest dir").child(
                             h_flex()
@@ -196,9 +228,11 @@ impl Workspace {
                     ),
             )
             .child(
-                Label::new("Workbench YAML · edit or create with the config builder")
-                    .text_xs()
-                    .text_color(muted),
+                Label::new(self.config_summary.clone().unwrap_or_else(|| {
+                    "Workbench YAML · edit or create with the config builder".into()
+                }))
+                .text_xs()
+                .text_color(muted),
             )
     }
 

@@ -6,6 +6,8 @@
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+
+use crate::YAML_PANEL_WIDTH;
 use gpui_component::{
     ActiveTheme, StyledExt, h_flex, label::Label, scroll::ScrollableElement, v_flex,
 };
@@ -35,7 +37,7 @@ impl ConfigBuilder {
             .collect();
 
         v_flex()
-            .w(px(340.))
+            .w(YAML_PANEL_WIDTH)
             .h_full()
             .border_l_1()
             .border_color(cx.theme().colors.border)

@@ -35,6 +35,28 @@ fn adopt_provisioned_install(dir: &Path, cx: &mut App) {
     }
 }
 
+/// Resolve the Python environment from settings. Both the ingest run and a preprocess script
+/// need it, and both should fail the same way when Workbench has not been configured.
+pub(super) fn workbench_info(cx: &App) -> anyhow::Result<WbInfo> {
+    let settings = AppSettings::get(cx);
+    let path = |key: &str| {
+        settings
+            .values
+            .get(key)
+            .map(|v| v.text())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| PathBuf::from(s.trim()))
+    };
+    let wb_dir = path("workbench_path")
+        .ok_or_else(|| anyhow::anyhow!("Workbench path not configured in settings"))?;
+    let use_uv = settings
+        .values
+        .get("use_uv")
+        .map(|v| v.bool())
+        .unwrap_or(false);
+    Ok(WbInfo::new(wb_dir, use_uv, path("uv_path")))
+}
+
 impl Workspace {
     pub(super) fn run_ingest(&mut self, check: bool, window: &mut Window, cx: &mut Context<Self>) {
         if !self.is_idle() || !self.ingest_ready(cx) {
@@ -88,38 +110,17 @@ impl Workspace {
             }
         };
 
-        // Read the run inputs straight from settings. Provisioning above guarantees `workbench_path`
-        // is populated whenever workbench was app-managed, so the setting is now the single source of
-        // truth. `WbInfo::new` falls back to `which("uv")` when `uv_path` is absent.
-        let settings = AppSettings::get(cx);
-        let wb_dir = settings
-            .values
-            .get("workbench_path")
-            .map(|v| v.text())
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| PathBuf::from(s.trim()));
-        let uv_path = settings
-            .values
-            .get("uv_path")
-            .map(|v| v.text())
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| PathBuf::from(s.trim()));
-        let use_uv = settings
-            .values
-            .get("use_uv")
-            .map(|v| v.bool())
-            .unwrap_or(false);
-
-        let Some(wb_dir) = wb_dir else {
-            self.append_log(
-                "[ERROR] Workbench path not configured in settings",
-                window,
-                cx,
-            );
-            self.op = Operation::None;
-            WindowLock::set(false, cx);
-            cx.notify();
-            return;
+        // Provisioning above guarantees `workbench_path` is populated whenever workbench was
+        // app-managed, so settings are now the single source of truth.
+        let wb_info = match workbench_info(cx) {
+            Ok(info) => info,
+            Err(e) => {
+                self.append_log(&format!("[ERROR] {e}"), window, cx);
+                self.op = Operation::None;
+                WindowLock::set(false, cx);
+                cx.notify();
+                return;
+            }
         };
 
         let server_url = match self.server_select.read(cx).selected_value() {
@@ -139,7 +140,6 @@ impl Workspace {
             .map(|s| PathBuf::from(s.credentials_file.as_ref()))
             .unwrap_or_default();
 
-        let wb_info = WbInfo::new(wb_dir, use_uv, uv_path);
         let mut config_handler = match WorkbenchConfigHandler::new(config_path).load() {
             Ok(h) => h,
             Err(e) => {

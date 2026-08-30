@@ -68,6 +68,23 @@ pub fn build_pages() -> Vec<SettingPage> {
                 .into(),
             ]),
         ]),
+        // Stage 3 gives this page company (input source defaults, clash warnings). One key is
+        // enough for now: without it the preprocess dropdown can only offer the built-in.
+        SettingPage::new("Input & preprocess")
+            .default_open(true)
+            .groups(vec![SettingGroup::new().title("Preprocess Scripts").items(
+                vec![
+                        Setting::DirPicker {
+                            key: "preprocess_scripts_dir",
+                            label: "Scripts Folder",
+                            description: "Every .py file here is offered as a preprocess script. \
+                                          A script is called with --input, --output-dir and \
+                                          optionally --config, and must write a CSV.",
+                            prompt: "Select preprocess scripts folder",
+                        }
+                        .into(),
+                    ],
+            )]),
         SettingPage::new("Servers").default_open(true).groups(vec![
             SettingGroup::new()
                 .title("Saved Servers")

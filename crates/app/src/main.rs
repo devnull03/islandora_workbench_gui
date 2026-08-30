@@ -84,7 +84,7 @@ impl Render for App {
             .child(
                 v_flex()
                     .size_full()
-                    .child(AppTitleBar::new(cx))
+                    .child(AppTitleBar::new(cx).title("Islandora Workbench"))
                     .child(
                         // `min_h(0)` is load-bearing: a flex item's min height defaults to its
                         // content, so without it a tall workspace refuses to shrink and shoves

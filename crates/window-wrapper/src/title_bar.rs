@@ -1,3 +1,11 @@
+//! The title bar: menus on the left, the window title in the centre, registered components and
+//! the run indicator on the right.
+//!
+//! The three-region layout and the [`TitleBarRegistry`] are ported from the qrate
+//! window-wrapper, so anything in the app can drop a view into the bar without this crate
+//! knowing about it.
+
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, IconName, Sizable, TitleBar,
@@ -8,9 +16,25 @@ use gpui_component::{
 };
 
 use crate::WindowLock;
+use crate::bar::{BarItems, BarRegistry};
+
+#[derive(Default)]
+pub struct TitleBarRegistry(BarItems);
+
+impl Global for TitleBarRegistry {}
+
+impl BarRegistry for TitleBarRegistry {
+    fn items(&self) -> &BarItems {
+        &self.0
+    }
+    fn items_mut(&mut self) -> &mut BarItems {
+        &mut self.0
+    }
+}
 
 #[derive(IntoElement)]
 pub struct AppTitleBar {
+    title: SharedString,
     items: Vec<OwnedMenu>,
 }
 
@@ -21,11 +45,17 @@ impl AppTitleBar {
         // for menu in menu_items.into_iter() {
         //     items.push(menu.owned());
         // }
-        Self { items: menu_items }
+        Self {
+            items: menu_items,
+            title: SharedString::default(),
+        }
     }
 
     pub fn with_owned(items: Vec<OwnedMenu>) -> Self {
-        Self { items }
+        Self {
+            items,
+            title: SharedString::default(),
+        }
     }
 
     fn convert_menu(menu_spec: OwnedMenu) -> impl IntoElement {
@@ -86,38 +116,69 @@ impl AppTitleBar {
     }
 }
 
+impl AppTitleBar {
+    /// The window title, shown centred. Empty by default so secondary windows can stay bare.
+    pub fn title(mut self, title: impl Into<SharedString>) -> Self {
+        self.title = title.into();
+        self
+    }
+}
+
 impl RenderOnce for AppTitleBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let locked = WindowLock::is_locked(cx);
+        let muted = cx.theme().muted_foreground;
 
-        let mut menu_container = gpui_component::h_flex().gap_1().justify_start();
+        let mut menus = gpui_component::h_flex().flex_1().gap_1().justify_start();
         for item in self.items.clone() {
-            menu_container = menu_container
-                .child(Self::convert_menu(item))
-                .cursor_pointer();
+            menus = menus.child(Self::convert_menu(item)).cursor_pointer();
         }
 
-        let mut right = gpui_component::h_flex()
-            .flex_1()
-            .justify_end()
-            .pr_4()
-            .gap_1()
-            .items_center();
-        if locked {
-            right = right
-                .child(
-                    Spinner::new()
-                        .small()
-                        .icon(IconName::LoaderCircle)
-                        .color(cx.theme().muted_foreground),
-                )
-                .child(
-                    Label::new("Ingest running")
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground),
-                );
-        }
+        let registered = cx
+            .try_global::<TitleBarRegistry>()
+            .map(|r| {
+                r.items()
+                    .right
+                    .iter()
+                    .filter(|item| item.occupied(cx))
+                    .map(|item| item.view.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
-        TitleBar::new().child(menu_container).child(right)
+        TitleBar::new()
+            .text_xs()
+            .text_color(cx.theme().foreground)
+            .child(menus)
+            .child(
+                gpui_component::h_flex()
+                    .justify_center()
+                    .items_center()
+                    .gap_1p5()
+                    .when(!self.title.is_empty(), |this| {
+                        this.child(Label::new(self.title.clone()).text_xs().text_color(muted))
+                    }),
+            )
+            .child(
+                gpui_component::h_flex()
+                    .flex_1()
+                    .justify_end()
+                    .pr_4()
+                    .gap_1()
+                    .items_center()
+                    .children(registered)
+                    // The run indicator is not a registered item: it belongs to the window lock,
+                    // which this crate owns, and it must always sit closest to the controls.
+                    .when(locked, |right| {
+                        right
+                            .child(
+                                Spinner::new()
+                                    .small()
+                                    .icon(IconName::LoaderCircle)
+                                    .color(muted),
+                            )
+                            .child(Label::new("Ingest running").text_xs().text_color(muted))
+                    }),
+            )
     }
 }
