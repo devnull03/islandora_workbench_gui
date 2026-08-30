@@ -6,8 +6,7 @@ pub mod path_picker;
 mod db;
 
 pub use db::{SettingsWriter, load_app_settings};
-use gpui::prelude::FluentBuilder;
-use gpui_component::{ActiveTheme, Sizable};
+use gpui_component::Sizable;
 
 /// Increment when the persisted SQLite JSON schema (`db::PersistSettings`) changes.
 pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
@@ -21,7 +20,7 @@ use gpui_component::{
     IconName, StyledExt, TitleBar,
     button::Button,
     h_flex,
-    input::{Input, InputEvent, InputState},
+    input::InputState,
     label::Label,
     scroll::ScrollableElement,
     setting::{SettingField, SettingItem, SettingPage, Settings},
@@ -588,70 +587,33 @@ impl Global for SettingsWindowHandle {}
 
 // --- Settings Window ---
 
-/// `build_pages` takes the search query because filtering has to happen at construction.
-/// `SettingPage` keeps its title and groups `pub(super)` to gpui-component, so a built page
-/// cannot be read back and narrowed — only the code that knows the labels can decide.
 pub struct SettingsWindow {
-    pub build_pages: fn(&str) -> Vec<SettingPage>,
-    search: Entity<InputState>,
-    _subscription: Subscription,
+    pub build_pages: fn() -> Vec<SettingPage>,
 }
 
 impl SettingsWindow {
     pub fn new(
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        build_pages: fn(&str) -> Vec<SettingPage>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+        build_pages: fn() -> Vec<SettingPage>,
     ) -> Self {
-        let search = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Search settings — try \"python\", \"server\"")
-        });
-        let _subscription = cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change) {
-                cx.notify();
-            }
-        });
-        Self {
-            build_pages,
-            search,
-            _subscription,
-        }
+        Self { build_pages }
     }
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let query = self.search.read(cx).value();
-        let pages = (self.build_pages)(query.as_ref());
-        let empty = pages.is_empty();
-
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .child(TitleBar::new().child(Label::new("Settings").font_semibold()))
             .child(
-                div()
-                    .w_full()
-                    .flex_shrink_0()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(Input::new(&self.search).small().w_full()),
-            )
-            .child(
+                // `Settings` draws its own search field and filters through
+                // `SettingItem::is_match`, so this window adds none of its own.
                 div()
                     .flex_1()
                     .min_h(px(0.))
                     .overflow_y_scrollbar()
-                    .when(empty, |this| {
-                        this.p_4().child(
-                            Label::new(format!("Nothing matches \u{201c}{query}\u{201d}."))
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                    })
-                    .when(!empty, |this| {
-                        this.child(Settings::new("app-settings").pages(pages))
-                    }),
+                    .child(Settings::new("app-settings").pages((self.build_pages)())),
             )
     }
 }

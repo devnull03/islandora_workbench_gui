@@ -69,9 +69,8 @@ visible everywhere, so nobody edits the wrong institution's servers.
 
 Both open questions were put to the user and answered:
 
-- **The search filters rows in place.** Typing narrows every page to matching rows; a page that
-  keeps nothing is not rendered at all. This is what VS Code and Zed settings search do, so it
-  needs no explanation.
+- **The search filters rows in place** — and it turned out gpui-component's `Settings` already
+  does exactly that, so the app writes none of it. See note 1.
 - **Test is two stages.** `GET {server_url}` first; only if that answers,
   `GET {server_url}/islandora_workbench_integration/version` with the credentials file. They are
   reported separately because they fail separately, which is exactly what the mockup's
@@ -79,13 +78,12 @@ Both open questions were put to the user and answered:
 
 ## Notes discovered during implementation (31 August 2026)
 
-1. **The search had to move into `build_pages`, and change its signature to
-   `fn(&str) -> Vec<SettingPage>`.** gpui-component keeps `SettingPage::{title, groups}` and
-   `SettingGroup::items` `pub(super)`, so a built page cannot be read back and narrowed — only
-   the code holding the labels as literals can decide. Each item is declared with the words it
-   answers to, and `page()` weighs page title, group title and item terms together. Filtering
-   group-at-a-time does not work: by then the page title is out of scope, so searching a page's
-   own name would return nothing. There is a test for exactly that case.
+1. **The search is gpui-component's, not ours.** `Settings` renders its own field and filters
+   through `SettingItem::is_match`, which reads each item's title and description; a custom
+   `SettingItem::Element` (the server and config lists) shows only when the query is empty,
+   which is right for a list that is not a single setting. A hand-rolled filter was written
+   first, against a `build_pages(query)` signature, and then removed — `build_pages` is back to
+   `fn() -> Vec<SettingPage>`. Check the library before building a filter.
 2. **No migration code was needed for schema v2.** `PersistServerConfig`'s new fields are
    `#[serde(default)]`, and "never tested, no confirmation required" is the right reading of a
    v1 blob's silence. The version constant still moves to 2 so the change is legible.
