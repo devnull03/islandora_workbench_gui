@@ -1,0 +1,1547 @@
+{
+  "workbench_ref": "dcb49fe777199276eace15b4b044dded3d8bab27",
+  "generated": "2026-08-30",
+  "settings": [
+    {
+      "key": "input_dir",
+      "shape": "file_path",
+      "default": "input_data",
+      "description": "Folder Workbench reads the input CSV and files from.",
+      "group": "Input",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "input_csv",
+      "shape": "file_path",
+      "default": "metadata.csv",
+      "description": "The processed sheet. Written by the app at run time.",
+      "group": "Input",
+      "required": false,
+      "browse": "file",
+      "locked": true
+    },
+    {
+      "key": "media_use_tid",
+      "shape": "url",
+      "default": "http://pcdm.org/use#OriginalFile",
+      "description": "Islandora media use term for the files this run creates.",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "drupal_filesystem",
+      "shape": "string",
+      "default": "fedora://",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "id_field",
+      "shape": "string",
+      "default": "id",
+      "description": "CSV column holding the identifier Workbench keys rows by.",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "content_type",
+      "shape": "string",
+      "default": "islandora_object",
+      "description": "",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "delimiter",
+      "shape": "delimiter",
+      "default": ",",
+      "description": "Separates columns in the input CSV.",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "subdelimiter",
+      "shape": "delimiter",
+      "default": "|",
+      "description": "Separates several values in one cell.",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "log_file_path",
+      "shape": "file_path",
+      "default": "workbench.log",
+      "description": "Where Workbench writes this run's log.",
+      "group": "Logging",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "log_file_mode",
+      "shape": "enum",
+      "default": "a",
+      "description": "",
+      "group": "Logging",
+      "required": false,
+      "choices": [
+        [
+          "a",
+          "append"
+        ],
+        [
+          "w",
+          "overwrite"
+        ]
+      ]
+    },
+    {
+      "key": "allow_missing_files",
+      "shape": "boolean",
+      "default": false,
+      "description": "Keep going when a file named in the CSV isn't on disk.",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "perform_soft_checks",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "update_mode",
+      "shape": "enum",
+      "default": "replace",
+      "description": "How an update task treats values already on the node.",
+      "group": "Task",
+      "required": false,
+      "choices": [
+        "replace",
+        "append",
+        "delete"
+      ]
+    },
+    {
+      "key": "max_node_title_length",
+      "shape": "integer",
+      "default": 255,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "max_image_alt_text_length",
+      "shape": "integer",
+      "default": 255,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "paged_content_from_directories",
+      "shape": "boolean",
+      "default": false,
+      "description": "Create page nodes from the files in each item's directory.",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "paged_content_from_directories_parents_exist",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "delete_media_with_nodes",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "allow_adding_terms",
+      "shape": "boolean",
+      "default": false,
+      "description": "Let Workbench create taxonomy terms it does not find.",
+      "group": "Taxonomy",
+      "required": false
+    },
+    {
+      "key": "columns_with_term_names",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Taxonomy",
+      "required": false
+    },
+    {
+      "key": "protected_vocabularies",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "Vocabularies Workbench may never add terms to.",
+      "group": "Taxonomy",
+      "required": false
+    },
+    {
+      "key": "nodes_only",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "log_response_time",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "adaptive_pause_threshold",
+      "shape": "integer",
+      "default": 2,
+      "description": "",
+      "group": "HTTP",
+      "required": false,
+      "unit": "seconds"
+    },
+    {
+      "key": "log_response_time_sample",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_request_url",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_json",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_response_body",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_response_status_code",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_headers",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_term_creation",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "log_file_name_and_line_number",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "progress_bar",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "show_percentage_of_csv_input_processed",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "prompt_user_before_delete_task",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "run_scripts_threads",
+      "shape": "integer",
+      "default": 1,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "run_scripts_log_script_output",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "user_agent",
+      "shape": "string",
+      "default": "Islandora Workbench",
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "allow_redirects",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "secure_ssl_only",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "google_sheets_csv_filename",
+      "shape": "string",
+      "default": "google_sheet.csv",
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "google_sheets_gid",
+      "shape": "string",
+      "default": "0",
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "excel_worksheet",
+      "shape": "string",
+      "default": "Sheet1",
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "excel_csv_filename",
+      "shape": "string",
+      "default": "excel.csv",
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "ignore_csv_columns",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "Columns in the CSV that Workbench should not try to map to a field.",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "use_node_title_for_media",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "use_nid_in_media_title",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "use_node_title_for_media_title",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "field_for_remote_filename",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "remote_file_cookie_name",
+      "shape": "string",
+      "default": "",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "remote_file_cookie_value",
+      "shape": "string",
+      "default": "",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "keep_filename_parent_directory",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "field_for_media_title",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "delete_tmp_upload",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "input_data_zip_archives",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "delete_zip_archive_after_extraction",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "list_missing_drupal_fields",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "secondary_tasks",
+      "shape": "config_ref",
+      "default": null,
+      "description": "Configs that run in order after this one finishes.",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "sqlite_db_filename",
+      "shape": "string",
+      "default": "workbench_temp_data.db",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "csv_id_to_node_id_map_dir",
+      "shape": "file_path",
+      "default": null,
+      "description": "Defaults to the system temp folder when unset.",
+      "group": "Advanced",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "csv_id_to_node_id_map_filename",
+      "shape": "string",
+      "default": "csv_id_to_node_id_map.db",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "fixity_algorithm",
+      "shape": "nullable_enum",
+      "default": null,
+      "description": "Checksum used to verify uploaded files. Unset skips the check.",
+      "group": "Advanced",
+      "required": false,
+      "choices": [
+        "md5",
+        "sha1",
+        "sha256"
+      ]
+    },
+    {
+      "key": "validate_fixity_during_check",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "output_csv_include_input_csv",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "export_file_url_instead_of_download",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "timestamp_rollback",
+      "shape": "boolean",
+      "default": false,
+      "description": "Stamp rollback files so runs don't overwrite each other.",
+      "group": "Rollback",
+      "required": false
+    },
+    {
+      "key": "rollback_dir",
+      "shape": "file_path",
+      "default": null,
+      "description": "Folder for rollback CSVs.",
+      "group": "Rollback",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "rollback_file_include_node_info",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Rollback",
+      "required": false
+    },
+    {
+      "key": "enable_http_cache",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "http_cache_storage",
+      "shape": "enum",
+      "default": "memory",
+      "description": "",
+      "group": "HTTP",
+      "required": false,
+      "choices": [
+        "memory",
+        "sqlite"
+      ]
+    },
+    {
+      "key": "http_cache_storage_expire_after",
+      "shape": "integer",
+      "default": 1200,
+      "description": "",
+      "group": "HTTP",
+      "required": false,
+      "unit": "seconds"
+    },
+    {
+      "key": "http_max_retries",
+      "shape": "integer",
+      "default": 3,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "http_retry_on_status_codes",
+      "shape": "list_of_numbers",
+      "default": [
+        500,
+        502,
+        503,
+        504
+      ],
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "http_backoff_factor",
+      "shape": "integer",
+      "default": 1,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "http_retry_allowed_methods",
+      "shape": "list_of_strings",
+      "default": [
+        "HEAD",
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "validate_terms_exist",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Taxonomy",
+      "required": false
+    },
+    {
+      "key": "validate_parent_node_exists",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "media_types",
+      "shape": "map_of_lists",
+      "default": [
+        {
+          "image": [
+            "png",
+            "gif",
+            "jpg",
+            "jpeg"
+          ]
+        },
+        {
+          "document": [
+            "pdf",
+            "doc",
+            "docx",
+            "ppt",
+            "pptx"
+          ]
+        },
+        {
+          "file": [
+            "tif",
+            "tiff",
+            "jp2",
+            "zip",
+            "tar"
+          ]
+        },
+        {
+          "audio": [
+            "mp3",
+            "wav",
+            "aac"
+          ]
+        },
+        {
+          "video": [
+            "mp4",
+            "mov",
+            "wmv",
+            "avi",
+            "mts",
+            "flv",
+            "f4v",
+            "swf",
+            "mkv",
+            "webm",
+            "ogv",
+            "mpeg"
+          ]
+        },
+        {
+          "extracted_text": [
+            "txt"
+          ]
+        }
+      ],
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "preprocessors",
+      "shape": "map",
+      "default": {},
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "paged_content_sequence_separator",
+      "shape": "delimiter",
+      "default": "-",
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "paged_content_page_weight_multiplier",
+      "shape": "string",
+      "default": "1",
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "media_type_file_fields",
+      "shape": "map",
+      "default": {
+        "file": "field_media_file",
+        "document": "field_media_document",
+        "image": "field_media_image",
+        "audio": "field_media_audio_file",
+        "video": "field_media_video_file",
+        "extracted_text": "field_media_file",
+        "fits_technical_metadata": "field_media_file",
+        "remote_video": "field_media_oembed_video"
+      },
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "media_track_file_fields",
+      "shape": "map",
+      "default": {
+        "audio": "field_track",
+        "video": "field_track"
+      },
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "media_fields",
+      "shape": "map",
+      "default": {
+        "file": "field_media_file",
+        "document": "field_media_document",
+        "image": "field_media_image",
+        "audio": "field_media_audio_file",
+        "video": "field_media_video_file",
+        "extracted_text": "field_media_file",
+        "fits_technical_metadata": "field_media_file",
+        "remote_video": "field_media_oembed_video"
+      },
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "delete_media_by_node_media_use_tids",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "update_media_by_node_media_use_tids",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "export_csv_term_mode",
+      "shape": "enum",
+      "default": "tid",
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "choices": [
+        "tid",
+        "name"
+      ]
+    },
+    {
+      "key": "export_csv_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "export_csv_field_list",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "export_file_directory",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "export_file_media_use_term_id",
+      "shape": "url",
+      "default": "http://pcdm.org/use#OriginalFile",
+      "description": "",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "standalone_media_url",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "require_entity_reference_views",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "csv_start_row",
+      "shape": "integer",
+      "default": 0,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "csv_stop_row",
+      "shape": "integer",
+      "default": null,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "oembed_providers",
+      "shape": "map_of_lists",
+      "default": [
+        {
+          "remote_video": [
+            "https://www.youtube.com/",
+            "https://youtu.be"
+          ]
+        }
+      ],
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "contact_sheet_output_dir",
+      "shape": "file_path",
+      "default": "contact_sheet_output",
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "contact_sheet_css_path",
+      "shape": "file_path",
+      "default": "assets/contact_sheet/contact-sheet.css",
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "page_title_template",
+      "shape": "template_string",
+      "default": "$parent_title, page $weight",
+      "description": "Title given to each page node created under a parent.",
+      "group": "Paged content",
+      "required": false,
+      "tokens": [
+        "$parent_title",
+        "$weight"
+      ]
+    },
+    {
+      "key": "csv_headers",
+      "shape": "enum",
+      "default": "names",
+      "description": "",
+      "group": "Input",
+      "required": false,
+      "choices": [
+        "names",
+        "labels"
+      ]
+    },
+    {
+      "key": "clean_csv_values_skip",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "text_format_id",
+      "shape": "string",
+      "default": "basic_html",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "ignore_existing_parent_ids",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "query_csv_id_to_node_id_map_for_parents",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "ignore_duplicate_parent_ids",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "redirect_status_code",
+      "shape": "integer",
+      "default": 301,
+      "description": "",
+      "group": "HTTP",
+      "required": false
+    },
+    {
+      "key": "csv_value_templates",
+      "shape": "list_of_one_key_maps",
+      "default": [],
+      "description": "Rewrite a column's value before it is sent. $csv_value stands in for the cell's original value.",
+      "group": "Templates",
+      "required": false
+    },
+    {
+      "key": "csv_value_templates_for_paged_content",
+      "shape": "list_of_one_key_maps",
+      "default": [],
+      "description": "",
+      "group": "Templates",
+      "required": false
+    },
+    {
+      "key": "csv_value_templates_rand_length",
+      "shape": "integer",
+      "default": 5,
+      "description": "",
+      "group": "Templates",
+      "required": false
+    },
+    {
+      "key": "allow_csv_value_templates_if_field_empty",
+      "shape": "list_of_strings",
+      "default": [],
+      "description": "",
+      "group": "Templates",
+      "required": false
+    },
+    {
+      "key": "remind_user_to_run_check",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "completion_message",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Logging",
+      "required": false
+    },
+    {
+      "key": "media_type_by_media_use",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "paged_content_ignore_files",
+      "shape": "list_of_strings",
+      "default": [
+        "Thumbs.db"
+      ],
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "include_password_in_rollback_config_file",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Rollback",
+      "required": false
+    },
+    {
+      "key": "remove_password_from_config_file",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Rollback",
+      "required": false
+    },
+    {
+      "key": "recovery_mode_starting_from_node_id",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "viewer_override_fieldname",
+      "shape": "string",
+      "default": "field_viewer_override",
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "check_for_workbench_updates",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "use_workbench_permissions",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "show_shutdown_script_output",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "show_bootstrap_script_output",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "task",
+      "shape": "enum",
+      "default": null,
+      "description": "What this run does to Islandora.",
+      "group": "Task",
+      "required": true,
+      "choices": [
+        [
+          "create",
+          "create - Create new nodes"
+        ],
+        [
+          "create_from_files",
+          "create_from_files - Create from files"
+        ],
+        [
+          "update",
+          "update - Update existing nodes"
+        ],
+        [
+          "delete",
+          "delete - Delete nodes"
+        ],
+        [
+          "add_media",
+          "add_media - Add media to nodes"
+        ],
+        [
+          "update_media",
+          "update_media - Update existing media"
+        ],
+        [
+          "delete_media",
+          "delete_media - Delete media"
+        ],
+        [
+          "delete_media_by_node",
+          "delete_media_by_node - Delete media by node"
+        ],
+        [
+          "export_csv",
+          "export_csv - Export content to CSV"
+        ],
+        [
+          "get_data_from_view",
+          "get_data_from_view - Get data from view"
+        ]
+      ]
+    },
+    {
+      "key": "host",
+      "shape": "url",
+      "default": null,
+      "description": "Ingest server. Written by the app at run time.",
+      "group": "Task",
+      "required": false,
+      "locked": true
+    },
+    {
+      "key": "credentials_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "Credentials for the ingest server. Written by the app at run time.",
+      "group": "Task",
+      "required": false,
+      "browse": "file",
+      "locked": true
+    },
+    {
+      "key": "adaptive_pause",
+      "shape": "integer",
+      "default": null,
+      "description": "Seconds to wait between requests when the server is slow.",
+      "group": "HTTP",
+      "required": false,
+      "unit": "seconds"
+    },
+    {
+      "key": "pause",
+      "shape": "integer",
+      "default": null,
+      "description": "Fixed number of seconds to wait between requests.",
+      "group": "HTTP",
+      "required": false,
+      "unit": "seconds"
+    },
+    {
+      "key": "bootstrap",
+      "shape": "command_list",
+      "default": null,
+      "description": "Commands run on your machine before the task starts.",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "shutdown",
+      "shape": "command_list",
+      "default": null,
+      "description": "Commands run on your machine after the task finishes.",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "node_post_create",
+      "shape": "command_list",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "node_post_update",
+      "shape": "command_list",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "media_post_create",
+      "shape": "command_list",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "run_scripts",
+      "shape": "command_list",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "run_scripts_entity_type",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false
+    },
+    {
+      "key": "csv_field_templates",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "Give every row the same value for a field.",
+      "group": "Templates",
+      "required": false
+    },
+    {
+      "key": "csv_row_filters",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "csv_rows_to_process",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "csv_start_row_skip",
+      "shape": "integer",
+      "default": null,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "csv_stop_row_skip",
+      "shape": "integer",
+      "default": null,
+      "description": "",
+      "group": "Input",
+      "required": false
+    },
+    {
+      "key": "additional_files",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "field_text_format_ids",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "media_types_override",
+      "shape": "map_of_lists",
+      "default": null,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "mimetype_extensions",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "extensions_to_mimetypes",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "rollback_config_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Rollback",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "rollback_config_filename_template",
+      "shape": "template_string",
+      "default": null,
+      "description": "Names the rollback config so runs don't overwrite each other.",
+      "group": "Rollback",
+      "required": false,
+      "tokens": [
+        "${config_filename}"
+      ]
+    },
+    {
+      "key": "rollback_csv_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Rollback",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "rollback_csv_filename_template",
+      "shape": "template_string",
+      "default": null,
+      "description": "",
+      "group": "Rollback",
+      "required": false,
+      "tokens": [
+        "${config_filename}"
+      ]
+    },
+    {
+      "key": "rollback_file_comments",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "",
+      "group": "Rollback",
+      "required": false
+    },
+    {
+      "key": "paged_content_page_content_type",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "paged_content_page_model_tid",
+      "shape": "url",
+      "default": null,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "paged_content_image_file_extension",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "paged_content_page_viewer_override",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "page_files_source_dir_field",
+      "shape": "string",
+      "default": null,
+      "description": "",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "entity_reference_view_endpoints",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "node_exists_verification_view_endpoint",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "view_parameters",
+      "shape": "list_of_one_key_maps",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "field_viewer_override_models",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "field_viewer_override_extensions",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "temp_dir",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false,
+      "browse": "dir"
+    },
+    {
+      "key": "output_csv",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Export",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "csv_id_to_node_id_map_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "csv_id_to_node_id_map_allowed_hosts",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
+      "key": "check_lock_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Advanced",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "path_to_python",
+      "shape": "file_path",
+      "default": null,
+      "description": "",
+      "group": "Scripts",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "use_nid_in_remote_filename",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "use_node_title_for_remote_filename",
+      "shape": "boolean",
+      "default": false,
+      "description": "",
+      "group": "Media",
+      "required": false
+    }
+  ]
+}

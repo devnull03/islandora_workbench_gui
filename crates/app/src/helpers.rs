@@ -6,8 +6,6 @@ use gpui::*;
 use gpui_component::input::InputState;
 use settings::AppSettings;
 
-use crate::workspace::Workspace;
-
 /// `{workbench_path}/input_data` from the `workbench_path` setting, or `None` when it's empty.
 pub fn workbench_input_data_dir(cx: &App) -> Option<PathBuf> {
     let path = AppSettings::get(cx)
@@ -65,9 +63,12 @@ pub fn per_user_workbench_dir() -> Option<PathBuf> {
     )
 }
 
-pub fn get_file(
+/// Browse for a file or folder and write the chosen path into `input`.
+///
+/// Generic over the calling view — the workspace and the config builder both use it.
+pub fn get_file<T: 'static>(
     window: &mut Window,
-    cx: &mut Context<Workspace>,
+    cx: &mut Context<T>,
     input: &Entity<InputState>,
     prompt: SharedString,
     is_folder: bool,

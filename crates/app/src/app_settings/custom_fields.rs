@@ -9,7 +9,11 @@ use gpui_component::{
     v_flex,
 };
 
+use std::path::PathBuf;
+
 use settings::{AppSettings, ServerConfig, TaskConfig};
+
+use crate::config_builder::open_config_builder;
 
 pub const TASK_OPTIONS: &[(&str, &str)] = &[
     ("create", "create - Create new nodes"),
@@ -74,6 +78,17 @@ fn task_config_row(idx: usize, config: &TaskConfig, cx: &App) -> impl IntoElemen
                         ),
                 ),
         )
+        .child({
+            // Minimum hook-up into the config builder. The richer Edit / New beside the config
+            // picker in the main window is Stage 2 — docs/plans/stage-2-main-window.md.
+            let path = PathBuf::from(config.file_path.as_ref());
+            Button::new(SharedString::from(format!("edit-{}", idx)))
+                .icon(IconName::Settings2)
+                .ghost()
+                .xsmall()
+                .tooltip("Edit in the config builder")
+                .on_click(move |_, _, cx| open_config_builder(Some(path.clone()), cx))
+        })
         .child(
             Button::new(SharedString::from(format!("remove-{}", idx)))
                 .icon(IconName::Close)

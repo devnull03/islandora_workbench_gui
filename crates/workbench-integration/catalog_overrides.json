@@ -1,0 +1,442 @@
+{
+  "_README": [
+    "Hand-written half of the config-builder catalogue. `scripts/gen-config-catalog.py` merges",
+    "this over what it reads from Workbench's get_default_config() and writes config_catalog.json.",
+    "",
+    "`settings` patches keys that HAVE an upstream default. Recognised fields:",
+    "  description  one sentence, plain, second person. Shown under the setting name.",
+    "  shape        overrides the inferred shape. Must be one of SHAPES in the generator.",
+    "  choices      for enum / nullable_enum. A list of strings, or [value, label] pairs.",
+    "  group        section in the add-a-setting palette.",
+    "  browse       'file' or 'dir' -- which picker a file_path setting opens.",
+    "  unit         suffix shown after an integer input (e.g. 'seconds').",
+    "  tokens       insertable tokens for a template_string.",
+    "  required     the builder refuses to save without it. Only `task` is.",
+    "  locked       written by the app at run time; shown in the locked band, not addable.",
+    "  skip         not a user setting at all; left out of the catalogue.",
+    "  default      replaces a default the generator could not evaluate.",
+    "",
+    "`extra` ADDS settings Workbench recognises but has no default for. Same fields, but each",
+    "entry is complete rather than a patch. Grow this list as settings come up; the generator",
+    "errors if an `extra` key later gains an upstream default, so it cannot silently duplicate.",
+    "",
+    "Descriptions are filled in on demand. An empty one is fine -- the key, shape and default",
+    "still carry most of the meaning."
+  ],
+
+  "settings": {
+    "check": { "skip": true },
+    "get_csv_template": { "skip": true },
+    "path_to_workbench_script": { "skip": true },
+
+    "input_csv": {
+      "locked": true,
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Input",
+      "description": "The processed sheet. Written by the app at run time."
+    },
+    "input_dir": {
+      "shape": "file_path",
+      "browse": "dir",
+      "group": "Input",
+      "description": "Folder Workbench reads the input CSV and files from."
+    },
+    "secondary_tasks": {
+      "shape": "config_ref",
+      "group": "Task",
+      "description": "Configs that run in order after this one finishes."
+    },
+
+    "media_use_tid": {
+      "shape": "url",
+      "group": "Media",
+      "description": "Islandora media use term for the files this run creates."
+    },
+    "export_file_media_use_term_id": { "shape": "url", "group": "Export" },
+    "media_types": { "shape": "map_of_lists", "group": "Media" },
+    "media_fields": { "shape": "map", "group": "Media" },
+    "media_type_file_fields": { "shape": "map", "group": "Media" },
+    "media_track_file_fields": { "shape": "map", "group": "Media" },
+    "oembed_providers": { "shape": "map_of_lists", "group": "Media" },
+    "preprocessors": { "shape": "map", "group": "Scripts" },
+
+    "id_field": {
+      "group": "Input",
+      "description": "CSV column holding the identifier Workbench keys rows by."
+    },
+    "content_type": { "group": "Task" },
+    "delimiter": {
+      "group": "Input",
+      "description": "Separates columns in the input CSV."
+    },
+    "subdelimiter": {
+      "group": "Input",
+      "description": "Separates several values in one cell."
+    },
+    "csv_headers": {
+      "shape": "enum",
+      "choices": ["names", "labels"],
+      "group": "Input"
+    },
+    "google_sheets_gid": { "shape": "string", "group": "Input" },
+    "csv_stop_row": { "shape": "integer", "group": "Input" },
+    "ignore_csv_columns": {
+      "group": "Input",
+      "description": "Columns in the CSV that Workbench should not try to map to a field."
+    },
+
+    "update_mode": {
+      "shape": "enum",
+      "choices": ["replace", "append", "delete"],
+      "group": "Task",
+      "description": "How an update task treats values already on the node."
+    },
+    "allow_missing_files": {
+      "group": "Task",
+      "description": "Keep going when a file named in the CSV isn't on disk."
+    },
+    "perform_soft_checks": { "group": "Task" },
+    "nodes_only": { "group": "Task" },
+
+    "log_file_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Logging",
+      "description": "Where Workbench writes this run's log."
+    },
+    "log_file_mode": {
+      "shape": "enum",
+      "choices": [["a", "append"], ["w", "overwrite"]],
+      "group": "Logging"
+    },
+    "remind_user_to_run_check": { "group": "Logging" },
+    "completion_message": { "group": "Logging" },
+
+    "allow_adding_terms": {
+      "group": "Taxonomy",
+      "description": "Let Workbench create taxonomy terms it does not find."
+    },
+    "protected_vocabularies": {
+      "group": "Taxonomy",
+      "description": "Vocabularies Workbench may never add terms to."
+    },
+    "columns_with_term_names": { "group": "Taxonomy" },
+    "validate_terms_exist": { "group": "Taxonomy" },
+
+    "timestamp_rollback": {
+      "group": "Rollback",
+      "description": "Stamp rollback files so runs don't overwrite each other."
+    },
+    "rollback_dir": {
+      "shape": "file_path",
+      "browse": "dir",
+      "group": "Rollback",
+      "description": "Folder for rollback CSVs."
+    },
+    "rollback_file_include_node_info": { "group": "Rollback" },
+
+    "fixity_algorithm": {
+      "shape": "nullable_enum",
+      "choices": ["md5", "sha1", "sha256"],
+      "group": "Advanced",
+      "description": "Checksum used to verify uploaded files. Unset skips the check."
+    },
+    "validate_fixity_during_check": { "group": "Advanced" },
+
+    "http_cache_storage": {
+      "shape": "enum",
+      "choices": ["memory", "sqlite"],
+      "group": "HTTP"
+    },
+    "http_retry_on_status_codes": { "group": "HTTP" },
+    "http_retry_allowed_methods": { "group": "HTTP" },
+    "http_max_retries": { "group": "HTTP" },
+    "http_backoff_factor": { "group": "HTTP" },
+    "http_cache_storage_expire_after": { "group": "HTTP", "unit": "seconds" },
+    "enable_http_cache": { "group": "HTTP" },
+    "allow_redirects": { "group": "HTTP" },
+    "secure_ssl_only": { "group": "HTTP" },
+    "user_agent": { "group": "HTTP" },
+    "adaptive_pause_threshold": { "group": "HTTP", "unit": "seconds" },
+    "redirect_status_code": { "group": "HTTP" },
+
+    "csv_value_templates": {
+      "shape": "list_of_one_key_maps",
+      "group": "Templates",
+      "description": "Rewrite a column's value before it is sent. $csv_value stands in for the cell's original value."
+    },
+    "csv_value_templates_for_paged_content": {
+      "shape": "list_of_one_key_maps",
+      "group": "Templates"
+    },
+    "allow_csv_value_templates_if_field_empty": { "group": "Templates" },
+    "csv_value_templates_rand_length": { "group": "Templates" },
+    "page_title_template": {
+      "shape": "template_string",
+      "tokens": ["$parent_title", "$weight"],
+      "group": "Paged content",
+      "description": "Title given to each page node created under a parent."
+    },
+
+    "paged_content_from_directories": {
+      "group": "Paged content",
+      "description": "Create page nodes from the files in each item's directory."
+    },
+    "paged_content_from_directories_parents_exist": { "group": "Paged content" },
+    "paged_content_sequence_separator": { "group": "Paged content" },
+    "paged_content_page_weight_multiplier": { "shape": "string", "group": "Paged content" },
+    "paged_content_ignore_files": { "group": "Paged content" },
+
+    "export_csv_term_mode": {
+      "shape": "enum",
+      "choices": ["tid", "name"],
+      "group": "Export"
+    },
+    "export_csv_file_path": { "shape": "file_path", "browse": "file", "group": "Export" },
+    "export_csv_field_list": { "group": "Export" },
+    "export_file_directory": { "shape": "file_path", "browse": "dir", "group": "Export" },
+    "export_file_url_instead_of_download": { "group": "Export" },
+    "output_csv_include_input_csv": { "group": "Export" },
+
+    "contact_sheet_output_dir": { "shape": "file_path", "browse": "dir", "group": "Export" },
+    "contact_sheet_css_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Export",
+      "default": "assets/contact_sheet/contact-sheet.css"
+    },
+
+    "csv_id_to_node_id_map_dir": {
+      "shape": "file_path",
+      "browse": "dir",
+      "group": "Advanced",
+      "default": null,
+      "description": "Defaults to the system temp folder when unset."
+    },
+    "csv_id_to_node_id_map_filename": { "group": "Advanced" },
+    "sqlite_db_filename": { "group": "Advanced" },
+    "query_csv_id_to_node_id_map_for_parents": { "group": "Advanced" },
+
+    "run_scripts_threads": { "group": "Scripts" },
+    "run_scripts_log_script_output": { "group": "Scripts" },
+    "show_shutdown_script_output": { "group": "Scripts" },
+    "show_bootstrap_script_output": { "group": "Scripts" },
+
+    "input_data_zip_archives": { "group": "Input" },
+    "delete_zip_archive_after_extraction": { "group": "Input" },
+    "excel_worksheet": { "group": "Input" },
+    "excel_csv_filename": { "group": "Input" },
+    "google_sheets_csv_filename": { "group": "Input" },
+    "clean_csv_values_skip": { "group": "Input" },
+    "csv_start_row": { "group": "Input" },
+
+    "text_format_id": { "group": "Advanced" },
+    "viewer_override_fieldname": { "group": "Advanced" },
+    "check_for_workbench_updates": { "group": "Advanced" },
+    "use_workbench_permissions": { "group": "Advanced" },
+    "standalone_media_url": { "group": "Advanced" },
+    "require_entity_reference_views": { "group": "Advanced" },
+    "drupal_filesystem": { "group": "Advanced" },
+    "recovery_mode_starting_from_node_id": { "group": "Advanced" },
+    "include_password_in_rollback_config_file": { "group": "Rollback" },
+    "remove_password_from_config_file": { "group": "Rollback" }
+  },
+
+  "extra": {
+    "task": {
+      "shape": "enum",
+      "required": true,
+      "group": "Task",
+      "default": null,
+      "description": "What this run does to Islandora.",
+      "choices": [
+        ["create", "create - Create new nodes"],
+        ["create_from_files", "create_from_files - Create from files"],
+        ["update", "update - Update existing nodes"],
+        ["delete", "delete - Delete nodes"],
+        ["add_media", "add_media - Add media to nodes"],
+        ["update_media", "update_media - Update existing media"],
+        ["delete_media", "delete_media - Delete media"],
+        ["delete_media_by_node", "delete_media_by_node - Delete media by node"],
+        ["export_csv", "export_csv - Export content to CSV"],
+        ["get_data_from_view", "get_data_from_view - Get data from view"]
+      ]
+    },
+    "host": {
+      "shape": "url",
+      "locked": true,
+      "group": "Task",
+      "default": null,
+      "description": "Ingest server. Written by the app at run time."
+    },
+    "credentials_file_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "locked": true,
+      "group": "Task",
+      "default": null,
+      "description": "Credentials for the ingest server. Written by the app at run time."
+    },
+
+    "adaptive_pause": {
+      "shape": "integer",
+      "unit": "seconds",
+      "group": "HTTP",
+      "default": null,
+      "description": "Seconds to wait between requests when the server is slow."
+    },
+    "pause": {
+      "shape": "integer",
+      "unit": "seconds",
+      "group": "HTTP",
+      "default": null,
+      "description": "Fixed number of seconds to wait between requests."
+    },
+
+    "bootstrap": {
+      "shape": "command_list",
+      "group": "Scripts",
+      "default": null,
+      "description": "Commands run on your machine before the task starts."
+    },
+    "shutdown": {
+      "shape": "command_list",
+      "group": "Scripts",
+      "default": null,
+      "description": "Commands run on your machine after the task finishes."
+    },
+    "node_post_create": { "shape": "command_list", "group": "Scripts", "default": null },
+    "node_post_update": { "shape": "command_list", "group": "Scripts", "default": null },
+    "media_post_create": { "shape": "command_list", "group": "Scripts", "default": null },
+    "run_scripts": { "shape": "command_list", "group": "Scripts", "default": null },
+    "run_scripts_entity_type": { "shape": "string", "group": "Scripts", "default": null },
+
+    "csv_field_templates": {
+      "shape": "list_of_one_key_maps",
+      "group": "Templates",
+      "default": null,
+      "description": "Give every row the same value for a field."
+    },
+    "csv_row_filters": { "shape": "list_of_one_key_maps", "group": "Input", "default": null },
+    "csv_rows_to_process": { "shape": "list_of_strings", "group": "Input", "default": null },
+    "csv_start_row_skip": { "shape": "integer", "group": "Input", "default": null },
+    "csv_stop_row_skip": { "shape": "integer", "group": "Input", "default": null },
+    "additional_files": { "shape": "list_of_one_key_maps", "group": "Media", "default": null },
+    "field_text_format_ids": {
+      "shape": "list_of_one_key_maps",
+      "group": "Advanced",
+      "default": null
+    },
+    "media_types_override": { "shape": "map_of_lists", "group": "Media", "default": null },
+    "mimetype_extensions": { "shape": "list_of_one_key_maps", "group": "Media", "default": null },
+    "extensions_to_mimetypes": {
+      "shape": "list_of_one_key_maps",
+      "group": "Media",
+      "default": null
+    },
+
+    "rollback_config_file_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Rollback",
+      "default": null
+    },
+    "rollback_config_filename_template": {
+      "shape": "template_string",
+      "tokens": ["${config_filename}"],
+      "group": "Rollback",
+      "default": null,
+      "description": "Names the rollback config so runs don't overwrite each other."
+    },
+    "rollback_csv_file_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Rollback",
+      "default": null
+    },
+    "rollback_csv_filename_template": {
+      "shape": "template_string",
+      "tokens": ["${config_filename}"],
+      "group": "Rollback",
+      "default": null
+    },
+    "rollback_file_comments": { "shape": "list_of_strings", "group": "Rollback", "default": null },
+
+    "paged_content_page_content_type": {
+      "shape": "string",
+      "group": "Paged content",
+      "default": null
+    },
+    "paged_content_page_model_tid": { "shape": "url", "group": "Paged content", "default": null },
+    "paged_content_image_file_extension": {
+      "shape": "string",
+      "group": "Paged content",
+      "default": null
+    },
+    "paged_content_page_viewer_override": {
+      "shape": "string",
+      "group": "Paged content",
+      "default": null
+    },
+    "page_files_source_dir_field": {
+      "shape": "string",
+      "group": "Paged content",
+      "default": null
+    },
+
+    "entity_reference_view_endpoints": {
+      "shape": "list_of_one_key_maps",
+      "group": "Advanced",
+      "default": null
+    },
+    "node_exists_verification_view_endpoint": {
+      "shape": "list_of_one_key_maps",
+      "group": "Advanced",
+      "default": null
+    },
+    "view_parameters": { "shape": "list_of_one_key_maps", "group": "Advanced", "default": null },
+    "field_viewer_override_models": {
+      "shape": "list_of_strings",
+      "group": "Advanced",
+      "default": null
+    },
+    "field_viewer_override_extensions": {
+      "shape": "list_of_strings",
+      "group": "Advanced",
+      "default": null
+    },
+
+    "temp_dir": { "shape": "file_path", "browse": "dir", "group": "Advanced", "default": null },
+    "output_csv": { "shape": "file_path", "browse": "file", "group": "Export", "default": null },
+    "csv_id_to_node_id_map_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Advanced",
+      "default": null
+    },
+    "csv_id_to_node_id_map_allowed_hosts": {
+      "shape": "list_of_strings",
+      "group": "Advanced",
+      "default": null
+    },
+    "check_lock_file_path": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Advanced",
+      "default": null
+    },
+    "path_to_python": {
+      "shape": "file_path",
+      "browse": "file",
+      "group": "Scripts",
+      "default": null
+    },
+    "use_nid_in_remote_filename": { "shape": "boolean", "group": "Media", "default": false },
+    "use_node_title_for_remote_filename": {
+      "shape": "boolean",
+      "group": "Media",
+      "default": false
+    }
+  }
+}

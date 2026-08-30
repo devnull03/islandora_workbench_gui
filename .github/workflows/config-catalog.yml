@@ -1,0 +1,66 @@
+name: Refresh config catalog
+
+# The config builder's setting catalogue is generated from Islandora Workbench's own
+# `WorkbenchConfig.get_default_config()` and checked in, so the app needs no Python at
+# runtime. That means it goes stale when upstream adds or renames a setting.
+#
+# This workflow regenerates it and opens a PR. Merging the PR onto `main` is what feeds the
+# release pipeline (see docs/SETUP.md) -- it deliberately does not tag a release itself.
+#
+# Run it by hand from the Actions tab, or fire it from outside with:
+#   gh api repos/:owner/:repo/dispatches -f event_type=workbench-updated
+on:
+  workflow_dispatch:
+    inputs:
+      workbench_ref:
+        description: Ref of islandora/islandora_workbench to read
+        required: false
+        default: main
+  repository_dispatch:
+    types: [workbench-updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve workbench ref
+        id: ref
+        run: |
+          ref="${{ github.event.inputs.workbench_ref || github.event.client_payload.workbench_ref }}"
+          echo "value=${ref:-main}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out Islandora Workbench
+        uses: actions/checkout@v4
+        with:
+          repository: islandora/islandora_workbench
+          ref: ${{ steps.ref.outputs.value }}
+          path: .workbench
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The generator only reads WorkbenchConfig.py with `ast` -- no Workbench deps needed.
+      - name: Regenerate catalog
+        run: python scripts/gen-config-catalog.py --workbench .workbench
+
+      - name: Open a PR if it changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: crates/workbench-integration/config_catalog.json
+          branch: chore/config-catalog
+          commit-message: "chore: refresh config catalog (${{ steps.ref.outputs.value }})"
+          title: "chore: refresh config catalog (${{ steps.ref.outputs.value }})"
+          body: |
+            Regenerated `config_catalog.json` from `islandora/islandora_workbench@${{ steps.ref.outputs.value }}`.
+
+            Review the diff for **new** settings (they need a `group` and ideally a
+            `description` in `catalog_overrides.json`) and for **removed** ones. If the run
+            failed with "overrides name keys that are not in get_default_config()", upstream
+            renamed something and the overrides need the same edit.

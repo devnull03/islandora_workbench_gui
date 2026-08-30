@@ -6,6 +6,7 @@
 mod app_menus;
 mod app_settings;
 mod components;
+mod config_builder;
 mod helpers;
 mod status_items;
 mod workspace;
@@ -19,6 +20,7 @@ use settings::{
 use window_wrapper::{OpenBrowser, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar};
 
 use crate::app_settings::build_pages;
+use crate::config_builder::{ConfigBuilderWindows, OpenConfigBuilder, open_config_builder};
 use crate::workspace::Workspace;
 use crate::{
     app_menus::{OpenSettings, Quit, app_menus},
@@ -115,6 +117,9 @@ fn main() {
             writer: Some(SettingsWriter::start()),
         });
         cx.set_global(SettingsWindowHandle::default());
+        cx.set_global(ConfigBuilderWindows::default());
+
+        cx.on_action(|_: &OpenConfigBuilder, cx| open_config_builder(None, cx));
 
         cx.on_action(|_: &OpenSettings, cx| {
             let state = cx.global::<SettingsWindowHandle>();

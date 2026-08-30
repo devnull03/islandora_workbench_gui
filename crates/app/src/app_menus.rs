@@ -2,6 +2,8 @@ use gpui::*;
 
 use window_wrapper::OpenBrowser;
 
+use crate::config_builder::OpenConfigBuilder;
+
 actions!(nav, [OpenSettings, Quit]);
 
 pub fn app_menus() -> Vec<Menu> {
@@ -10,6 +12,7 @@ pub fn app_menus() -> Vec<Menu> {
             name: "Islandora Workbench".into(),
             items: vec![
                 MenuItem::action("Settings", OpenSettings),
+                MenuItem::action("Config Builder", OpenConfigBuilder),
                 MenuItem::action(
                     "About",
                     OpenBrowser {
