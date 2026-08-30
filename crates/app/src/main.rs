@@ -225,11 +225,6 @@ fn main() {
             window_bounds: Some(WindowBounds::Windowed(main_bounds)),
             display_id: main_display,
             window_min_size: Some(min_size),
-            // No maximize: dropping WS_THICKFRAME also drops WS_MAXIMIZEBOX, and that one style
-            // bit backs the maximize button, double-click-to-zoom and Win+Up alike, so all three
-            // go together. Programmatic `window.resize` is a plain SetWindowPos and still works.
-            // Settings keeps its resize handles — it is a long scrolling form, not a fixed layout.
-            is_resizable: false,
             ..Default::default()
         };
 
