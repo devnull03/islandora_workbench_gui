@@ -1,44 +1,51 @@
 use std::path::Path;
 
-use workbench_integration::ProcessResult;
+use workbench_integration::PreprocessResult;
 
-pub fn sheet_preprocess_start_message(
-    node_id: &str,
-    sheet_url: &str,
+pub fn preprocess_start_message(
+    processor: &str,
+    source_csv: &Path,
     language_url: &str,
     metadata_csv: &Path,
+    config_file: Option<&Path>,
 ) -> String {
     format!(
-        "[INFO] Running sheet preprocessor (--full, node={})…\n\
-         [INFO] Sheet URL: {}\n\
-         [INFO] Language mapping URL: {}\n\
-         [INFO] Output: {} (and items CSV in the same folder)",
-        node_id.trim(),
-        sheet_url.trim(),
-        language_url,
+        "[INFO] Running {processor}...\n\
+         [INFO] Source CSV: {}\n\
+         [INFO] Language mapping URL: {language_url}\n\
+         [INFO] Config: {}\n\
+         [INFO] Expected output: {}",
+        source_csv.display(),
+        config_file
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "not supplied".to_string()),
         metadata_csv.display(),
     )
 }
 
-pub fn sheet_preprocess_success_messages(res: &ProcessResult) -> Vec<String> {
+pub fn preprocess_success_messages(result: &PreprocessResult) -> Vec<String> {
+    let details = &result.details;
     let mut lines = vec![
         format!(
-            "[INFO] Sheet preprocessor finished: rows={}, cells_modified={}, validation_failures={}",
-            res.processing_stats.total_rows,
-            res.processing_stats.cells_modified,
-            res.processing_stats.validation_failures
+            "[INFO] Processor finished: rows={}, cells_modified={}, validation_failures={}",
+            details.processing_stats.total_rows,
+            details.processing_stats.cells_modified,
+            details.processing_stats.validation_failures
         ),
-        format!("[INFO] Processed CSV: {}", res.processed_output_path),
+        format!("[INFO] New metadata CSV: {}", result.metadata_csv.display()),
     ];
-    if let (Some(path), Some(stats)) = (res.items_output_path.as_ref(), res.items_stats.as_ref()) {
+    if let (Some(path), Some(stats)) = (
+        details.items_output_path.as_ref(),
+        details.items_stats.as_ref(),
+    ) {
         lines.push(format!(
-            "[INFO] Items CSV: {} (items={}, unique_parents={}, skipped={})",
-            path, stats.total_items, stats.unique_parents, stats.skipped_rows
+            "[INFO] Items CSV: {path} (items={}, unique_parents={}, skipped={})",
+            stats.total_items, stats.unique_parents, stats.skipped_rows
         ));
     }
     lines
 }
 
-pub fn sheet_preprocess_error_message(err: &anyhow::Error) -> String {
-    format!("[ERROR] Sheet preprocessor failed: {:#}", err)
+pub fn preprocess_error_message(err: &anyhow::Error) -> String {
+    format!("[ERROR] Processor failed: {err:#}")
 }

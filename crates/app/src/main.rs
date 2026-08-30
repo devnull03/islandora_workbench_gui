@@ -5,8 +5,6 @@
 
 mod app_menus;
 mod app_settings;
-mod components;
-mod config_builder;
 mod helpers;
 mod status_items;
 mod workspace;
@@ -19,14 +17,13 @@ use settings::{
 };
 use window_wrapper::{OpenBrowser, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar};
 
-use crate::app_settings::build_pages;
-use crate::config_builder::{ConfigBuilderWindows, OpenConfigBuilder, open_config_builder};
-use crate::workspace::Workspace;
 use crate::{
     app_menus::{OpenSettings, Quit, app_menus},
-    status_items::ping::ServerPingIndicator,
-    status_items::{PingLogEvent, build_status_bar_registry},
+    app_settings::build_pages,
+    status_items::{PingLogEvent, build_status_bar_registry, ping::ServerPingIndicator},
+    workspace::Workspace,
 };
+use config_builder::{ConfigBuilderWindows, OpenConfigBuilder, open_config_builder};
 
 pub struct App {
     workspace: Entity<Workspace>,

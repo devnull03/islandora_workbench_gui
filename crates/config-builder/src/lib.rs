@@ -1,4 +1,4 @@
-//! The config builder: search the Workbench setting catalogue, add settings, edit them with a
+//! Config-builder UI: search the Workbench setting catalogue, edit settings, and save YAML.
 //! control that fits the value's shape, watch local validation, and save the YAML to the config
 //! library.
 //!
@@ -38,7 +38,7 @@ use workbench_integration::{
     validate::{Problem, Severity, validate},
 };
 
-use crate::components::select_items::DetailSelectItem;
+use ui::DetailSelectItem;
 
 actions!(config_builder, [OpenConfigBuilder]);
 
@@ -91,20 +91,20 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
 }
 
 pub struct ConfigBuilder {
-    pub(super) draft: ConfigDraft,
-    pub(super) problems: Vec<Problem>,
+    pub(crate) draft: ConfigDraft,
+    pub(crate) problems: Vec<Problem>,
 
     /// Text inputs by field id — see [`field_id`] for the encoding.
     inputs: HashMap<SharedString, Entity<InputState>>,
     /// Dropdowns, keyed the same way.
     selects: HashMap<SharedString, Entity<SelectState<Vec<DetailSelectItem>>>>,
 
-    pub(super) search: Entity<InputState>,
-    pub(super) search_open: bool,
-    pub(super) yaml_open: bool,
-    pub(super) saved_at: Option<SharedString>,
+    pub(crate) search: Entity<InputState>,
+    pub(crate) search_open: bool,
+    pub(crate) yaml_open: bool,
+    pub(crate) saved_at: Option<SharedString>,
     /// Load or save failures — shown in the footer rather than swallowed.
-    pub(super) notice: Option<SharedString>,
+    pub(crate) notice: Option<SharedString>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -113,8 +113,39 @@ pub struct ConfigBuilder {
 ///
 /// `rollback_dir` · `shutdown#0` · `csv_value_templates#0#k` · `media_types#1#l#2`.
 /// Setting keys are `[a-z0-9_]` upstream, so `#` cannot collide with one.
-pub(super) fn field_id(parts: &[&str]) -> SharedString {
+pub(crate) fn field_id(parts: &[&str]) -> SharedString {
     parts.join("#").into()
+}
+
+/// Open a native file/folder picker and copy the selected path into a builder input.
+/// Kept here so the config builder owns all of its window and dialog behavior.
+pub(crate) fn get_file<T: 'static>(
+    window: &mut Window,
+    cx: &mut Context<T>,
+    input: &Entity<InputState>,
+    prompt: SharedString,
+    is_folder: bool,
+) {
+    let receiver = cx.prompt_for_paths(PathPromptOptions {
+        files: !is_folder,
+        directories: is_folder,
+        multiple: false,
+        prompt: Some(prompt),
+    });
+    let input = input.clone();
+    cx.spawn_in(window, async move |_, cx| {
+        if let Ok(Ok(Some(paths))) = receiver.await
+            && let Some(path) = paths.first()
+        {
+            cx.update(|window, cx| {
+                input.update(cx, |state, cx| {
+                    state.set_value(path.to_string_lossy().to_string(), window, cx);
+                });
+            })
+            .ok();
+        }
+    })
+    .detach();
 }
 
 impl ConfigBuilder {
@@ -160,7 +191,7 @@ impl ConfigBuilder {
 
     /// A text input for `id`, created and seeded on first use. Its change handler writes back
     /// into the draft, so `commit` is the only path a value takes from screen to config.
-    pub(super) fn input(
+    pub(crate) fn input(
         &mut self,
         id: SharedString,
         setting_key: &str,
@@ -192,7 +223,7 @@ impl ConfigBuilder {
     }
 
     /// A dropdown for `id`, seeded with `choices` and the current selection.
-    pub(super) fn select(
+    pub(crate) fn select(
         &mut self,
         id: SharedString,
         setting_key: &str,
@@ -219,14 +250,14 @@ impl ConfigBuilder {
         state
     }
 
-    pub(super) fn input_value(&self, id: &SharedString, cx: &App) -> String {
+    pub(crate) fn input_value(&self, id: &SharedString, cx: &App) -> String {
         self.inputs
             .get(id)
             .map(|i| i.read(cx).value().to_string())
             .unwrap_or_default()
     }
 
-    pub(super) fn select_value(&self, id: &SharedString, cx: &App) -> Option<SharedString> {
+    pub(crate) fn select_value(&self, id: &SharedString, cx: &App) -> Option<SharedString> {
         self.selects
             .get(id)
             .and_then(|s| s.read(cx).selected_value().cloned())
@@ -234,7 +265,7 @@ impl ConfigBuilder {
 
     /// Forget every widget belonging to `key`, so the next render rebuilds them from the draft.
     /// Needed whenever rows are added or removed and the surviving rows shift position.
-    pub(super) fn forget_widgets(&mut self, key: &str) {
+    pub(crate) fn forget_widgets(&mut self, key: &str) {
         let prefix = format!("{key}#");
         self.inputs
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
@@ -246,7 +277,7 @@ impl ConfigBuilder {
 
     /// Rebuild `key`'s value from its widgets and revalidate. The one place screen state
     /// becomes config state.
-    pub(super) fn commit(&mut self, key: &str, cx: &mut Context<Self>) {
+    pub(crate) fn commit(&mut self, key: &str, cx: &mut Context<Self>) {
         let Some(def) = catalog::find(key) else {
             return;
         };
@@ -256,12 +287,12 @@ impl ConfigBuilder {
         self.revalidate(cx);
     }
 
-    pub(super) fn revalidate(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
         self.problems = validate(&self.draft);
         cx.notify();
     }
 
-    pub(super) fn add_setting(&mut self, def: &SettingDef, cx: &mut Context<Self>) {
+    pub(crate) fn add_setting(&mut self, def: &SettingDef, cx: &mut Context<Self>) {
         if self.draft.values.contains_key(&def.key) {
             return;
         }
@@ -278,20 +309,20 @@ impl ConfigBuilder {
         self.revalidate(cx);
     }
 
-    pub(super) fn remove_setting(&mut self, key: &str, cx: &mut Context<Self>) {
+    pub(crate) fn remove_setting(&mut self, key: &str, cx: &mut Context<Self>) {
         self.draft.values.shift_remove(key);
         self.forget_widgets(key);
         self.revalidate(cx);
     }
 
-    pub(super) fn problems_for<'a>(&'a self, key: &str) -> impl Iterator<Item = &'a Problem> {
+    pub(crate) fn problems_for<'a>(&'a self, key: &str) -> impl Iterator<Item = &'a Problem> {
         let key = key.to_string();
         self.problems
             .iter()
             .filter(move |p| p.key.as_deref() == Some(key.as_str()))
     }
 
-    pub(super) fn count(&self, severity: Severity) -> usize {
+    pub(crate) fn count(&self, severity: Severity) -> usize {
         self.problems
             .iter()
             .filter(|p| p.severity == severity)

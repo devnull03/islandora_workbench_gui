@@ -5,26 +5,21 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
+dirs.workspace = true
 gpui.workspace = true
 gpui-component.workspace = true
 gpui-component-assets.workspace = true
-dirs.workspace = true
-rusqlite.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_yaml = "0.9"
-schemars.workspace = true
+config-builder = { path = "../config-builder" }
+settings = { path = "../settings" }
+ui = { path = "../ui" }
 ureq.workspace = true
-base64.workspace = true
-
 window-wrapper = { path = "../window-wrapper" }
 workbench-integration = { path = "../workbench-integration" }
-settings = { path = "../settings" }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
 
 # Embeds the app icon and version metadata into the Windows .exe at build time.
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
-
-# Reads installer-provided paths from HKLM (UvPath / ProvisionWorkbench).
-[target.'cfg(windows)'.dependencies]
-winreg = "0.52"

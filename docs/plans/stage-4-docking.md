@@ -27,7 +27,7 @@ windows is worse than one.
 
 ## Files
 
-- `crates/app/src/config_builder/mod.rs` — split the view from its window host. The render body
+- `crates/config-builder/src/lib.rs` — split the view from its window host. The render body
   must not assume a window (no `TitleBar` of its own when docked, no window-bounds reads).
 - `crates/app/src/main.rs` — the `App` render tree gains a right pane and a divider;
   `ConfigBuilderHandle` grows a docked/floated state.

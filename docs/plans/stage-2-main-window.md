@@ -1,7 +1,7 @@
 # Stage 2 — Main window, generalized
 
 **Mockup:** `2c`
-**Status:** not started
+**Status:** in progress
 **Depends on:** Stage 1 (the builder must exist before Edit/New can open it)
 **Blocks:** nothing
 
@@ -44,12 +44,25 @@ A **Profile** switcher sits above step 1, hidden until a second profile exists (
 - Settings needs a `preprocess_scripts_dir` value (Stage 3 gives it a page; a bare key works
   before then).
 
-## Open questions
+## Canvas questions, resolved below
 
 From the canvas, unresolved:
 
 - **Do preprocess scripts need to declare anything** — a name, expected columns — or is "a bare
   `.py` file that writes `metadata.csv`" the whole contract? Decide before building; it changes
   whether the dropdown needs to read script metadata or just list a folder.
-- Does the input-source picker need to be genuinely pluggable now, or is an enum of the two
-  known sources (Sheet, CSV file) enough until a third appears?
+## Decisions (31 August 2026)
+
+- The processing dropdown currently has one choice: **Workbench preprocessor**, the built-in
+  Rust importer. It is a dropdown now so future processors do not require another main-window
+  redesign.
+- The processing contract is stable: a processor receives the complete source CSV and may receive
+  the selected Workbench config file. It must return the path of the new metadata CSV it wrote.
+  The config is optional because processing can happen before the user selects one.
+- The first source adapter is **Google Sheet → CSV**. It feeds the built-in processor and returns
+  the processed CSV path. The processor does not inspect the optional config yet.
+- The UI keeps the input-source dropdown even with one choice. A later source adapter can add an
+  option without changing the three-step window.
+
+The collection-node control remains removed: site-specific logic belongs with the processor, not
+in the shared window.

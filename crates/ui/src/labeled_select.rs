@@ -6,7 +6,7 @@ use gpui_component::{
     v_flex,
 };
 
-use super::select_items::DetailSelectItem;
+use crate::DetailSelectItem;
 
 #[derive(IntoElement)]
 pub struct LabeledSelect {

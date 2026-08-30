@@ -32,9 +32,9 @@ depth-first.
 
 ## Files
 
-- `crates/app/src/config_builder/chain.rs` — the flat list grows into a tree; the run-order
+- `crates/config-builder/src/chain.rs` — the flat list grows into a tree; the run-order
   strip is a flattened depth-first walk of it.
-- `crates/app/src/config_builder/mod.rs` — breadcrumb title, level badge, inheritance line,
+- `crates/config-builder/src/lib.rs` — breadcrumb title, level badge, inheritance line,
   cascade placement.
 - `crates/workbench-integration/src/config_builder.rs` — a cycle check over the resolved
   `secondary_tasks` graph, reusing the same relative-path resolution

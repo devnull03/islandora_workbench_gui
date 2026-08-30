@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use settings::{AppSettings, ServerConfig, TaskConfig};
 
-use crate::config_builder::open_config_builder;
+use config_builder::open_config_builder;
 
 pub const TASK_OPTIONS: &[(&str, &str)] = &[
     ("create", "create - Create new nodes"),

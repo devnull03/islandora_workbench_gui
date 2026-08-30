@@ -26,8 +26,8 @@ use workbench_integration::{
 };
 
 use super::{ConfigBuilder, field_id};
-use crate::components::select_items::DetailSelectItem;
-use crate::helpers::get_file;
+use crate::get_file;
+use ui::DetailSelectItem;
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
 /// setting has no upstream default, so the row still renders something editable.

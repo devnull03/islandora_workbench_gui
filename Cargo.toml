@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
   "crates/app",
+  "crates/config-builder",
   "crates/settings",
+  "crates/ui",
   "crates/workbench-integration",
   "crates/window-wrapper",
 ]

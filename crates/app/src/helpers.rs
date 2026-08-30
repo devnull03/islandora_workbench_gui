@@ -1,3 +1,5 @@
+//! Desktop and operating-system services owned by the application shell.
+
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;

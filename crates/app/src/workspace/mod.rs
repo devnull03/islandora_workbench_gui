@@ -8,38 +8,34 @@ use std::path::{Path, PathBuf};
 
 use gpui::*;
 use gpui_component::{
-    Disableable, IconName, Sizable, StyledExt,
+    ActiveTheme, Disableable, IconName, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
     h_flex,
-    input::{InputEvent, InputState},
+    input::{Input, InputEvent, InputState},
     label::Label,
-    select::{SelectEvent, SelectState},
+    select::{Select, SelectEvent, SelectState},
     v_flex,
 };
 use workbench_integration::{
-    WbInfo, WorkbenchConfigHandler, language_url_from_server_base, process_google_sheet_metadata,
+    WbInfo, WorkbenchConfigHandler, language_url_from_server_base, process_google_sheet_source,
     provision_workbench, run_ingest_streaming,
 };
 
-use crate::{
-    components::{
-        labeled_input::LabeledInput, labeled_select::LabeledSelect, select_items::DetailSelectItem,
-    },
-    helpers::get_file,
-};
+use crate::helpers::get_file;
 use settings::AppSettings;
 use settings::path_picker::PathPickerBrowseRow;
+use ui::{DetailSelectItem, LabeledSelect};
 use window_wrapper::WindowLock;
 
 use self::gdrive_log::{
-    sheet_preprocess_error_message, sheet_preprocess_start_message,
-    sheet_preprocess_success_messages,
+    preprocess_error_message, preprocess_start_message, preprocess_success_messages,
 };
 use self::streaming::spawn_stream_to_log;
 use crate::helpers::{
     per_user_workbench_dir, registry_install, reveal_in_folder, workbench_input_data_dir,
 };
+use config_builder::open_config_builder;
 
 /// Record an app-provisioned workbench install into the normal settings store, so the path becomes
 /// the single source of truth — visible and editable in Settings, exactly like a user-entered value.
@@ -85,8 +81,9 @@ pub struct Workspace {
     log_expanded: bool,
 
     gdrive_link: Entity<InputState>,
-    collection_node_id: Entity<InputState>,
     ingest_files_dir: Entity<InputState>,
+    input_source_select: Entity<SelectState<Vec<DetailSelectItem>>>,
+    processor_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     saved_config_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     server_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     synced_task_labels: Vec<SharedString>,
@@ -100,12 +97,7 @@ impl Workspace {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let log_viewer = cx.new(LogViewer::new);
 
-        let gdrive_link = cx.new(|cx| InputState::new(window, cx).placeholder("Sheets URL…"));
-
-        let collection_node_id = cx.new(|cx| InputState::new(window, cx).placeholder("2"));
-        collection_node_id.update(cx, |state, cx| {
-            state.set_value("2", window, cx);
-        });
+        let gdrive_link = cx.new(|cx| InputState::new(window, cx).placeholder("Sheet URL..."));
 
         let ingest_files_dir =
             cx.new(|cx| InputState::new(window, cx).placeholder("Directory for ingest files..."));
@@ -113,6 +105,40 @@ impl Workspace {
         let saved_config_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
 
         let server_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
+        let input_source_select = cx.new(|cx| {
+            SelectState::new(
+                vec![DetailSelectItem {
+                    label: "Google Sheet → CSV".into(),
+                    subtitle: "Built-in source adapter".into(),
+                    value: "google-sheet".into(),
+                    divider_above: false,
+                }],
+                None,
+                window,
+                cx,
+            )
+        });
+        input_source_select.update(cx, |state, cx| {
+            let value: SharedString = "google-sheet".into();
+            state.set_selected_value(&value, window, cx);
+        });
+        let processor_select = cx.new(|cx| {
+            SelectState::new(
+                vec![DetailSelectItem {
+                    label: "Workbench preprocessor".into(),
+                    subtitle: "Built-in Rust importer".into(),
+                    value: "workbench-preprocessor".into(),
+                    divider_above: false,
+                }],
+                None,
+                window,
+                cx,
+            )
+        });
+        processor_select.update(cx, |state, cx| {
+            let value: SharedString = "workbench-preprocessor".into();
+            state.set_selected_value(&value, window, cx);
+        });
 
         // Restore persisted field values before subscriptions are wired up.
         let saved_gdrive = AppSettings::get(cx)
@@ -132,7 +158,7 @@ impl Workspace {
 
         let mut _subscriptions = Vec::new();
 
-        // `Change`: typing / paste. `Focus`/`Blur`: moving between URL and Node fields updates readiness.
+        // `Change`: typing / paste. `Focus`/`Blur` keep action readiness current.
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
         // (Do not use `observe` on `InputState`: it also fires every cursor-blink tick.)
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
@@ -155,23 +181,6 @@ impl Workspace {
                 }
             }),
         );
-        _subscriptions.push(cx.subscribe(
-            &collection_node_id,
-            |this, _, event: &InputEvent, cx| {
-                if matches!(
-                    event,
-                    InputEvent::Change | InputEvent::Focus | InputEvent::Blur
-                ) {
-                    if matches!(event, InputEvent::Change) {
-                        this.reset_validation();
-                    }
-                    let workspace = cx.weak_entity();
-                    cx.defer(move |app| {
-                        let _ = workspace.update(app, |_, cx| cx.notify());
-                    });
-                }
-            },
-        ));
         _subscriptions.push(
             cx.subscribe(&ingest_files_dir, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -207,8 +216,9 @@ impl Workspace {
             log_viewer,
             log_expanded: false,
             gdrive_link,
-            collection_node_id,
             ingest_files_dir,
+            input_source_select,
+            processor_select,
             saved_config_select,
             server_select,
             synced_task_labels: Vec::new(),
@@ -228,13 +238,10 @@ impl Workspace {
         self.stage = WorkflowStage::Unfilled;
     }
 
-    /// Process needs a sheet URL, a saved server (for language mapping JSON), and Workbench path
+    /// Processing needs a Sheet URL, a saved server (for language mapping JSON), and Workbench path
     /// (outputs go to `{workbench}/input_data/metadata.csv`).
-    fn gdrive_ready(&self, cx: &App) -> bool {
+    fn process_ready(&self, cx: &App) -> bool {
         if self.gdrive_link.read(cx).value().trim().is_empty() {
-            return false;
-        }
-        if self.collection_node_id.read(cx).value().trim().is_empty() {
             return false;
         }
         if self.server_select.read(cx).selected_value().is_none() {
@@ -293,8 +300,8 @@ impl Workspace {
         }
     }
 
-    fn process_gdrive_link(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.is_idle() || !self.gdrive_ready(cx) {
+    fn process_metadata(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_idle() || !self.process_ready(cx) {
             return;
         }
 
@@ -310,15 +317,20 @@ impl Workspace {
             return;
         };
         let sheet_url = self.gdrive_link.read(cx).value().to_string();
-        let node_id = self.collection_node_id.read(cx).value().to_string();
+        let config_path = self
+            .saved_config_select
+            .read(cx)
+            .selected_value()
+            .map(|value| PathBuf::from(value.as_ref()));
         let metadata_csv = input_data_dir.join("metadata.csv");
 
         self.append_log(
-            &sheet_preprocess_start_message(
-                node_id.trim(),
-                sheet_url.trim(),
+            &preprocess_start_message(
+                "Workbench preprocessor",
+                Path::new(&sheet_url),
                 &language_url,
                 &metadata_csv,
+                config_path.as_deref(),
             ),
             window,
             cx,
@@ -329,15 +341,9 @@ impl Workspace {
             let sheet_url = sheet_url.clone();
             let language_url = language_url.clone();
             let input_data_dir = input_data_dir.clone();
-            let node_id = node_id.trim().to_string();
             let result = cx
                 .background_spawn(async move {
-                    process_google_sheet_metadata(
-                        &sheet_url,
-                        &input_data_dir,
-                        language_url.as_str(),
-                        node_id.as_str(),
-                    )
+                    process_google_sheet_source(&sheet_url, &input_data_dir, language_url.as_str())
                 })
                 .await;
 
@@ -345,13 +351,13 @@ impl Workspace {
                 entity.update(app, |this, cx| {
                     match &result {
                         Ok(res) => {
-                            for line in sheet_preprocess_success_messages(res) {
+                            for line in preprocess_success_messages(res) {
                                 this.append_log(&line, window, cx);
                             }
                             this.stage = WorkflowStage::GdriveProcessed;
                         }
                         Err(e) => {
-                            this.append_log(&sheet_preprocess_error_message(e), window, cx);
+                            this.append_log(&preprocess_error_message(e), window, cx);
                         }
                     }
                     this.op = Operation::None;
@@ -362,7 +368,8 @@ impl Workspace {
         .detach();
     }
 
-    pub(crate) fn push_log(&mut self, message: String, cx: &mut Context<Self>) {
+    /// Append an external status event to the workspace log.
+    pub fn push_log(&mut self, message: String, cx: &mut Context<Self>) {
         self.log_viewer.update(cx, |lv, cx| lv.append(&message, cx));
     }
 
@@ -607,7 +614,7 @@ impl Render for Workspace {
         self.sync_select_items(window, cx);
 
         let idle = self.is_idle();
-        let gdrive_ok = self.gdrive_ready(cx);
+        let gdrive_ok = self.process_ready(cx);
         let ingest_ok = self.ingest_ready(cx);
         let auto_accept = AppSettings::get(cx)
             .values
@@ -660,6 +667,33 @@ impl Render for Workspace {
             .p_4()
             .gap_3()
             .child(
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .gap_3()
+                    .pb_2()
+                    .border_b_1()
+                    .border_color(cx.theme().colors.border)
+                    .child(
+                        Label::new("PROFILE")
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground),
+                    )
+                    .child(
+                        Button::new("active-profile")
+                            .outline()
+                            .small()
+                            .label("Default"),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("manage-profiles")
+                            .ghost()
+                            .small()
+                            .label("Manage profiles"),
+                    ),
+            )
+            .child(
                 v_flex()
                     .w_full()
                     .flex_1()
@@ -668,18 +702,27 @@ impl Render for Workspace {
                         v_flex()
                             .w_full()
                             .gap_2()
-                            .child(Label::new("Metadata").font_semibold())
+                            .child(Label::new("1  Input source").font_semibold())
                             .child(
-                                h_flex()
+                                Select::new(&self.input_source_select)
+                                    .w_full()
+                                    .disabled(!idle),
+                            )
+                            .child(
+                                v_flex()
                                     .w_full()
                                     .gap_2()
                                     .items_start()
-                                    .child(
-                                        div().flex_1().min_w(px(0.)).child(
-                                            LabeledInput::new("Sheets URL", &self.gdrive_link)
-                                                .disabled(!idle),
-                                        ),
-                                    )
+                                    .p_3()
+                                    .rounded_md()
+                                    .bg(cx.theme().colors.secondary)
+                                    .child(div().flex_1().min_w(px(0.)).child(
+                                        v_flex()
+                                            .w_full()
+                                            .gap_1()
+                                            .child(Label::new("Sheet URL").text_sm())
+                                            .child(Input::new(&self.gdrive_link).w_full().disabled(!idle)),
+                                    ))
                                     .child(
                                         div().flex_1().min_w(px(0.)).child(
                                             v_flex()
@@ -708,9 +751,13 @@ impl Render for Workspace {
                                         ),
                                     )
                                     .child(
-                                        div().w(px(80.)).child(
-                                            LabeledInput::new("nid", &self.collection_node_id)
-                                                .disabled(!idle),
+                                        div().flex_1().min_w(px(0.)).child(
+                                            LabeledSelect::new(
+                                                "Processing",
+                                                &self.processor_select,
+                                            )
+                                            .description("Outputs a new metadata CSV path")
+                                            .disabled(!idle),
                                         ),
                                     ),
                             )
@@ -726,7 +773,7 @@ impl Render for Workspace {
                                             .loading(process_loading)
                                             .disabled(process_disabled || process_loading)
                                             .on_click(cx.listener(|this, _, window, cx| {
-                                                this.process_gdrive_link(window, cx);
+                                                this.process_metadata(window, cx);
                                             })),
                                     )
                                     .child(
@@ -765,7 +812,7 @@ impl Render for Workspace {
                     )
                     .child(
                         v_flex().gap_2().w_full()
-                            .child(Label::new("Server").font_semibold())
+                            .child(Label::new("2  Config and server").font_semibold())
                             .child(
                             h_flex()
                                 .w_full()
@@ -777,12 +824,41 @@ impl Render for Workspace {
                                         .gap_1()
                                         .child(
                                             LabeledSelect::new(
-                                                "Saved config",
+                                                "Saved config (optional for processing)",
                                                 &self.saved_config_select,
                                             )
                                             .placeholder("Select saved config…")
                                             .description("Workbench YAML / task profile")
                                             .disabled(!idle),
+                                        )
+                                        .child(
+                                            Button::new("edit-config")
+                                                .ghost()
+                                                .small()
+                                                .icon(IconName::Settings2)
+                                                .tooltip("Edit selected config in the config builder")
+                                                .disabled(!config_selected)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    let Some(path) = this
+                                                        .saved_config_select
+                                                        .read(cx)
+                                                        .selected_value()
+                                                    else {
+                                                        return;
+                                                    };
+                                                    open_config_builder(
+                                                        Some(PathBuf::from(path.as_ref())),
+                                                        cx,
+                                                    );
+                                                })),
+                                        )
+                                        .child(
+                                            Button::new("new-config")
+                                                .ghost()
+                                                .small()
+                                                .icon(IconName::Plus)
+                                                .tooltip("Create a config in the config builder")
+                                                .on_click(|_, _, cx| open_config_builder(None, cx)),
                                         )
                                         .child(
                                             Button::new("reveal-config-file")
@@ -890,6 +966,9 @@ impl Render for Workspace {
                         ),
                     )
                     .child(
+                        v_flex().gap_2().w_full()
+                            .child(Label::new("3  Review and run").font_semibold())
+                            .child(
                         h_flex()
                             .w_full()
                             .items_center()
@@ -931,6 +1010,7 @@ impl Render for Workspace {
                                         this.run_ingest(false, window, cx);
                                     })),
                             ),
+                                ),
                     ),
             )
             .child(

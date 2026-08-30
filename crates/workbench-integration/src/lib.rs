@@ -35,7 +35,9 @@ pub fn read_credentials(path: &Path) -> anyhow::Result<Credentials> {
     })
 }
 
-use organise::process_google_sheets_and_maybe_generate_items;
+use organise::{
+    process_csv_and_maybe_generate_items, process_google_sheets_and_maybe_generate_items,
+};
 use which::which;
 
 pub use organise::ProcessResult;
@@ -72,31 +74,81 @@ impl WbInfo {
     }
 }
 
-pub fn process_google_sheet_metadata(
-    sheet_url: &str,
-    input_data_dir: &Path,
-    language_url: &str,
-    node_id: &str,
-) -> anyhow::Result<ProcessResult> {
-    std::fs::create_dir_all(input_data_dir).map_err(|e| {
+/// The input a metadata processor receives from the workspace.
+///
+/// A processor must write a new metadata CSV and report its path in
+/// [`PreprocessResult`]. The selected Workbench config is available for processors that need
+/// site-specific rules, but is intentionally optional because processing can happen before a
+/// config is chosen.
+pub struct PreprocessRequest<'a> {
+    pub input_csv: &'a Path,
+    pub output_dir: &'a Path,
+    pub language_url: &'a str,
+    pub config_file: Option<&'a Path>,
+}
+
+/// The universal result returned by a metadata processor.
+pub struct PreprocessResult {
+    pub metadata_csv: PathBuf,
+    pub details: ProcessResult,
+}
+
+/// Run the built-in Workbench preprocessor on a complete local CSV.
+///
+/// The built-in processor currently does not read `config_file`; accepting it here establishes
+/// the contract used by future external processors without coupling them to the main window.
+pub fn process_workbench_csv(request: PreprocessRequest<'_>) -> anyhow::Result<PreprocessResult> {
+    std::fs::create_dir_all(request.output_dir).map_err(|e| {
         anyhow::anyhow!(
             "create output directory {}: {}",
-            input_data_dir.display(),
+            request.output_dir.display(),
             e
         )
     })?;
-    let out_dir = input_data_dir.to_string_lossy();
-    process_google_sheets_and_maybe_generate_items(
+    let input_csv = request.input_csv.to_string_lossy();
+    let out_dir = request.output_dir.to_string_lossy();
+    let details = process_csv_and_maybe_generate_items(
+        input_csv.as_ref(),
+        Some("metadata.csv"),
+        Some(out_dir.as_ref()),
+        &[],
+        &[],
+        Some(request.language_url),
+        false,
+        None,
+        None,
+    )?;
+    Ok(PreprocessResult {
+        metadata_csv: PathBuf::from(&details.processed_output_path),
+        details,
+    })
+}
+
+/// Acquire a Google Sheet and run the built-in processor. This is a source adapter, not the
+/// processor contract: additional processors still receive a local CSV through
+/// [`PreprocessRequest`].
+pub fn process_google_sheet_source(
+    sheet_url: &str,
+    output_dir: &Path,
+    language_url: &str,
+) -> anyhow::Result<PreprocessResult> {
+    std::fs::create_dir_all(output_dir)?;
+    let out_dir = output_dir.to_string_lossy();
+    let details = process_google_sheets_and_maybe_generate_items(
         sheet_url,
         Some("metadata.csv"),
         Some(out_dir.as_ref()),
         &[],
         &[],
         Some(language_url),
-        true,
+        false,
         None,
-        Some(node_id),
-    )
+        None,
+    )?;
+    Ok(PreprocessResult {
+        metadata_csv: PathBuf::from(&details.processed_output_path),
+        details,
+    })
 }
 
 pub fn build_workbench_command(

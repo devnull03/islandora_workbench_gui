@@ -2,7 +2,7 @@ use gpui::*;
 
 use window_wrapper::OpenBrowser;
 
-use crate::config_builder::OpenConfigBuilder;
+use config_builder::OpenConfigBuilder;
 
 actions!(nav, [OpenSettings, Quit]);
 

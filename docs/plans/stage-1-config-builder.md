@@ -74,7 +74,7 @@ pub struct SettingDef { key, shape, default: serde_yaml::Value, description,
 pub fn catalog() -> &'static [SettingDef];   // LazyLock over include_str!("../config_catalog.json")
 ```
 
-`TASK_OPTIONS` (`crates/app/src/app_settings/custom_fields.rs:14`) becomes the `choices` of the
+`TASK_OPTIONS` (`crates/app/src/app_settings/custom_fields.rs`) becomes the `choices` of the
 `task` entry in `catalog_overrides.json`. Keep the Rust const as a thin re-export off the
 catalogue so the existing settings pages keep compiling unchanged.
 
@@ -120,7 +120,7 @@ Rules, all local:
 
 Keep the cross-field table a plain slice of closures. It grows one rule at a time.
 
-## 1.4 Builder UI — `crates/app/src/config_builder/` (new)
+## 1.4 Builder UI — `crates/config-builder/`
 
 - **`mod.rs`** — `ConfigBuilderWindow` view plus `open_config_builder(path, cx)`. Opens as its
   own window, mirroring the `OpenSettings` handler in `crates/app/src/main.rs:119-151`: same

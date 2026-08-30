@@ -131,16 +131,13 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "base64",
+ "config-builder",
  "dirs 6.0.0",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
- "rusqlite",
- "schemars",
- "serde",
- "serde_json",
- "serde_yaml",
  "settings",
+ "ui",
  "ureq",
  "window-wrapper",
  "winreg 0.52.0",
@@ -1107,6 +1104,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
+]
+
+[[package]]
+name = "config-builder"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "gpui",
+ "gpui-component",
+ "serde_yaml",
+ "settings",
+ "ui",
+ "workbench-integration",
 ]
 
 [[package]]
@@ -6740,6 +6749,15 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ui"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "gpui",
+ "gpui-component",
+ "settings",
 ]
 
 [[package]]
