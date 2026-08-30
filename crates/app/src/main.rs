@@ -140,10 +140,6 @@ fn main() {
                 titlebar: Some(TitleBar::title_bar_options()),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(Size::new(px(600.0), px(400.0))),
-                // No maximize: dropping WS_THICKFRAME also drops WS_MAXIMIZEBOX, which is what
-                // kills the button, double-click-to-zoom and Win+Up together. Programmatic
-                // `window.resize` is a plain SetWindowPos and still works.
-                is_resizable: false,
                 ..Default::default()
             };
 
@@ -180,6 +176,10 @@ fn main() {
             window_bounds: Some(WindowBounds::Windowed(main_bounds)),
             display_id: main_display,
             window_min_size: Some(min_size),
+            // No maximize: dropping WS_THICKFRAME also drops WS_MAXIMIZEBOX, and that one style
+            // bit backs the maximize button, double-click-to-zoom and Win+Up alike, so all three
+            // go together. Programmatic `window.resize` is a plain SetWindowPos and still works.
+            // Settings keeps its resize handles — it is a long scrolling form, not a fixed layout.
             is_resizable: false,
             ..Default::default()
         };
