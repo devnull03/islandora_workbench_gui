@@ -8,6 +8,7 @@ on:
     branches: [dev]
   pull_request:
     branches: [dev, main]
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -17,6 +18,10 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Full debuginfo is a large share of a debug build — generating it, and on Windows writing the
+  # PDB. Line tables keep backtraces readable and drop the rest. (The dev profile in Cargo.toml
+  # already says this; repeated here so it also covers the test profile.)
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   check:
@@ -43,8 +48,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      # No separate `cargo build` step: `clippy --all-targets` above already compiled every
+      # target, so building again was a second full build per run for no extra signal.
       - name: Test
         run: cargo test --workspace
-
-      - name: Build
-        run: cargo build --workspace

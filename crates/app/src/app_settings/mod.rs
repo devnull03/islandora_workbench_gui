@@ -33,7 +33,7 @@ fn exe_candidates(base: &'static str) -> Vec<&'static str> {
     }
 }
 
-pub fn build_pages() -> Vec<SettingPage> {
+pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
     vec![
         SettingPage::new("General").default_open(true).groups(vec![
             SettingGroup::new().title("Runs").items(vec![
@@ -42,6 +42,18 @@ pub fn build_pages() -> Vec<SettingPage> {
                     label: "Auto-accept prompts",
                     description: "Answer Workbench's confirmation prompts automatically. \
                                   Servers marked \"always confirm\" still prompt.",
+                }
+                .into(),
+            ]),
+            // A group rather than a page of its own: one switch about the app itself belongs
+            // beside the other app-level preference, not behind another tab.
+            SettingGroup::new().title("Updates").items(vec![
+                Setting::Switch {
+                    key: crate::update_check::AUTO_UPDATE_KEY,
+                    label: "Check for updates on startup",
+                    description: "Asks the release feed once per launch whether a newer version \
+                                  exists, and says so in the status bar. Nothing is downloaded \
+                                  or installed — you choose when to upgrade.",
                 }
                 .into(),
             ]),

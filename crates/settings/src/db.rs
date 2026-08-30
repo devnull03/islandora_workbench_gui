@@ -188,10 +188,14 @@ impl From<PersistSettings> for AppSettings {
     }
 }
 
+/// The app's own folder under the OS local data dir — the settings DB, the logs, and anything
+/// else the app writes for itself. `None` only when the OS reports no local data dir at all.
+pub fn data_dir() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|base| base.join(APP_DIR))
+}
+
 fn db_path() -> Result<PathBuf> {
-    let base = dirs::data_local_dir()
-        .context("Failed to resolve local data dir")?
-        .join(APP_DIR);
+    let base = data_dir().context("Failed to resolve local data dir")?;
     Ok(base.join(DB_FILE))
 }
 

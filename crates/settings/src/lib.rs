@@ -5,11 +5,14 @@ pub mod path_picker;
 
 mod db;
 
-pub use db::{SettingsWriter, load_app_settings};
+pub use db::{SettingsWriter, data_dir, load_app_settings};
 use gpui_component::Sizable;
 
 /// Increment when the persisted SQLite JSON schema (`db::PersistSettings`) changes.
 pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
+
+/// `AppSettings` value key for the Settings window's last size (a JSON [`MainWindowBounds`]).
+pub const SETTINGS_WINDOW_BOUNDS_KEY: &str = "settings_window_bounds";
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -588,21 +591,68 @@ impl Global for SettingsWindowHandle {}
 // --- Settings Window ---
 
 pub struct SettingsWindow {
-    pub build_pages: fn() -> Vec<SettingPage>,
+    /// Takes `&App` so a page can build itself from live state — the Servers and Task Configs
+    /// pages list what is currently saved, which a context-free builder cannot see. Re-invoked
+    /// every render.
+    pub build_pages: fn(&App) -> Vec<SettingPage>,
+    /// Persists the window's size (debounced through the settings writer) so it reopens where it
+    /// was left.
+    _bounds_sub: Subscription,
+    /// Re-render when any setting changes, so a page built from live state rebuilds as soon as
+    /// that state moves rather than on the next unrelated repaint. Adding a server and seeing the
+    /// list above stay stale is the bug this fixes.
+    _settings_sub: Subscription,
 }
 
 impl SettingsWindow {
     pub fn new(
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-        build_pages: fn() -> Vec<SettingPage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        build_pages: fn(&App) -> Vec<SettingPage>,
     ) -> Self {
-        Self { build_pages }
+        window.set_window_title("Settings — Islandora Workbench");
+        let _bounds_sub = cx.observe_window_bounds(window, |_this, window, cx| {
+            let bounds = MainWindowBounds::capture_from_window(window, cx);
+            if let Ok(json) = serde_json::to_string(&bounds) {
+                AppSettings::set_text(SETTINGS_WINDOW_BOUNDS_KEY, json.into(), cx);
+            }
+        });
+        let _settings_sub = cx.observe_global::<AppSettings>(|_this, cx| cx.notify());
+        Self {
+            build_pages,
+            _bounds_sub,
+            _settings_sub,
+        }
+    }
+
+    /// Where to open the Settings window: the size it was last left at, centred on the display
+    /// the main window is on. Falls back to a sensible default the first time.
+    pub fn startup_placement(cx: &App) -> (Bounds<Pixels>, Option<Size<Pixels>>) {
+        const MIN: Size<Pixels> = Size {
+            width: px(600.0),
+            height: px(400.0),
+        };
+        let saved = AppSettings::get(cx)
+            .values
+            .get(SETTINGS_WINDOW_BOUNDS_KEY)
+            .map(|v| v.text())
+            .and_then(|json| serde_json::from_str::<MainWindowBounds>(&json).ok())
+            // A saved size below the window minimum would be honoured as an opening size the user
+            // cannot reproduce by dragging, so treat it as no saved size at all.
+            .filter(|b| {
+                b.width.is_finite()
+                    && b.height.is_finite()
+                    && px(b.width) >= MIN.width
+                    && px(b.height) >= MIN.height
+            })
+            .map(|b| size(px(b.width), px(b.height)))
+            .unwrap_or_else(|| size(px(1000.0), px(800.0)));
+        (Bounds::centered(None, saved, cx), Some(MIN))
     }
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .child(TitleBar::new().child(Label::new("Settings").font_semibold()))
@@ -613,7 +663,7 @@ impl Render for SettingsWindow {
                     .flex_1()
                     .min_h(px(0.))
                     .overflow_y_scrollbar()
-                    .child(Settings::new("app-settings").pages((self.build_pages)())),
+                    .child(Settings::new("app-settings").pages((self.build_pages)(cx))),
             )
     }
 }

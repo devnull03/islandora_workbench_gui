@@ -39,7 +39,7 @@ pub fn spawn_stream_to_log(
                 StreamLine::InputRequired(prompt) => {
                     let prompt_text = prompt.clone();
                     let prompt_msg = format!("[PROMPT] {}", prompt_text);
-                    println!("[stream] prompt detected: {}", prompt_text);
+                    log::debug!("stream: prompt detected: {prompt_text}");
 
                     if auto_accept {
                         stdin_sink.send("y");
@@ -53,7 +53,7 @@ pub fn spawn_stream_to_log(
                         })
                         .ok();
                     } else {
-                        eprintln!("[dialog] opening dialog for prompt: {:?}", prompt_text);
+                        log::debug!("stream: opening dialog for prompt {prompt_text:?}");
                         let sink_for_dialog = stdin_sink.clone();
                         let workspace_ref = workspace.clone();
                         let prompt_log = prompt_msg.clone();
@@ -99,7 +99,7 @@ pub fn spawn_stream_to_log(
                 _ => {
                     let should_break = matches!(&line, StreamLine::Done(_) | StreamLine::Error(_));
                     let msg = format_stream_line(&line);
-                    println!("[stream] received: {}", msg);
+                    log::trace!("stream: received {msg}");
 
                     if cx
                         .update(|window, cx| {
@@ -110,7 +110,7 @@ pub fn spawn_stream_to_log(
                         })
                         .is_err()
                     {
-                        println!("[stream] cx.update failed (window closed?)");
+                        log::warn!("stream: cx.update failed (window closed?)");
                         break;
                     }
 
@@ -121,7 +121,7 @@ pub fn spawn_stream_to_log(
             }
         }
 
-        println!("[stream] loop exited, calling on_complete");
+        log::debug!("stream: loop exited, calling on_complete");
         cx.update(|_, cx| {
             workspace.update(cx, |this, cx| {
                 on_complete(this, cx);

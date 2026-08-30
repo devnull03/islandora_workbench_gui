@@ -8,21 +8,33 @@ use std::path::PathBuf;
 use gpui::*;
 use gpui_component::{IconName, Sizable, button::Button};
 use settings::{AppSettings, load_app_settings};
-use window_wrapper::status_bar::StatusBarRegistry;
+use window_wrapper::{BarRegistry as _, status_bar::StatusBarRegistry};
 
 use self::ping::ServerPingIndicator;
+use crate::dock::LogDockButton;
 use crate::helpers;
+use crate::update_check::UpdateIndicator;
 
 pub use ping::PingLogEvent;
 
 pub fn build_status_bar_registry(
     ping: Entity<ServerPingIndicator>,
+    log_button: Entity<LogDockButton>,
     cx: &mut App,
 ) -> StatusBarRegistry {
     let mut registry = StatusBarRegistry::new();
 
     registry.add_left(ping);
+    // Centred, under the dock it opens — the same rule qrate's bar buttons follow.
+    registry.items_mut().add_centre_if(log_button, |_| true);
 
+    // Silent until the startup check finds something, so it declares its own occupancy rather
+    // than stranding a divider beside an empty slot.
+    registry
+        .items_mut()
+        .add_right_if(cx.new(UpdateIndicator::new), |cx: &App| {
+            UpdateIndicator::occupied(cx)
+        });
     // registry.add_right(cx.new(|_| WindowBoundsDebug));
     registry.add_right(cx.new(|_| ReloadConfigs));
     registry.add_right(cx.new(|_| OpenTerminal));
@@ -44,7 +56,7 @@ impl OpenTerminal {
             return;
         };
 
-        println!("spawning terminal at: {:?}", path);
+        log::debug!("spawning terminal at {path:?}");
 
         cx.spawn(async move |_this, _cx| {
             let _ = helpers::spawn_terminal_at(&path, "");
@@ -63,7 +75,7 @@ impl Render for OpenTerminal {
                 .px_0()
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _, window, cx| {
-                    println!("terminal button clicked");
+                    log::debug!("terminal button clicked");
                     this.spawn_terminal(window, cx);
                 })),
         )

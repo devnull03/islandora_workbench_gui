@@ -1,4 +1,5 @@
 use gpui::{prelude::FluentBuilder, *};
+use gpui_component::dock::{Panel, PanelControl, PanelEvent};
 use gpui_component::{ActiveTheme, label::Label};
 
 /// Approximate visual line height for text_sm. Used for Y-position → line index mapping.
@@ -101,7 +102,6 @@ impl Render for LogViewer {
 
         let selection_bg = cx.theme().selection;
         let bg_color = cx.theme().input;
-        let border_color = cx.theme().border;
         let focus_handle = self.focus_handle.clone();
         let scroll_handle = self.scroll_handle.clone();
         let weak = cx.weak_entity();
@@ -113,10 +113,9 @@ impl Render for LogViewer {
             .track_scroll(&scroll_handle)
             .track_focus(&focus_handle)
             .key_context("LogViewer")
+            // No border or corner radius: the dock panel draws its own edge, and a rounded card
+            // inset inside it reads as a box in a box.
             .bg(bg_color)
-            .border_1()
-            .border_color(border_color)
-            .rounded(cx.theme().radius_lg)
             // Log output is columnar: mono keeps timestamps and paths aligned (mockup `2c`).
             .font_family(cx.theme().mono_font_family.clone())
             .p_2()
@@ -234,5 +233,31 @@ impl Render for LogViewer {
 impl Focusable for LogViewer {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
+    }
+}
+
+// --- Dock panel ---
+
+impl EventEmitter<PanelEvent> for LogViewer {}
+
+impl Panel for LogViewer {
+    fn panel_name(&self) -> &'static str {
+        "LogPanel"
+    }
+
+    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        SharedString::from("Log")
+    }
+
+    /// The only panel in the only dock: closing it would leave a tab strip with nothing in it and
+    /// no way back, since the status-bar button toggles the dock rather than re-adding the panel.
+    fn closable(&self, _cx: &App) -> bool {
+        false
+    }
+
+    /// Zoom is a whole-window takeover of a panel, which is what the old inline log's expand
+    /// button did. The dock replaces that: drag it taller.
+    fn zoomable(&self, _cx: &App) -> Option<PanelControl> {
+        None
     }
 }

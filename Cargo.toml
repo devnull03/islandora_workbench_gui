@@ -14,6 +14,19 @@ default-members = ["crates/app"]
 version = "0.1.0-alpha.1"
 edition = "2024"
 
+# Unoptimized gpui — text shaping and layout above all — runs every frame, so a debug build of
+# this app is unusably slow before any of our own code is the problem. Dependencies are optimized
+# once and then cached; our own crates stay at 1 so recompiles remain fast.
+[profile.dev]
+opt-level = 1
+# Full debuginfo is a large share of a debug build: generating it, and on Windows writing the PDB.
+# Line tables keep backtraces readable and drop the rest.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+
 # Release artifacts ship to end users, so trade build time for a smaller, faster
 # binary. opt-level stays at the default 3 (max speed) — this is a GUI app, so we
 # get size from stripping + LTO rather than size-optimized codegen.
@@ -37,5 +50,10 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1.0.221", features = ["derive", "rc"] }
 serde_json = { version = "1.0.144", features = ["preserve_order", "raw_value"] }
 schemars = { version = "1.0", features = ["indexmap2"] }
-ureq = "2"
+# `json` for the update feed — it is the only response body anything here parses.
+ureq = { version = "2", features = ["json"] }
 base64 = "0.22"
+log = "0.4"
+simplelog = "0.12"
+os_info = "3"
+sysinfo = "0.37"

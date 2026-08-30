@@ -127,7 +127,7 @@ pub fn run_ingest_streaming(
     if is_check {
         cmd.arg("--check");
     }
-    println!(
+    log::info!(
         "[workbench] cwd: {:?}\n[workbench] cmd: {} {}",
         cmd.get_current_dir(),
         cmd.get_program().to_string_lossy(),

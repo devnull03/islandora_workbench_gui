@@ -5,6 +5,12 @@ use window_wrapper::OpenBrowser;
 use config_builder::OpenConfigBuilder;
 
 actions!(nav, [OpenSettings, Quit]);
+actions!(
+    help,
+    [CheckForUpdates, CopyDebugInfo, OpenLogsFolder, ReportIssue]
+);
+
+pub const REPO_URL: &str = "https://github.com/devnull03/islandora_workbench_gui";
 
 pub fn app_menus() -> Vec<Menu> {
     vec![
@@ -49,18 +55,31 @@ pub fn app_menus() -> Vec<Menu> {
                         MenuItem::action(
                             "Repository",
                             OpenBrowser {
-                                url: "https://github.com/devnull03/islandora_workbench_gui".into(),
+                                url: REPO_URL.into(),
                             },
                         ),
                         MenuItem::action(
                             "Issues",
                             OpenBrowser {
-                                url: "https://github.com/devnull03/islandora_workbench_gui/issues"
-                                    .into(),
+                                url: format!("{REPO_URL}/issues"),
                             },
                         ),
                     ],
                 }),
+            ],
+        },
+        // The three things a bug report needs, in the order a report is assembled: read the log,
+        // copy the machine details, then file it with those details already in the body.
+        Menu {
+            name: "Help".into(),
+            items: vec![
+                // Opens the releases page rather than reporting a result inline: the check that
+                // runs at startup is the one that can answer without making anyone wait.
+                MenuItem::action("Check for Updates", CheckForUpdates),
+                MenuItem::Separator,
+                MenuItem::action("Open Logs Folder", OpenLogsFolder),
+                MenuItem::action("Copy Debug Info", CopyDebugInfo),
+                MenuItem::action("Report an Issue", ReportIssue),
             ],
         },
     ]

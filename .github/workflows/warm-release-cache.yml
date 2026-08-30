@@ -1,0 +1,54 @@
+name: Warm release cache
+
+# A release runs on a tag ref, and GitHub only lets a run restore caches saved on its own ref or
+# on the default branch. Every tag is its own ref, so release.yml starts from an empty cache every
+# time and spends the better part of half an hour recompiling dependencies that have not changed.
+# (The cache keys already match across releases — the ref scope is the whole problem.)
+#
+# This job saves exactly the caches release.yml restores, on `main`, where a tag run can read them.
+# It shares their `shared-key`, so the keys line up despite the different job names.
+on:
+  push:
+    branches: [main]
+    # Only when the dependency graph actually moves. Everything else reuses what is already there.
+    paths:
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/warm-release-cache.yml'
+  # An unread cache is evicted after 7 days, which would silently put releases back to cold builds.
+  schedule:
+    - cron: '0 4 */3 * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  warm:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            shared-key: release-windows
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            shared-key: release-x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            shared-key: release-aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.shared-key }}
+
+      # The same build the release does, so the cache holds exactly what the release will look
+      # for. Our own crates recompile on the tag anyway (they changed — that's why there's a
+      # release); the dependency graph underneath them is what this is really saving.
+      - name: Build
+        run: cargo build --release -p app ${{ matrix.target && format('--target {0}', matrix.target) || '' }}

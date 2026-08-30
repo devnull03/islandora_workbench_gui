@@ -64,9 +64,10 @@ impl WorkbenchConfigHandler<Ready> {
         credentials_file_path: PathBuf,
         workbench_dir: &Path,
     ) -> anyhow::Result<()> {
-        eprintln!(
+        log::debug!(
             "[config] updating {:?}  host={:?}",
-            self.state.file_path, host
+            self.state.file_path,
+            host
         );
 
         self.state.config.host = host.to_string();
@@ -82,9 +83,10 @@ impl WorkbenchConfigHandler<Ready> {
                 } else {
                     workbench_dir.join(&task_path)
                 };
-                eprintln!(
+                log::debug!(
                     "[config] secondary task raw={:?}  resolved={:?}",
-                    task_path, resolved
+                    task_path,
+                    resolved
                 );
 
                 let mut handler = WorkbenchConfigHandler::new(resolved).load()?;

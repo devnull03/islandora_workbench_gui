@@ -5,12 +5,13 @@ mod sources;
 mod steps;
 mod streaming;
 
-use log_viewer::LogViewer;
+pub use log_viewer::LogViewer;
 
 use std::path::{Path, PathBuf};
 
 use gpui::*;
 use gpui_component::{
+    dock::{Panel, PanelControl, PanelEvent},
     input::{InputEvent, InputState},
     scroll::ScrollableElement,
     select::{SelectEvent, SelectState},
@@ -51,8 +52,11 @@ enum WorkflowStage {
 pub struct Workspace {
     op: Operation,
     stage: WorkflowStage,
+    /// The log lives in the bottom dock now, not in this view — this handle is only how run
+    /// output reaches it. Owned by `main` and handed to both, so the panel and the writer are
+    /// the same log.
     log_viewer: Entity<LogViewer>,
-    log_expanded: bool,
+    focus_handle: FocusHandle,
 
     /// One field per source rather than one shared field: switching source back and forth must
     /// not lose the URL you already pasted, and the two persist under their own settings keys.
@@ -77,9 +81,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let log_viewer = cx.new(LogViewer::new);
-
+    pub fn new(log_viewer: Entity<LogViewer>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let gdrive_link = cx.new(|cx| InputState::new(window, cx).placeholder("Sheet URL..."));
 
         let source_csv =
@@ -215,7 +217,7 @@ impl Workspace {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
             log_viewer,
-            log_expanded: false,
+            focus_handle: cx.focus_handle(),
             gdrive_link,
             source_csv,
             ingest_files_dir,
@@ -455,11 +457,6 @@ impl Workspace {
         .detach();
     }
 
-    /// Append an external status event to the workspace log.
-    pub fn push_log(&mut self, message: String, cx: &mut Context<Self>) {
-        self.log_viewer.update(cx, |lv, cx| lv.append(&message, cx));
-    }
-
     pub(crate) fn append_log(&self, message: &str, _window: &mut Window, cx: &mut Context<Self>) {
         self.log_viewer.update(cx, |lv, cx| lv.append(message, cx));
     }
@@ -474,14 +471,10 @@ impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_select_items(window, cx);
 
-        if self.log_expanded {
-            return self.render_log_expanded(cx).into_any_element();
-        }
-
-        // The three steps have intrinsic heights and the log has a floor, so a short window can
-        // need more room than it has. `min_h(relative(1.))` keeps the column stretching to fill a
-        // tall window (so the log still grows) while letting it exceed a short one — at which
-        // point this scrolls, instead of the overflow pushing the status bar off-screen.
+        // The three steps have intrinsic heights, so a short window can need more room than it
+        // has. `min_h(relative(1.))` keeps the column stretching to fill a tall window while
+        // letting it exceed a short one — at which point this scrolls, instead of the overflow
+        // pushing the status bar off-screen.
         div()
             .size_full()
             .child(
@@ -492,11 +485,38 @@ impl Render for Workspace {
                     .gap_4()
                     .child(self.render_input_source(cx))
                     .child(self.render_config(cx))
-                    .child(self.render_server(cx))
-                    .child(self.render_log(cx)),
+                    .child(self.render_server(cx)),
             )
             .overflow_y_scrollbar()
-            .into_any_element()
+    }
+}
+
+// --- Dock panel ---
+
+impl Focusable for Workspace {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl EventEmitter<PanelEvent> for Workspace {}
+
+impl Panel for Workspace {
+    fn panel_name(&self) -> &'static str {
+        "Workspace"
+    }
+
+    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        SharedString::from("Workbench")
+    }
+
+    /// The centre of the window. There is nothing behind it to close it onto.
+    fn closable(&self, _cx: &App) -> bool {
+        false
+    }
+
+    fn zoomable(&self, _cx: &App) -> Option<PanelControl> {
+        None
     }
 }
 

@@ -62,9 +62,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      # `shared-key`, not `key`: it replaces the job-name component of the cache key, so the
+      # warm-release-cache job on `main` writes a key this tag run can actually restore. See
+      # .github/workflows/warm-release-cache.yml for why that job has to exist at all.
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          shared-key: release-${{ matrix.target }}
 
       - name: Build
         run: cargo build --release -p app --target ${{ matrix.target }}
@@ -119,6 +122,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-windows
 
       - name: Build
         run: cargo build --release -p app
@@ -160,6 +165,10 @@ jobs:
     needs: [version, bundle-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      # For scripts/build-update-manifest.sh below; the artifacts themselves come from the
+      # build jobs, not the tree.
+      - uses: actions/checkout@v4
+
       # Only the final artifacts — not the intermediate per-arch macOS binaries.
       - uses: actions/download-artifact@v4
         with:
@@ -176,6 +185,19 @@ jobs:
           sha256sum *.dmg *.zip *-setup.exe > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      # Attached to the release so `releases/latest/download/stable.json` resolves to the newest
+      # published one — that URL is the update feed the app polls. Pre-releases never take over
+      # `latest`, so a beta tag cannot offer itself to everyone on stable.
+      - name: Build update manifest
+        run: |
+          chmod +x scripts/build-update-manifest.sh
+          scripts/build-update-manifest.sh \
+            "${{ needs.version.outputs.version }}" \
+            "${{ needs.version.outputs.tag }}" \
+            dist \
+            "${{ github.server_url }}/${{ github.repository }}" > dist/stable.json
+          cat dist/stable.json
+
       - name: Publish draft release
         uses: softprops/action-gh-release@v2
         with:
@@ -188,6 +210,7 @@ jobs:
             dist/*.zip
             dist/*-setup.exe
             dist/SHA256SUMS.txt
+            dist/stable.json
           body: |
             ## Islandora Workbench GUI ${{ needs.version.outputs.tag }}
 

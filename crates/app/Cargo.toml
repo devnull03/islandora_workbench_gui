@@ -11,7 +11,13 @@ gpui.workspace = true
 gpui-component.workspace = true
 gpui-component-assets.workspace = true
 config-builder = { path = "../config-builder" }
+log.workspace = true
+os_info.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 settings = { path = "../settings" }
+simplelog.workspace = true
+sysinfo.workspace = true
 ui = { path = "../ui" }
 ureq.workspace = true
 window-wrapper = { path = "../window-wrapper" }
