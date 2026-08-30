@@ -4,6 +4,7 @@
 //! implementations are in sibling modules (`util`, `stream`, `sheet`, `placeholder`).
 
 pub mod catalog;
+mod check;
 mod config_builder;
 mod preprocess;
 mod provision;
@@ -44,6 +45,7 @@ pub use stream::{StdinSink, StreamLine, spawn_command_streaming};
 
 pub use config_builder::{APP_SUPPLIED, ConfigDraft, WorkbenchConfigHandler};
 
+pub use check::{ServerCheck, check_server};
 pub use preprocess::{
     InputSource, PreprocessJob, PreprocessResult, ProcessResult, Processor, run as run_preprocess,
 };

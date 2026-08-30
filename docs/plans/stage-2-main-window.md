@@ -1,7 +1,7 @@
 # Stage 2 — Main window, generalized
 
 **Mockup:** `2c`
-**Status:** in progress
+**Status:** built — see the notes section
 **Depends on:** Stage 1 (the builder must exist before Edit/New can open it)
 **Blocks:** nothing
 
@@ -70,3 +70,55 @@ From the canvas, unresolved:
 
 The collection-node control remains removed: site-specific logic belongs with the processor, not
 in the shared window.
+
+## Notes discovered during implementation (31 August 2026)
+
+**The open question is answered: a script declares nothing.** Being a `.py` in the folder named
+by `preprocess_scripts_dir` is the whole registration. The dropdown lists the folder and never
+opens a file. A script is invoked
+
+```text
+python <script> --input <source.csv> --output-dir <dir> [--config <config.yml>]
+```
+
+and must write a CSV. If its last line of stdout is a path that exists that is the result,
+otherwise `<dir>/metadata.csv` is — forgiving of both readings of "report the path it wrote".
+The interpreter is Workbench's own (`WbInfo::python_command`, `uv run python` when UV is on),
+with the workbench directory as the working directory, so a script has the dependencies
+Workbench has without installing anything of its own.
+
+Eight things the plan did not predict:
+
+1. **Source and processor had to be split into two enums, not one.** `process_google_sheet_source`
+   fused acquisition and transformation. `preprocess.rs` now has `InputSource` (GoogleSheet, CsvFile)
+   and `Processor` (Builtin, Script, None) and dispatches the pair, so every combination works
+   without a function per combination.
+2. **`PreprocessResult::details` had to become `Option`.** Row and validation counts come from
+   the built-in importer's `ProcessResult`; an external script is a black box. `None` is what
+   "we genuinely do not know" looks like, and the log says `Processor finished.` instead of
+   inventing zeroes.
+3. **`PreprocessResult` gained `output`.** A script's stdout is the only report it has, so it is
+   echoed into the log as `[SCRIPT] …` lines.
+4. **Two input fields, not one.** Switching source must not lose the URL you already pasted, so
+   the sheet URL and the CSV path are separate `InputState`s persisted under `gdrive_link` and
+   `source_csv`. `Workspace::source_field` picks the one the current source uses.
+5. **`WbInfo::python_command` was extracted** from `build_workbench_command`, and
+   `run::workbench_info` from `run_ingest`, so a preprocess script and an ingest run resolve the
+   Python environment the same way and fail the same way when it is missing.
+6. **The processor list is rebuilt from a directory read, not from a settings row**, so the only
+   way to notice a new script is to look. `sync_select_items` compares the values it would build
+   against the ones the select holds, which keeps that to one `read_dir` per render.
+7. **The config summary is cached.** `14 settings · runs 2 secondary configs · edited today`
+   needs a parse of the YAML plus a stat, which must not happen once per frame — it is rebuilt
+   only when the selection changes. "Edited" is relative (today / yesterday / N days ago), which
+   also avoids pulling in a date-formatting crate.
+8. **The mockup's `↳ 2` chain badge is folded into the summary line** as
+   `runs N secondary configs` rather than drawn as a separate glyph. Add the badge when the row
+   gets crowded enough to need the shorthand.
+
+`Operation::GdriveBusy` / `WorkflowStage::GdriveProcessed` / `gdrive_log.rs` were renamed to
+`Preprocessing` / `SourceProcessed` / `preprocess_log.rs` — nothing about them was ever
+Sheets-specific except the name.
+
+**Deliberately not built:** the profile switcher above step 1 (Stage 5 owns it, and it stays
+hidden until a second profile exists anyway).

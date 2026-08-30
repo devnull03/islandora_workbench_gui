@@ -6,10 +6,11 @@ pub mod path_picker;
 mod db;
 
 pub use db::{SettingsWriter, load_app_settings};
-use gpui_component::Sizable;
+use gpui::prelude::FluentBuilder;
+use gpui_component::{ActiveTheme, Sizable};
 
 /// Increment when the persisted SQLite JSON schema (`db::PersistSettings`) changes.
-pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,7 +21,7 @@ use gpui_component::{
     IconName, StyledExt, TitleBar,
     button::Button,
     h_flex,
-    input::InputState,
+    input::{Input, InputEvent, InputState},
     label::Label,
     scroll::ScrollableElement,
     setting::{SettingField, SettingItem, SettingPage, Settings},
@@ -232,18 +233,76 @@ impl Val {
 
 // --- Config Types ---
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TaskConfig {
     pub label: SharedString,
     pub task_name: SharedString,
     pub file_path: SharedString,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ServerConfig {
     pub label: SharedString,
     pub server_url: SharedString,
     pub credentials_file: SharedString,
+    /// Destructive tasks on this server always prompt, whatever `auto_accept_prompts` says.
+    /// A production host earns this; a scratch VM does not.
+    pub needs_confirmation: bool,
+    pub last_check: Option<CheckResult>,
+}
+
+/// What the last **Test** found, shown on the server's row so a bad pairing is visible before a
+/// run rather than during one (mockup `3b`).
+///
+/// Reachability and credentials are separate because they fail separately: an unreachable host
+/// says nothing about whether the password is right, and reporting them as one verdict would
+/// claim knowledge we do not have.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CheckResult {
+    /// Unix seconds. Rendered as an age ("checked 2 min ago") rather than a clock time, which
+    /// would need a timezone database to be honest about.
+    pub at: u64,
+    pub reachable: bool,
+    /// `None` when the host was unreachable, so the credentials were never sent anywhere.
+    pub credentials_ok: Option<bool>,
+    pub message: SharedString,
+}
+
+impl CheckResult {
+    pub fn now(
+        reachable: bool,
+        credentials_ok: Option<bool>,
+        message: impl Into<SharedString>,
+    ) -> Self {
+        Self {
+            at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            reachable,
+            credentials_ok,
+            message: message.into(),
+        }
+    }
+
+    /// `just now` · `4 min ago` · `2 h ago` · `3 days ago`.
+    pub fn age(&self) -> String {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        match now.saturating_sub(self.at) {
+            s if s < 60 => "just now".to_string(),
+            s if s < 3600 => format!("{} min ago", s / 60),
+            s if s < 86_400 => format!("{} h ago", s / 3600),
+            s => format!("{} days ago", s / 86_400),
+        }
+    }
+
+    /// True only when both stages passed.
+    pub fn is_ok(&self) -> bool {
+        self.reachable && self.credentials_ok == Some(true)
+    }
 }
 
 /// Last main window size and display, for restore on launch (position is not persisted).
@@ -448,37 +507,15 @@ impl AppSettings {
         });
     }
 
-    pub fn add_task_config(cx: &mut App) {
-        let s = Self::get(cx);
-        let label = s
-            .values
-            .get("new_task_label")
-            .map(|v| v.text())
-            .unwrap_or_default();
-        let task_name = s
-            .values
-            .get("new_task_name")
-            .map(|v| v.text())
-            .unwrap_or_default();
-        let file_path = s
-            .values
-            .get("new_task_path")
-            .map(|v| v.text())
-            .unwrap_or_default();
-
-        if label.is_empty() || task_name.is_empty() || file_path.is_empty() {
+    /// Append a config, or replace the one at `index`. One entry point for both because the
+    /// list's last row is the add form — the only difference is whether a row already exists.
+    pub fn upsert_task_config(index: Option<usize>, config: TaskConfig, cx: &mut App) {
+        if config.label.is_empty() || config.task_name.is_empty() || config.file_path.is_empty() {
             return;
         }
-
-        Self::update(cx, |s| {
-            s.task_configs.push(TaskConfig {
-                label,
-                task_name,
-                file_path,
-            });
-            s.values.remove("new_task_label");
-            s.values.remove("new_task_name");
-            s.values.remove("new_task_path");
+        Self::update(cx, |s| match index {
+            Some(i) if i < s.task_configs.len() => s.task_configs[i] = config,
+            _ => s.task_configs.push(config),
         });
     }
 
@@ -490,37 +527,23 @@ impl AppSettings {
         });
     }
 
-    pub fn add_server_config(cx: &mut App) {
-        let s = Self::get(cx);
-        let label = s
-            .values
-            .get("new_server_label")
-            .map(|v| v.text())
-            .unwrap_or_default();
-        let server_url = s
-            .values
-            .get("new_server_url")
-            .map(|v| v.text())
-            .unwrap_or_default();
-        let credentials_file = s
-            .values
-            .get("new_credentials_file")
-            .map(|v| v.text())
-            .unwrap_or_default();
-
-        if label.is_empty() || server_url.is_empty() || credentials_file.is_empty() {
+    /// As [`Self::upsert_task_config`]. `last_check` is preserved across an edit that does not
+    /// change the URL or the credentials file — editing a label does not invalidate a test.
+    pub fn upsert_server_config(index: Option<usize>, mut config: ServerConfig, cx: &mut App) {
+        if config.label.is_empty() || config.server_url.is_empty() {
             return;
         }
-
-        Self::update(cx, |s| {
-            s.server_configs.push(ServerConfig {
-                label,
-                server_url,
-                credentials_file,
-            });
-            s.values.remove("new_server_label");
-            s.values.remove("new_server_url");
-            s.values.remove("new_credentials_file");
+        Self::update(cx, |s| match index {
+            Some(i) if i < s.server_configs.len() => {
+                let old = &s.server_configs[i];
+                let same_target = old.server_url == config.server_url
+                    && old.credentials_file == config.credentials_file;
+                if same_target && config.last_check.is_none() {
+                    config.last_check = old.last_check.clone();
+                }
+                s.server_configs[i] = config;
+            }
+            _ => s.server_configs.push(config),
         });
     }
 
@@ -528,6 +551,15 @@ impl AppSettings {
         Self::update(cx, |s| {
             if index < s.server_configs.len() {
                 s.server_configs.remove(index);
+            }
+        });
+    }
+
+    /// Record what a [`CheckResult`] found, without disturbing anything the user has typed.
+    pub fn set_server_check(index: usize, result: CheckResult, cx: &mut App) {
+        Self::update(cx, |s| {
+            if let Some(server) = s.server_configs.get_mut(index) {
+                server.last_check = Some(result);
             }
         });
     }
@@ -556,30 +588,70 @@ impl Global for SettingsWindowHandle {}
 
 // --- Settings Window ---
 
+/// `build_pages` takes the search query because filtering has to happen at construction.
+/// `SettingPage` keeps its title and groups `pub(super)` to gpui-component, so a built page
+/// cannot be read back and narrowed — only the code that knows the labels can decide.
 pub struct SettingsWindow {
-    pub build_pages: fn() -> Vec<SettingPage>,
+    pub build_pages: fn(&str) -> Vec<SettingPage>,
+    search: Entity<InputState>,
+    _subscription: Subscription,
 }
 
 impl SettingsWindow {
     pub fn new(
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-        build_pages: fn() -> Vec<SettingPage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        build_pages: fn(&str) -> Vec<SettingPage>,
     ) -> Self {
-        Self { build_pages }
+        let search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Search settings — try \"python\", \"server\"")
+        });
+        let _subscription = cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        Self {
+            build_pages,
+            search,
+            _subscription,
+        }
     }
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let query = self.search.read(cx).value();
+        let pages = (self.build_pages)(query.as_ref());
+        let empty = pages.is_empty();
+
         v_flex()
             .size_full()
             .child(TitleBar::new().child(Label::new("Settings").font_semibold()))
             .child(
                 div()
+                    .w_full()
+                    .flex_shrink_0()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(Input::new(&self.search).small().w_full()),
+            )
+            .child(
+                div()
                     .flex_1()
+                    .min_h(px(0.))
                     .overflow_y_scrollbar()
-                    .child(Settings::new("app-settings").pages((self.build_pages)())),
+                    .when(empty, |this| {
+                        this.p_4().child(
+                            Label::new(format!("Nothing matches \u{201c}{query}\u{201d}."))
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                    })
+                    .when(!empty, |this| {
+                        this.child(Settings::new("app-settings").pages(pages))
+                    }),
             )
     }
 }

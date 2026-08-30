@@ -1,7 +1,7 @@
 # Stage 3 — Settings, reworked
 
 **Mockups:** `3a` (what exists today, recreated from source) → `3b` (the rework)
-**Status:** not started
+**Status:** built — see the notes section
 **Depends on:** Stage 1 (the *Config builder* page holds the defaults Stage 1 had to guess)
 **Blocks:** Stage 5 (profiles bundle these settings)
 
@@ -64,3 +64,51 @@ visible everywhere, so nobody edits the wrong institution's servers.
 - What does **Test** actually do — HEAD on the server URL, or a real authenticated call with the
   credentials file? The mockup's failure text ("HTTP 530, host unreachable. Credentials were not
   tested.") implies two stages, reachability then auth.
+
+## Decisions (31 August 2026)
+
+Both open questions were put to the user and answered:
+
+- **The search filters rows in place.** Typing narrows every page to matching rows; a page that
+  keeps nothing is not rendered at all. This is what VS Code and Zed settings search do, so it
+  needs no explanation.
+- **Test is two stages.** `GET {server_url}` first; only if that answers,
+  `GET {server_url}/islandora_workbench_integration/version` with the credentials file. They are
+  reported separately because they fail separately, which is exactly what the mockup's
+  "Credentials were not tested" implies.
+
+## Notes discovered during implementation (31 August 2026)
+
+1. **The search had to move into `build_pages`, and change its signature to
+   `fn(&str) -> Vec<SettingPage>`.** gpui-component keeps `SettingPage::{title, groups}` and
+   `SettingGroup::items` `pub(super)`, so a built page cannot be read back and narrowed — only
+   the code holding the labels as literals can decide. Each item is declared with the words it
+   answers to, and `page()` weighs page title, group title and item terms together. Filtering
+   group-at-a-time does not work: by then the page title is out of scope, so searching a page's
+   own name would return nothing. There is a test for exactly that case.
+2. **No migration code was needed for schema v2.** `PersistServerConfig`'s new fields are
+   `#[serde(default)]`, and "never tested, no confirmation required" is the right reading of a
+   v1 blob's silence. The version constant still moves to 2 so the change is legible.
+3. **`window.use_keyed_state` is what makes edit-in-place possible.** A settings item's render
+   closure takes `&mut Window, &mut App` and runs fresh every frame, so it can create entities
+   but not hold them. Keyed state (gpui-component's own path picker uses it) gives each row
+   durable widgets with no global edit state to keep in sync.
+4. **`CheckResult::at` is a unix timestamp rendered as an age**, not the mockup's `12:03`.
+   A wall-clock time needs a timezone database to be honest; "checked 4 min ago" needs nothing
+   and answers the same question.
+5. **`upsert_server_config` preserves `last_check` when the URL and credentials file are
+   unchanged.** Renaming a server does not invalidate a test result, and re-testing after every
+   label edit would train people to ignore the line.
+6. **The task field is a dropdown, not a text input.** `task` is the one setting Workbench
+   demands and only ten values are legal.
+7. **`needs_confirmation` is wired into the run, not just stored.** `run_ingest` clears
+   auto-accept when the selected server carries the flag and says so in the log — a flag that
+   only decorated a settings row would be worse than no flag.
+8. **`builder_check_paths` was cut.** Marking which problems came from path checking, purely so
+   a switch could suppress them, is more machinery than the switch is worth. Path checking stays
+   always-on. `config_library_dir` and `builder_show_yaml` are wired: the latter also decides the
+   builder window's opening width, or the first toggle corrects it with a visible jump.
+
+**Deliberately not built:** the Profiles page and the active-profile footer (Stage 5 owns both,
+and there is nothing to switch between until profiles exist). `AppSettings` is now split the way
+Stage 5 needs — *Workbench & Python* is machine facts, everything else is institutional.

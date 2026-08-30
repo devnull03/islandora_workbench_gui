@@ -21,8 +21,8 @@ it is stable across canvas edits. Read the canvas with the `claude_design` MCP
 | Stage | File | Mockups | Status |
 |-------|------|---------|--------|
 | 1 | [stage-1-config-builder.md](stage-1-config-builder.md) | `1a` `1b` `1c` `1d` | **built** — see its notes section |
-| 2 | [stage-2-main-window.md](stage-2-main-window.md) | `2c` | in progress |
-| 3 | [stage-3-settings.md](stage-3-settings.md) | `3a` → `3b` | not started |
+| 2 | [stage-2-main-window.md](stage-2-main-window.md) | `2c` | **built** — see its notes section |
+| 3 | [stage-3-settings.md](stage-3-settings.md) | `3a` → `3b` | **built** — see its notes section |
 | 4 | [stage-4-docking.md](stage-4-docking.md) | `2b` | not started |
 | 5 | [stage-5-profiles.md](stage-5-profiles.md) | `3c` | not started |
 | 6 | [stage-6-chain-map.md](stage-6-chain-map.md) | `2a` | not started |

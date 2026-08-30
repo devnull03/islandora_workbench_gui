@@ -70,8 +70,19 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
         cx.global_mut::<ConfigBuilderWindows>().open.remove(&path);
     }
 
-    // Opens with the YAML panel showing, so the starting width includes it.
-    let bounds = Bounds::centered(None, size(EDITOR_WIDTH + YAML_PANEL_WIDTH, px(820.0)), cx);
+    // The starting width has to agree with whether the YAML panel is showing, or the window
+    // opens the wrong size and the first toggle corrects it with a visible jump.
+    let with_yaml = AppSettings::get(cx)
+        .values
+        .get("builder_show_yaml")
+        .map(|v| v.bool())
+        .unwrap_or(true);
+    let width = if with_yaml {
+        EDITOR_WIDTH + YAML_PANEL_WIDTH
+    } else {
+        EDITOR_WIDTH
+    };
+    let bounds = Bounds::centered(None, size(width, px(820.0)), cx);
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -189,7 +200,13 @@ impl ConfigBuilder {
             selects: HashMap::new(),
             search,
             search_open: false,
-            yaml_open: true,
+            // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is the
+            // thing that makes the editors legible to someone who knows the YAML already.
+            yaml_open: AppSettings::get(cx)
+                .values
+                .get("builder_show_yaml")
+                .map(|v| v.bool())
+                .unwrap_or(true),
             saved_at: None,
             notice,
             _subscriptions,

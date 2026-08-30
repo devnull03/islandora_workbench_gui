@@ -174,11 +174,26 @@ impl Workspace {
             }
         };
 
-        let auto_accept = AppSettings::get(cx)
-            .values
-            .get("auto_accept_prompts")
-            .map(|v| v.bool())
-            .unwrap_or(false);
+        // A server marked "always confirm" overrides auto-accept. The point of the flag is that
+        // a production host cannot be run against unattended by forgetting a global switch, so
+        // the server's answer wins whenever the two disagree.
+        let confirms = AppSettings::get(cx)
+            .server_configs
+            .iter()
+            .any(|s| s.server_url.as_ref() == server_url.as_str() && s.needs_confirmation);
+        let auto_accept = !confirms
+            && AppSettings::get(cx)
+                .values
+                .get("auto_accept_prompts")
+                .map(|v| v.bool())
+                .unwrap_or(false);
+        if confirms {
+            self.append_log(
+                "[INFO] This server is marked \"always confirm\" — prompts will be shown.",
+                window,
+                cx,
+            );
+        }
 
         let entity = cx.entity().clone();
         spawn_stream_to_log(

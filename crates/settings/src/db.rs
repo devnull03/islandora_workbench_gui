@@ -20,7 +20,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AppSettings, MainWindowBounds, SETTINGS_SCHEMA_VERSION, ServerConfig, TaskConfig, Val,
+    AppSettings, CheckResult, MainWindowBounds, SETTINGS_SCHEMA_VERSION, ServerConfig, TaskConfig,
+    Val,
 };
 
 const APP_DIR: &str = "islandora_workbench_gui";
@@ -45,6 +46,20 @@ struct PersistServerConfig {
     label: String,
     server_url: String,
     credentials_file: String,
+    /// Added in schema v2. `serde(default)` is the whole migration: a v1 blob has neither field,
+    /// and "never tested, no confirmation required" is the right reading of its silence.
+    #[serde(default)]
+    needs_confirmation: bool,
+    #[serde(default)]
+    last_check: Option<PersistCheckResult>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct PersistCheckResult {
+    at: u64,
+    reachable: bool,
+    credentials_ok: Option<bool>,
+    message: String,
 }
 
 fn default_persist_settings_version() -> u32 {
@@ -98,6 +113,13 @@ impl From<&AppSettings> for PersistSettings {
                 label: srv.label.to_string(),
                 server_url: srv.server_url.to_string(),
                 credentials_file: srv.credentials_file.to_string(),
+                needs_confirmation: srv.needs_confirmation,
+                last_check: srv.last_check.as_ref().map(|c| PersistCheckResult {
+                    at: c.at,
+                    reachable: c.reachable,
+                    credentials_ok: c.credentials_ok,
+                    message: c.message.to_string(),
+                }),
             })
             .collect();
 
@@ -144,6 +166,13 @@ impl From<PersistSettings> for AppSettings {
                 label: SharedString::from(s.label),
                 server_url: SharedString::from(s.server_url),
                 credentials_file: SharedString::from(s.credentials_file),
+                needs_confirmation: s.needs_confirmation,
+                last_check: s.last_check.map(|c| CheckResult {
+                    at: c.at,
+                    reachable: c.reachable,
+                    credentials_ok: c.credentials_ok,
+                    message: SharedString::from(c.message),
+                }),
             })
             .collect();
 
