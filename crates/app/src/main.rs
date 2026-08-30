@@ -10,14 +10,12 @@ mod status_items;
 mod workspace;
 
 use gpui::*;
-use gpui_component::{Root, v_flex};
+use gpui_component::{Root, TitleBar, v_flex};
 use settings::{
     AppSettings, MainWindowBounds, SettingsPersistence, SettingsWindow, SettingsWindowHandle,
     SettingsWriter, load_app_settings,
 };
-use window_wrapper::{
-    OpenBrowser, TitleBar, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar,
-};
+use window_wrapper::{OpenBrowser, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar};
 
 use crate::{
     app_menus::{OpenSettings, Quit, app_menus},

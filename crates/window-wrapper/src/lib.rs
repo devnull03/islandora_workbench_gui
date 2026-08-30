@@ -1,11 +1,10 @@
 pub mod bar;
 pub mod status_bar;
 pub mod title_bar;
-pub mod title_bar_shell;
 
 pub use bar::{BarItem, BarItems, BarRegistry};
 use gpui::*;
-pub use title_bar_shell::{TITLE_BAR_HEIGHT, TitleBarShell as TitleBar};
+pub use gpui_component::TitleBar;
 
 use schemars::JsonSchema;
 use serde::Deserialize;

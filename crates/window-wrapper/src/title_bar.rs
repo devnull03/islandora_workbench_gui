@@ -8,7 +8,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable,
+    ActiveTheme, IconName, Sizable, TitleBar,
     button::{Button, ButtonVariants},
     label::Label,
     menu::{DropdownMenu, PopupMenu},
@@ -17,7 +17,6 @@ use gpui_component::{
 
 use crate::WindowLock;
 use crate::bar::{BarItems, BarRegistry};
-use crate::title_bar_shell::TitleBarShell;
 
 #[derive(Default)]
 pub struct TitleBarRegistry(BarItems);
@@ -147,7 +146,7 @@ impl RenderOnce for AppTitleBar {
             })
             .unwrap_or_default();
 
-        TitleBarShell::new()
+        TitleBar::new()
             .text_xs()
             .text_color(cx.theme().foreground)
             .child(menus)
