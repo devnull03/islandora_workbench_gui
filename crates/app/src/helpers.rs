@@ -8,14 +8,61 @@ use settings::AppSettings;
 
 use crate::workspace::Workspace;
 
-/// `{workbench_path}/input_data` from Settings (Workbench Path).
+/// `{workbench_path}/input_data` from the `workbench_path` setting, or `None` when it's empty.
 pub fn workbench_input_data_dir(cx: &App) -> Option<PathBuf> {
-    let raw = AppSettings::get(cx).values.get("workbench_path")?.text();
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
+    let path = AppSettings::get(cx)
+        .values
+        .get("workbench_path")
+        .map(|v| v.text())
+        .filter(|s| !s.trim().is_empty())?;
+    Some(PathBuf::from(path.trim()).join("input_data"))
+}
+
+// `RegistryInstall` lives in the (gpui-free) workbench-integration crate; re-exported here so app
+// code keeps importing it from `helpers`.
+pub use workbench_integration::RegistryInstall;
+
+/// Read the installer-written registry values. Returns an empty struct off-Windows or when the
+/// key is absent (i.e. workbench was installed manually).
+#[cfg(windows)]
+pub fn registry_install() -> RegistryInstall {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+
+    let Ok(key) =
+        RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"Software\Islandora Workbench GUI")
+    else {
+        return RegistryInstall::default();
+    };
+    // Drop a uv path that no longer exists (e.g. antivirus quarantined it) so callers fall back to PATH.
+    let uv_path = key
+        .get_value::<String, _>("UvPath")
+        .ok()
+        .map(PathBuf::from)
+        .filter(|p| p.exists());
+    let provision_workbench = key
+        .get_value::<String, _>("ProvisionWorkbench")
+        .map(|v: String| v == "1")
+        .unwrap_or(false);
+    RegistryInstall {
+        uv_path,
+        provision_workbench,
     }
-    Some(PathBuf::from(trimmed).join("input_data"))
+}
+
+#[cfg(not(windows))]
+pub fn registry_install() -> RegistryInstall {
+    RegistryInstall::default()
+}
+
+/// Per-user, writable location the app provisions workbench into. Shares the base directory with
+/// the settings DB (`dirs::data_local_dir()/islandora_workbench_gui`).
+pub fn per_user_workbench_dir() -> Option<PathBuf> {
+    Some(
+        dirs::data_local_dir()?
+            .join("islandora_workbench_gui")
+            .join("islandora_workbench"),
+    )
 }
 
 pub fn get_file(

@@ -4,7 +4,7 @@ mod streaming;
 
 use log_viewer::LogViewer;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui::*;
 use gpui_component::{
@@ -19,7 +19,7 @@ use gpui_component::{
 };
 use workbench_integration::{
     WbInfo, WorkbenchConfigHandler, language_url_from_server_base, process_google_sheet_metadata,
-    run_ingest_streaming,
+    provision_workbench, run_ingest_streaming,
 };
 
 use crate::{
@@ -37,7 +37,28 @@ use self::gdrive_log::{
     sheet_preprocess_success_messages,
 };
 use self::streaming::spawn_stream_to_log;
-use crate::helpers::{reveal_in_folder, workbench_input_data_dir};
+use crate::helpers::{
+    per_user_workbench_dir, registry_install, reveal_in_folder, workbench_input_data_dir,
+};
+
+/// Record an app-provisioned workbench install into the normal settings store, so the path becomes
+/// the single source of truth — visible and editable in Settings, exactly like a user-entered value.
+///
+/// `uv_path`/`use_uv` are only touched when the installer actually bundled a uv. To preserve an
+/// explicit user choice, `use_uv` is defaulted on only when the switch has never been set.
+fn adopt_provisioned_install(dir: &Path, cx: &mut App) {
+    AppSettings::set_text(
+        "workbench_path",
+        dir.to_string_lossy().to_string().into(),
+        cx,
+    );
+    if let Some(uv) = registry_install().uv_path {
+        AppSettings::set_text("uv_path", uv.to_string_lossy().to_string().into(), cx);
+        if !AppSettings::get(cx).values.contains_key("use_uv") {
+            AppSettings::set_bool("use_uv", true, cx);
+        }
+    }
+}
 
 /// What async operation is currently running. Drives loading spinners and blanket-disables inputs.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -359,6 +380,27 @@ impl Workspace {
             return;
         }
 
+        // First-run provisioning: the user opted in via the installer but `workbench_path` isn't a
+        // setting yet. If a previous session already downloaded workbench, adopt that path into
+        // settings; otherwise download it (in the background) and re-enter the run when it lands.
+        // We only get here when the setting is empty, so this never shadows a user-entered path.
+        let wb_unset = AppSettings::get(cx)
+            .values
+            .get("workbench_path")
+            .map(|v| v.text())
+            .is_none_or(|s| s.trim().is_empty());
+        if wb_unset
+            && registry_install().provision_workbench
+            && let Some(dest) = per_user_workbench_dir()
+        {
+            if dest.join("pyproject.toml").exists() {
+                adopt_provisioned_install(&dest, cx);
+            } else {
+                self.provision_then_run(check, dest, window, cx);
+                return;
+            }
+        }
+
         if check {
             self.op = Operation::CheckRunning;
         } else {
@@ -385,19 +427,29 @@ impl Workspace {
             }
         };
 
+        // Read the run inputs straight from settings. Provisioning above guarantees `workbench_path`
+        // is populated whenever workbench was app-managed, so the setting is now the single source of
+        // truth. `WbInfo::new` falls back to `which("uv")` when `uv_path` is absent.
         let settings = AppSettings::get(cx);
-        let workbench_path_str = settings
+        let wb_dir = settings
             .values
             .get("workbench_path")
             .map(|v| v.text())
-            .unwrap_or_default();
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| PathBuf::from(s.trim()));
+        let uv_path = settings
+            .values
+            .get("uv_path")
+            .map(|v| v.text())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| PathBuf::from(s.trim()));
         let use_uv = settings
             .values
             .get("use_uv")
             .map(|v| v.bool())
             .unwrap_or(false);
 
-        if workbench_path_str.trim().is_empty() {
+        let Some(wb_dir) = wb_dir else {
             self.append_log(
                 "[ERROR] Workbench path not configured in settings",
                 window,
@@ -407,7 +459,7 @@ impl Workspace {
             WindowLock::set(false, cx);
             cx.notify();
             return;
-        }
+        };
 
         let server_url = match self.server_select.read(cx).selected_value() {
             Some(url) => url.to_string(),
@@ -426,7 +478,7 @@ impl Workspace {
             .map(|s| PathBuf::from(s.credentials_file.as_ref()))
             .unwrap_or_default();
 
-        let wb_info = WbInfo::new(PathBuf::from(workbench_path_str.trim()), use_uv);
+        let wb_info = WbInfo::new(wb_dir, use_uv, uv_path);
         let mut config_handler = match WorkbenchConfigHandler::new(config_path).load() {
             Ok(h) => h,
             Err(e) => {
@@ -486,6 +538,67 @@ impl Workspace {
                 cx.notify();
             },
         );
+    }
+
+    /// Download the workbench tool into `dest` on a background thread, then re-enter `run_ingest`.
+    /// Used for first-run provisioning when the user opted in via the installer.
+    fn provision_then_run(
+        &mut self,
+        check: bool,
+        dest: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.op = if check {
+            Operation::CheckRunning
+        } else {
+            Operation::IngestRunning
+        };
+        WindowLock::set(true, cx);
+        cx.notify();
+        self.append_log(
+            "[INFO] Downloading Islandora Workbench (first-time setup)...",
+            window,
+            cx,
+        );
+
+        let entity = cx.entity().clone();
+        cx.spawn_in(window, async move |_, cx| {
+            let dl_dest = dest.clone();
+            let result = cx
+                .background_spawn(async move { provision_workbench(&dl_dest) })
+                .await;
+
+            let _ = cx.update(|window, app| {
+                entity.update(app, |this, cx| {
+                    this.op = Operation::None;
+                    WindowLock::set(false, cx);
+                    cx.notify();
+                    match result {
+                        Ok(()) => {
+                            this.append_log(
+                                &format!("[INFO] Workbench installed to {}", dest.display()),
+                                window,
+                                cx,
+                            );
+                            // Persist the freshly downloaded path as a normal setting so it becomes
+                            // the single source of truth (and shows up in Settings → Workbench Path).
+                            adopt_provisioned_install(&dest, cx);
+                            // The setting is now populated, so this proceeds to the actual run.
+                            this.run_ingest(check, window, cx);
+                        }
+                        Err(e) => {
+                            this.append_log(
+                                &format!("[ERROR] Failed to download workbench: {e}"),
+                                window,
+                                cx,
+                            );
+                        }
+                    }
+                });
+            });
+        })
+        .detach();
     }
 }
 

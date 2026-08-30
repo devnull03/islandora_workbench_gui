@@ -4,6 +4,8 @@
 //! implementations are in sibling modules (`util`, `stream`, `sheet`, `placeholder`).
 
 mod config_builder;
+mod provision;
+mod resolve;
 mod stream;
 mod util;
 
@@ -42,6 +44,10 @@ pub use stream::{StdinSink, StreamLine, spawn_command_streaming};
 
 pub use config_builder::WorkbenchConfigHandler;
 
+pub use provision::provision_workbench;
+
+pub use resolve::RegistryInstall;
+
 use crate::config_builder::Ready;
 
 pub struct WbInfo {
@@ -52,11 +58,13 @@ pub struct WbInfo {
 }
 
 impl WbInfo {
-    pub fn new(workbench_path: PathBuf, use_uv: bool) -> Self {
+    /// `uv_path` is the caller-resolved uv executable (settings → installer registry). When `None`
+    /// we fall back to discovering `uv` on `PATH`, preserving the previous behaviour.
+    pub fn new(workbench_path: PathBuf, use_uv: bool, uv_path: Option<PathBuf>) -> Self {
         Self {
             install_path: workbench_path,
             python_path: which("python").ok(),
-            uv_path: which("uv").ok(),
+            uv_path: uv_path.or_else(|| which("uv").ok()),
             use_uv,
         }
     }

@@ -34,15 +34,15 @@ pub struct OpenTerminal;
 
 impl OpenTerminal {
     fn spawn_terminal(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let path = AppSettings::get(cx)
+        let Some(path) = AppSettings::get(cx)
             .values
             .get("workbench_path")
-            .map(|v| PathBuf::from(v.text().as_ref()))
-            .unwrap_or_default();
-
-        if path.as_os_str().is_empty() {
+            .map(|v| v.text())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| PathBuf::from(s.trim()))
+        else {
             return;
-        }
+        };
 
         println!("spawning terminal at: {:?}", path);
 
