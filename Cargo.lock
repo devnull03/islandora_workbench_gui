@@ -1115,6 +1115,7 @@ dependencies = [
  "serde_yaml",
  "settings",
  "ui",
+ "window-wrapper",
  "workbench-integration",
 ]
 
@@ -7389,6 +7390,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "smallvec",
 ]
 
 [[package]]

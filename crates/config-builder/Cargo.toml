@@ -9,4 +9,5 @@ gpui-component.workspace = true
 serde_yaml = "0.9"
 settings = { path = "../settings" }
 ui = { path = "../ui" }
+window-wrapper = { path = "../window-wrapper" }
 workbench-integration = { path = "../workbench-integration" }

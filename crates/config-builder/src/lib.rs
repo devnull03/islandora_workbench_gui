@@ -21,7 +21,7 @@ use std::path::PathBuf;
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt, TitleBar,
+    ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     h_flex,
     input::{InputEvent, InputState},
@@ -39,6 +39,7 @@ use workbench_integration::{
 };
 
 use ui::DetailSelectItem;
+use window_wrapper::TitleBar;
 
 actions!(config_builder, [OpenConfigBuilder]);
 
