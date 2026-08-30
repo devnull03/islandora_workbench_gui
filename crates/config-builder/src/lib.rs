@@ -76,6 +76,8 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         window_min_size: Some(Size::new(px(520.0), px(420.0))),
+        // See the note in main.rs: this is what removes maximize from the window.
+        is_resizable: false,
         ..Default::default()
     };
 
