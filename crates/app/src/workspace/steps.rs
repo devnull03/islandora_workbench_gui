@@ -47,7 +47,7 @@ impl Workspace {
                     .w_full()
                     .gap_2()
                     .p_3()
-                    .rounded_md()
+                    .rounded(cx.theme().radius)
                     .border_1()
                     .border_color(border)
                     .bg(secondary)

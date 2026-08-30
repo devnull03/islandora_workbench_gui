@@ -152,7 +152,7 @@ impl ConfigBuilder {
             .w_full()
             .gap_1()
             .p_2()
-            .rounded_md()
+            .rounded(cx.theme().radius)
             .border_1()
             .border_color(cx.theme().colors.border)
             .children(matches.iter().take(MAX_RESULTS).map(|def| {

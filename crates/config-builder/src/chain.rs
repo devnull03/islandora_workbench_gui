@@ -79,7 +79,7 @@ impl ConfigBuilder {
             .gap_2()
             .items_center()
             .p_2()
-            .rounded_md()
+            .rounded(cx.theme().radius)
             .bg(cx.theme().colors.secondary)
             .child(
                 Label::new(format!("{}", index + 1))

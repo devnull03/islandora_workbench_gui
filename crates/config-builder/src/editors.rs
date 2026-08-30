@@ -284,7 +284,7 @@ impl ConfigBuilder {
             .w_full()
             .gap_1()
             .p_2()
-            .rounded_md()
+            .rounded(cx.theme().radius)
             .border_1()
             .border_color(cx.theme().colors.border)
             .child(
@@ -338,7 +338,7 @@ impl ConfigBuilder {
             .gap_2()
             .items_center()
             .p_2()
-            .rounded_md()
+            .rounded(cx.theme().radius)
             .border_1()
             .border_color(cx.theme().colors.warning)
             .child(Label::new(key.to_string()).font_semibold().text_sm())

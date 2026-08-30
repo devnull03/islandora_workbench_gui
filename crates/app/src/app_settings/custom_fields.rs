@@ -42,7 +42,7 @@ fn task_config_row(idx: usize, config: &TaskConfig, cx: &App) -> impl IntoElemen
         .items_center()
         .p_2()
         .w_full()
-        .rounded_md()
+        .rounded(cx.theme().radius)
         .bg(cx.theme().colors.secondary)
         .child(
             v_flex()
@@ -146,7 +146,7 @@ fn server_config_row(idx: usize, config: &ServerConfig, cx: &App) -> impl IntoEl
         .items_center()
         .p_2()
         .w_full()
-        .rounded_md()
+        .rounded(cx.theme().radius)
         .bg(cx.theme().colors.secondary)
         .child(
             v_flex()

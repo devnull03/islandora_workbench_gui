@@ -59,6 +59,7 @@ impl ConfigBuilder {
                     .p_2()
                     .gap_0()
                     .overflow_y_scrollbar()
+                    .font_family(cx.theme().mono_font_family.clone())
                     .when(lines.is_empty(), |this| {
                         this.child(
                             Label::new("Nothing added yet.")

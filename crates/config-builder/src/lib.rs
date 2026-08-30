@@ -470,7 +470,7 @@ impl ConfigBuilder {
             .w_full()
             .gap_1()
             .p_2()
-            .rounded_md()
+            .rounded(cx.theme().radius)
             .bg(cx.theme().colors.secondary)
             .child(
                 Label::new("Supplied by the app at run time — you don't set these here")

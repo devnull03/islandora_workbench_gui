@@ -4,6 +4,7 @@ mod labeled_field;
 mod labeled_select;
 mod select_items;
 mod step_section;
+pub mod theme;
 
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;

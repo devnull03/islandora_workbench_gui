@@ -116,7 +116,9 @@ impl Render for LogViewer {
             .bg(bg_color)
             .border_1()
             .border_color(border_color)
-            .rounded_lg()
+            .rounded(cx.theme().radius_lg)
+            // Log output is columnar: mono keeps timestamps and paths aligned (mockup `2c`).
+            .font_family(cx.theme().mono_font_family.clone())
             .p_2()
             // Keyboard: Ctrl+C copy, Ctrl+A select-all, Escape clear
             .on_key_down({

@@ -109,6 +109,7 @@ fn main() {
 
     app.run(move |cx| {
         gpui_component::init(cx);
+        ui::theme::init(cx);
 
         cx.set_global(WindowLock::default());
 
