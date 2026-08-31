@@ -33,7 +33,7 @@ REPO = Path(__file__).resolve().parent.parent
 OVERRIDES = REPO / "crates" / "workbench-integration" / "catalog_overrides.json"
 OUTPUT = REPO / "crates" / "workbench-integration" / "config_catalog.json"
 
-# Shapes must stay in step with `Shape` in crates/workbench-integration/src/catalog.rs.
+# Shapes must stay in step with `Shape` in crates/workbench-integration/src/config/catalog.rs.
 SHAPES = {
     "boolean",
     "integer",

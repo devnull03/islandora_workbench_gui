@@ -1,8 +1,6 @@
 //! Persisted preferences, reusable setting field builders, path picker widgets, and a generic
 //! settings-window shell (`SettingsWindow`). Product-specific pages live in `app`.
 
-pub mod path_picker;
-
 mod db;
 
 pub use db::{SettingsWriter, data_dir, load_app_settings};
@@ -30,7 +28,7 @@ use gpui_component::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::path_picker::PathPickerApp;
+use ui::PathPicker;
 
 // --- Setting Field Enum ---
 
@@ -192,7 +190,7 @@ fn build_path_picker(
                     state.set_value(want.to_string(), window, cx);
                 }
             });
-            PathPickerApp {
+            PathPicker {
                 layout: options.layout(),
                 field_size: options.size(),
                 button_size: Some(options.size()),
@@ -378,7 +376,7 @@ pub fn picker_with_path_button(
             h_flex()
                 .gap_2()
                 .w_full()
-                .child(PathPickerApp {
+                .child(PathPicker {
                     layout: options.layout(),
                     field_size: options.size(),
                     button_size: Some(options.size()),

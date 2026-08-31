@@ -32,7 +32,7 @@ use gpui_component::{
 };
 use serde_yaml::Value;
 use settings::{AppSettings, TaskConfig};
-use workbench_integration::{
+use workbench_integration::config::{
     ConfigDraft,
     catalog::{self, SettingDef},
     validate::{Problem, Severity, validate},

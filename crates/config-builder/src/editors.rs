@@ -20,7 +20,7 @@ use gpui_component::{
     v_flex,
 };
 use serde_yaml::{Mapping, Value};
-use workbench_integration::{
+use workbench_integration::config::{
     catalog::{Browse, SettingDef, Shape},
     validate::Severity,
 };
@@ -236,7 +236,7 @@ impl ConfigBuilder {
             .values
             .keys()
             .filter(|k| k.as_str() != "secondary_tasks")
-            .filter(|k| !workbench_integration::ConfigDraft::is_app_supplied(k))
+            .filter(|k| !workbench_integration::config::ConfigDraft::is_app_supplied(k))
             .cloned()
             .collect();
 
@@ -258,7 +258,7 @@ impl ConfigBuilder {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(def) = workbench_integration::catalog::find(key) else {
+        let Some(def) = workbench_integration::config::catalog::find(key) else {
             // An unrecognised key still has to be visible and removable, or a typo in a hand
             // written config becomes invisible the moment it is opened here.
             return self.render_unknown(key, cx).into_any_element();
@@ -629,7 +629,7 @@ impl ConfigBuilder {
     // survive are rebuilt from the draft instead of keeping values that have shifted up.
 
     fn push_row(&mut self, key: &str, cx: &mut Context<Self>) {
-        let Some(def) = workbench_integration::catalog::find(key) else {
+        let Some(def) = workbench_integration::config::catalog::find(key) else {
             return;
         };
         let entry = self.draft.values.entry(key.to_string());

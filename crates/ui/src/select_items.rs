@@ -1,10 +1,7 @@
 //! Select dropdown rows with a subtitle line and optional top divider.
 
-use std::path::Path;
-
 use gpui::{App, IntoElement, ParentElement, SharedString, Styled, StyledText, Window, div, px};
 use gpui_component::{ActiveTheme, select::SelectItem, v_flex};
-use settings::{ServerConfig, TaskConfig};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DetailSelectItem {
@@ -53,33 +50,5 @@ impl SelectItem for DetailSelectItem {
     fn matches(&self, query: &str) -> bool {
         let q = query.to_lowercase();
         self.label.to_lowercase().contains(&q) || self.subtitle.to_lowercase().contains(&q)
-    }
-}
-
-impl From<(usize, &ServerConfig)> for DetailSelectItem {
-    fn from((index, item): (usize, &ServerConfig)) -> Self {
-        Self {
-            label: item.label.clone(),
-            subtitle: item.server_url.clone(),
-            value: item.server_url.clone(),
-            divider_above: index > 0,
-        }
-    }
-}
-
-impl From<(usize, &TaskConfig)> for DetailSelectItem {
-    fn from((index, item): (usize, &TaskConfig)) -> Self {
-        let path_str = item.file_path.to_string();
-        let file_name = Path::new(&path_str)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(str::to_owned)
-            .unwrap_or(path_str);
-        Self {
-            label: item.label.clone(),
-            subtitle: file_name.into(),
-            value: item.file_path.clone(),
-            divider_above: index > 0,
-        }
     }
 }

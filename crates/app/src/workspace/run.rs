@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::*;
 use workbench_integration::{
-    WbInfo, WorkbenchConfigHandler, provision_workbench, run_ingest_streaming,
+    WbInfo, config::WorkbenchConfigHandler, provision_workbench, run_ingest_streaming,
 };
 
 use settings::AppSettings;

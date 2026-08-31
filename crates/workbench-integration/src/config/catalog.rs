@@ -13,7 +13,7 @@ use serde_yaml::Value;
 
 /// The sixteen YAML value shapes a setting can take, and therefore the sixteen editors the
 /// builder can render. Mirrors `SHAPES` in `scripts/gen-config-catalog.py`; adding one means
-/// adding it in both places plus an arm in `config_builder::editors`.
+/// adding it in both places plus an arm in the `config-builder` crate's editors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Shape {
@@ -152,7 +152,7 @@ struct Catalog {
 }
 
 static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../config_catalog.json"))
+    serde_json::from_str(include_str!("../../config_catalog.json"))
         .expect("config_catalog.json is generated and checked in; a parse failure is a build bug")
 });
 

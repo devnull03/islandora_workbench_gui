@@ -36,7 +36,7 @@ depth-first.
   strip is a flattened depth-first walk of it.
 - `crates/config-builder/src/lib.rs` — breadcrumb title, level badge, inheritance line,
   cascade placement.
-- `crates/workbench-integration/src/config_builder.rs` — a cycle check over the resolved
+- `crates/workbench-integration/src/config/draft.rs` — a cycle check over the resolved
   `secondary_tasks` graph, reusing the same relative-path resolution
   `update_config_fields` already does against the workbench directory.
 

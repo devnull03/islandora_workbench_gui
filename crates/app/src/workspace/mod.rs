@@ -18,13 +18,15 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
-    ConfigDraft, InputSource, PreprocessJob, language_url_from_server_base, run_preprocess,
+    InputSource, PreprocessJob, config::ConfigDraft, language_url_from_server_base, run_preprocess,
 };
 
 use settings::AppSettings;
 use ui::DetailSelectItem;
 
-use self::sources::{ProcessorChoice, SOURCE_CSV, SOURCE_SHEET};
+use self::sources::{
+    ProcessorChoice, SOURCE_CSV, SOURCE_SHEET, server_config_items, task_config_items,
+};
 
 use self::preprocess_log::{
     preprocess_error_message, preprocess_start_message, preprocess_success_messages,
@@ -304,11 +306,7 @@ impl Workspace {
         if task_labels != self.synced_task_labels {
             let first_population = self.synced_task_labels.is_empty();
             self.synced_task_labels = task_labels.clone();
-            let items: Vec<DetailSelectItem> = task_configs
-                .iter()
-                .enumerate()
-                .map(|(i, t)| DetailSelectItem::from((i, t)))
-                .collect();
+            let items = task_config_items(&task_configs);
             self.saved_config_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
                 if first_population && let Some(label) = &default_task {
@@ -319,11 +317,7 @@ impl Workspace {
         if server_labels != self.synced_server_labels {
             let first_population = self.synced_server_labels.is_empty();
             self.synced_server_labels = server_labels.clone();
-            let items: Vec<DetailSelectItem> = server_configs
-                .iter()
-                .enumerate()
-                .map(|(i, s)| DetailSelectItem::from((i, s)))
-                .collect();
+            let items = server_config_items(&server_configs);
             self.server_select.update(cx, |state, cx| {
                 state.set_items(items, window, cx);
                 if first_population && let Some(label) = &default_server {

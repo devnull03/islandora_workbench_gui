@@ -10,8 +10,8 @@ use std::path::Path;
 
 use serde_yaml::Value;
 
-use crate::catalog::{self, Shape};
-use crate::config_builder::ConfigDraft;
+use super::ConfigDraft;
+use super::catalog::{self, Shape};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
@@ -291,7 +291,7 @@ mod tests {
     /// builder silently rewrites configs that already work.
     #[test]
     fn sample_config_round_trips() {
-        let sample = include_str!("../test.config.yml");
+        let sample = include_str!("../../test.config.yml");
         let draft = ConfigDraft::from_yaml(sample).expect("sample config parses");
         let again = ConfigDraft::from_yaml(&draft.to_yaml()).expect("re-parses");
         assert_eq!(draft.values, again.values);
@@ -310,7 +310,7 @@ mod tests {
     /// `task` is present, so the only errors would be shape mismatches in the catalogue.
     #[test]
     fn sample_config_has_no_errors() {
-        let draft = ConfigDraft::from_yaml(include_str!("../test.config.yml")).unwrap();
+        let draft = ConfigDraft::from_yaml(include_str!("../../test.config.yml")).unwrap();
         assert_eq!(errors(&draft), Vec::<String>::new());
     }
 

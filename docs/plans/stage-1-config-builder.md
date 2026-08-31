@@ -61,7 +61,7 @@ for the rest; fill in by demand.
 - **Does not auto-tag a release.** Merging the PR onto `main` feeds the existing release
   pipeline (`docs/SETUP.md`); firing the release stays a human `workflow_dispatch`.
 
-### `crates/workbench-integration/src/catalog.rs` (new)
+### `crates/workbench-integration/src/config/catalog.rs` (new)
 
 ```rust
 pub enum Shape {                       // all 16 from mockup 1c
@@ -80,8 +80,8 @@ catalogue so the existing settings pages keep compiling unchanged.
 
 ## 1.2 Draft model + YAML I/O
 
-Extend `crates/workbench-integration/src/config_builder.rs`. **Do not disturb** the existing
-`Pending` / `Ready` type-state — `run_ingest` and `update_config_fields` depend on it.
+Add `crates/workbench-integration/src/config/draft.rs`. **Do not disturb** the `Pending` /
+`Ready` type-state in `config/runtime.rs` — `run_ingest` and `update_config_fields` depend on it.
 
 ```rust
 pub struct ConfigDraft {
@@ -100,7 +100,7 @@ impl ConfigDraft {
 `host`, `credentials_file_path` and `input_csv` are **never** in `values` — the app writes them
 at run time. The builder shows them as the locked band from mockup `1a`.
 
-## 1.3 Local validation — `crates/workbench-integration/src/validate.rs` (new)
+## 1.3 Local validation — `crates/workbench-integration/src/config/validate.rs` (new)
 
 ```rust
 pub enum Severity { Error, Warn, Ok }
@@ -133,7 +133,7 @@ Keep the cross-field table a plain slice of closures. It grows one rule at a tim
   (`create`, `add_media`, `update`, `export_csv`) as one-click starts.
 - **`editors.rs`** — all 16 shapes, one `fn render_<shape>` each, control plus inline validation
   line. Reuse rather than rebuild:
-  - `settings::path_picker::{PathPickerApp, PathPickerBrowseRow}` for `FilePath`
+  - `ui::{PathPicker, PathPickerBrowseRow}` for `FilePath`
   - `crate::helpers::get_file` for browse dialogs
   - `crate::components::labeled_input::LabeledInput`, `labeled_select::LabeledSelect`
   - `gpui_component::{checkbox, select, input}` for the rest

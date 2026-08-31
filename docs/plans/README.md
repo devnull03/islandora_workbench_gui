@@ -2,7 +2,7 @@
 
 The app can run Islandora Workbench but cannot **produce** a Workbench config. A saved
 configuration today (`settings::TaskConfig`) is only a label, a task name and a path to a YAML
-file someone wrote by hand elsewhere. `crates/workbench-integration/src/config_builder.rs` can
+file someone wrote by hand elsewhere. `crates/workbench-integration/src/config/runtime.rs` can
 only load an existing file and rewrite `host` / `credentials_file_path` into it.
 
 These plans work through that, plus the downstream reworks the design canvas draws.

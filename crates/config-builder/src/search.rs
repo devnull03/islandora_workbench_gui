@@ -12,7 +12,7 @@ use gpui_component::{
     v_flex,
 };
 use serde_yaml::Value;
-use workbench_integration::catalog::{self, SettingDef};
+use workbench_integration::config::catalog::{self, SettingDef};
 
 use super::ConfigBuilder;
 

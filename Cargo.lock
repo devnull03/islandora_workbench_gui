@@ -6518,6 +6518,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "ui",
 ]
 
 [[package]]
@@ -7615,7 +7616,6 @@ dependencies = [
  "gpui",
  "gpui-component",
  "serde_json",
- "settings",
 ]
 
 [[package]]

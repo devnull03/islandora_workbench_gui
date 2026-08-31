@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use gpui::{App, SharedString};
-use settings::AppSettings;
+use settings::{AppSettings, ServerConfig, TaskConfig};
 use ui::DetailSelectItem;
 
 pub const SOURCE_SHEET: &str = "google-sheet";
@@ -17,6 +17,41 @@ pub const SOURCE_CSV: &str = "csv-file";
 /// by their absolute path, which is also how [`processor_for`] recognises them.
 pub const PROCESSOR_BUILTIN: &str = "builtin";
 pub const PROCESSOR_NONE: &str = "none";
+
+/// Saved Workbench configs, displayed by label and file name.
+pub fn task_config_items(configs: &[TaskConfig]) -> Vec<DetailSelectItem> {
+    configs
+        .iter()
+        .enumerate()
+        .map(|(index, config)| {
+            let path = config.file_path.to_string();
+            let file_name = Path::new(&path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(&path);
+            DetailSelectItem {
+                label: config.label.clone(),
+                subtitle: file_name.to_string().into(),
+                value: config.file_path.clone(),
+                divider_above: index > 0,
+            }
+        })
+        .collect()
+}
+
+/// Saved servers, displayed by label and URL.
+pub fn server_config_items(configs: &[ServerConfig]) -> Vec<DetailSelectItem> {
+    configs
+        .iter()
+        .enumerate()
+        .map(|(index, config)| DetailSelectItem {
+            label: config.label.clone(),
+            subtitle: config.server_url.clone(),
+            value: config.server_url.clone(),
+            divider_above: index > 0,
+        })
+        .collect()
+}
 
 pub fn source_items() -> Vec<DetailSelectItem> {
     vec![

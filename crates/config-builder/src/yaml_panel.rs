@@ -11,7 +11,7 @@ use crate::YAML_PANEL_WIDTH;
 use gpui_component::{
     ActiveTheme, StyledExt, h_flex, label::Label, scroll::ScrollableElement, v_flex,
 };
-use workbench_integration::validate::Severity;
+use workbench_integration::config::validate::Severity;
 
 use super::ConfigBuilder;
 

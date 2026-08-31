@@ -3,15 +3,13 @@
 //! **Learning layout:** types and main API stubs live here; utilities and reference
 //! implementations are in sibling modules (`util`, `stream`, `sheet`, `placeholder`).
 
-pub mod catalog;
 mod check;
-mod config_builder;
+pub mod config;
 mod preprocess;
 mod provision;
 mod resolve;
 mod stream;
 mod util;
-pub mod validate;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -43,7 +41,7 @@ pub use util::{format_stream_line, language_url_from_server_base, run_command_ca
 
 pub use stream::{StdinSink, StreamLine, spawn_command_streaming};
 
-pub use config_builder::{APP_SUPPLIED, ConfigDraft, WorkbenchConfigHandler};
+pub use config::{APP_SUPPLIED, ConfigDraft, WorkbenchConfigHandler};
 
 pub use check::{ServerCheck, check_server};
 pub use preprocess::{
@@ -53,7 +51,7 @@ pub use provision::provision_workbench;
 
 pub use resolve::RegistryInstall;
 
-use crate::config_builder::Ready;
+use crate::config::Ready;
 
 pub struct WbInfo {
     pub install_path: PathBuf,
