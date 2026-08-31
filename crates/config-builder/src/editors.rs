@@ -22,7 +22,9 @@ use workbench_integration::config::{
 use super::{ConfigBuilder, field_id};
 
 use ui::tokens::GAP_XS;
-use ui::{APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldRow, app_button};
+use ui::{
+    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, SettingRow, app_button,
+};
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
 /// setting has no upstream default, so the row still renders something editable.
@@ -260,44 +262,41 @@ impl ConfigBuilder {
         };
         let owned_key = key.to_string();
         let control = self.render_control(def, window, cx);
-        let notes: Vec<AnyElement> = self
+        // The row shows the most severe thing wrong with the value. There is only one message
+        // slot under the control by design: a stack of five is a wall nobody reads.
+        let note = self
             .problems_for(key)
-            .map(|p| {
-                let color = match p.severity {
-                    Severity::Error => cx.theme().colors.danger,
-                    Severity::Warn => cx.theme().colors.warning,
-                    Severity::Ok => cx.theme().colors.success,
-                };
-                Label::new(p.message.clone())
-                    .text_xs()
-                    .text_color(color)
-                    .into_any_element()
+            .min_by_key(|p| match p.severity {
+                Severity::Error => 0,
+                Severity::Warn => 1,
+                Severity::Ok => 2,
             })
-            .collect();
+            .and_then(|p| match p.severity {
+                Severity::Error => Some(FieldNote::Error(p.message.clone().into())),
+                Severity::Warn => Some(FieldNote::Warning(p.message.clone().into())),
+                Severity::Ok => None,
+            });
+        let muted = cx.theme().muted_foreground;
 
         Card::new()
             .gap(GAP_XS)
             .child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .gap_2()
-                    .child(Label::new(def.key.clone()).font_semibold().text_sm())
-                    .when(def.required, |this| {
-                        this.child(
-                            Label::new("required")
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
-                        )
+                SettingRow::new(def.key.clone(), control)
+                    .when(!def.description.is_empty(), |row| {
+                        row.description(def.description.clone())
                     })
-                    .child(div().flex_1())
+                    .note(note)
                     .child(
-                        Label::new(def.shape.label())
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground),
+                        Label::new(if def.required {
+                            "required"
+                        } else {
+                            def.shape.label()
+                        })
+                        .text_xs()
+                        .text_color(muted),
                     )
-                    .when(!def.required, |this| {
-                        this.child(
+                    .when(!def.required, |row| {
+                        row.child(
                             app_button(SharedString::from(format!("remove-{}", def.key)))
                                 .ghost()
                                 .xsmall()
@@ -309,15 +308,6 @@ impl ConfigBuilder {
                         )
                     }),
             )
-            .when(!def.description.is_empty(), |this| {
-                this.child(
-                    Label::new(def.description.clone())
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground),
-                )
-            })
-            .child(control)
-            .children(notes)
             .into_any_element()
     }
 
