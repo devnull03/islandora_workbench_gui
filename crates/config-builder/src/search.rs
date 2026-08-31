@@ -7,7 +7,8 @@ use gpui_component::{
     ActiveTheme, IconName, Sizable, StyledExt, h_flex, input::Input, label::Label, v_flex,
 };
 use serde_yaml::Value;
-use ui::{APP_CONTROL_SIZE, app_button};
+use ui::tokens::GAP_XS;
+use ui::{APP_CONTROL_SIZE, Card, app_button};
 use workbench_integration::config::catalog::{self, SettingDef};
 
 use super::ConfigBuilder;
@@ -126,13 +127,8 @@ impl ConfigBuilder {
     ) -> impl IntoElement {
         let hidden = matches.len().saturating_sub(MAX_RESULTS);
 
-        v_flex()
-            .w_full()
-            .gap_1()
-            .p_2()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().colors.border)
+        Card::new()
+            .gap(GAP_XS)
             .child(
                 Label::new(format!(
                     "{} matching setting{}",

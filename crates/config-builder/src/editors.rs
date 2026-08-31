@@ -21,7 +21,8 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::{APP_CONTROL_SIZE, DetailSelectItem, FieldRow, app_button};
+use ui::tokens::GAP_XS;
+use ui::{APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldRow, app_button};
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
 /// setting has no upstream default, so the row still renders something editable.
@@ -274,13 +275,8 @@ impl ConfigBuilder {
             })
             .collect();
 
-        v_flex()
-            .w_full()
-            .gap_1()
-            .p_2()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().colors.border)
+        Card::new()
+            .gap(GAP_XS)
             .child(
                 h_flex()
                     .w_full()
@@ -327,28 +323,28 @@ impl ConfigBuilder {
 
     fn render_unknown(&mut self, key: &str, cx: &mut Context<Self>) -> impl IntoElement {
         let owned = key.to_string();
-        h_flex()
-            .w_full()
-            .gap_2()
-            .items_center()
-            .p_2()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().colors.warning)
-            .child(Label::new(key.to_string()).font_semibold().text_sm())
-            .child(
-                Label::new("Not a setting Workbench recognises.")
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground),
-            )
-            .child(div().flex_1())
-            .child(
-                app_button(SharedString::from(format!("remove-unknown-{key}")))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
-                    .on_click(cx.listener(move |this, _, _, cx| this.remove_setting(&owned, cx))),
-            )
+        Card::new().tone(CardTone::Warning).child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .child(Label::new(key.to_string()).font_semibold().text_sm())
+                .child(
+                    Label::new("Not a setting Workbench recognises.")
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground),
+                )
+                .child(div().flex_1())
+                .child(
+                    app_button(SharedString::from(format!("remove-unknown-{key}")))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Close)
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.remove_setting(&owned, cx)),
+                        ),
+                ),
+        )
     }
 
     // --- one control per shape --------------------------------------------------------

@@ -9,10 +9,10 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Sizable, button::ButtonVariants, checkbox::Checkbox,
-    h_flex, input::Input, label::Label, select::Select, v_flex,
+    h_flex, input::Input, label::Label, select::Select,
 };
 use settings::AppSettings;
-use ui::{APP_CONTROL_SIZE, FieldRow, LabeledField, StepSection, app_button};
+use ui::{APP_CONTROL_SIZE, Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
@@ -61,8 +61,6 @@ impl Workspace {
         let loading = self.op == Operation::Preprocessing;
         let process_disabled = !idle || !self.process_ready(cx);
         let processed = idle && self.stage >= WorkflowStage::SourceProcessed;
-        let border = cx.theme().colors.border;
-        let secondary = cx.theme().colors.secondary;
         let muted = cx.theme().colors.muted_foreground;
 
         StepSection::new("1", "Input source")
@@ -74,14 +72,9 @@ impl Workspace {
                     .disabled(!idle),
             )
             .child(
-                v_flex()
-                    .w_full()
-                    .gap_2()
-                    .p_3()
-                    .rounded(cx.theme().radius)
-                    .border_1()
-                    .border_color(border)
-                    .bg(secondary)
+                Card::new()
+                    .tone(CardTone::Filled)
+                    .padding(px(12.))
                     .child(self.render_source_field(cx))
                     .child(
                         LabeledField::new("Ingest dir").child(

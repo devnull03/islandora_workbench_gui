@@ -5,20 +5,26 @@
 //! second copy of a control in `app` or `config-builder` is how two adjacent buttons end up
 //! different heights, which is the specific defect this crate exists to prevent.
 
+mod card;
 mod controls;
 mod field_row;
 mod labeled_field;
 mod labeled_select;
 mod path_picker;
 mod select_items;
+mod status_bar_button;
 mod step_section;
+mod summary_lines;
 pub mod theme;
 pub mod tokens;
 
+pub use card::{Card, CardTone};
 pub use controls::{APP_CONTROL_SIZE, app_button};
 pub use field_row::FieldRow;
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;
 pub use path_picker::{PathPickFn, PathPicker, pick_into, pick_into_app};
 pub use select_items::DetailSelectItem;
+pub use status_bar_button::StatusBarButton;
 pub use step_section::StepSection;
+pub use summary_lines::SummaryLines;

@@ -13,7 +13,7 @@
 use std::time::Duration;
 
 use gpui::*;
-use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _, h_flex};
+use gpui_component::IconName;
 use semver::Version;
 use serde::Deserialize;
 use settings::AppSettings;
@@ -133,25 +133,14 @@ impl Render for UpdateIndicator {
         let Some(update) = cx.try_global::<AvailableUpdate>().cloned() else {
             return div();
         };
-        let hover_bg = cx.theme().secondary_hover;
-        let hover_fg = cx.theme().primary;
-
         div().child(
-            h_flex()
-                .id("update-available")
-                .gap_1()
-                .px(px(4.))
-                .py(px(2.))
-                .rounded_md()
-                .cursor_pointer()
-                .hover(move |this| this.bg(hover_bg).text_color(hover_fg))
-                .child(Icon::new(IconName::ArrowDown).small())
-                .child(format!("Update to {}", update.version))
-                .tooltip(|window, cx| {
-                    gpui_component::tooltip::Tooltip::new("Open the release notes to download")
-                        .build(window, cx)
-                })
-                .on_click(move |_, _, cx| cx.open_url(&update.release_notes_url)),
+            ui::StatusBarButton::new(
+                "update-available",
+                IconName::ArrowDown,
+                format!("Update to {}", update.version),
+            )
+            .tooltip("Open the release notes to download")
+            .on_click(move |_, cx| cx.open_url(&update.release_notes_url)),
         )
     }
 }

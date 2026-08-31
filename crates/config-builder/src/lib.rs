@@ -41,7 +41,7 @@ use workbench_integration::config::{
     validate::{Problem, Severity, validate},
 };
 
-use ui::{DetailSelectItem, app_button};
+use ui::{Card, CardTone, DetailSelectItem, app_button};
 
 actions!(config_builder, [OpenConfigBuilder]);
 
@@ -552,38 +552,34 @@ impl Render for ConfigBuilder {
 impl ConfigBuilder {
     /// The three settings the app writes at run time, so nobody thinks they are missing.
     fn render_locked_band(&self, cx: &App) -> impl IntoElement {
-        h_flex()
-            .w_full()
-            .gap_2()
-            .px_2()
-            .py_1()
-            .items_center()
-            .flex_wrap()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().colors.border)
-            .bg(cx.theme().colors.secondary)
-            .child(
-                Label::new("At run time")
-                    .text_xs()
-                    .font_semibold()
-                    .text_color(cx.theme().muted_foreground),
-            )
-            .children(catalog::locked().enumerate().flat_map(|(index, def)| {
-                let separator = (index > 0).then(|| {
-                    Label::new("·")
+        Card::new().tone(CardTone::Filled).padding(px(6.)).child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .flex_wrap()
+                .child(
+                    Label::new("At run time")
                         .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                });
-                separator
-                    .into_iter()
-                    .chain(std::iter::once(Label::new(def.key.clone()).text_xs()))
-            }))
-            .child(
-                Label::new("filled by the app")
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground),
-            )
+                        .font_semibold()
+                        .text_color(cx.theme().muted_foreground),
+                )
+                .children(catalog::locked().enumerate().flat_map(|(index, def)| {
+                    let separator = (index > 0).then(|| {
+                        Label::new("·")
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                    });
+                    separator
+                        .into_iter()
+                        .chain(std::iter::once(Label::new(def.key.clone()).text_xs()))
+                }))
+                .child(
+                    Label::new("filled by the app")
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground),
+                ),
+        )
     }
 
     fn render_footer(

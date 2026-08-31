@@ -15,7 +15,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt,
+    ActiveTheme, IconName, Sizable,
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
     h_flex,
@@ -86,31 +86,8 @@ fn value_of(input: &Entity<InputState>, cx: &App) -> SharedString {
     input.read(cx).value().trim().to_string().into()
 }
 
-/// The muted `label · detail` stack every collapsed row shows.
-fn row_summary(title: SharedString, lines: Vec<SharedString>, cx: &App) -> impl IntoElement {
-    v_flex()
-        .flex_1()
-        .min_w(px(0.))
-        .overflow_hidden()
-        .child(Label::new(title).font_semibold())
-        .children(lines.into_iter().map(|line| {
-            div().overflow_hidden().text_ellipsis().child(
-                Label::new(line)
-                    .text_xs()
-                    .text_color(cx.theme().colors.muted_foreground),
-            )
-        }))
-}
-
-fn row_shell(cx: &App) -> Div {
-    v_flex()
-        .w_full()
-        .gap_2()
-        .p_2()
-        .rounded(cx.theme().radius)
-        .border_1()
-        .border_color(cx.theme().colors.border)
-        .bg(cx.theme().colors.secondary)
+fn row_shell() -> ui::Card {
+    ui::Card::new().tone(ui::CardTone::Filled)
 }
 
 // --- Config library ---------------------------------------------------------------------
@@ -142,20 +119,17 @@ fn config_row(
         }
         let idx = index.unwrap_or(0);
         let path = PathBuf::from(config.file_path.as_ref());
-        return row_shell(cx)
+        return row_shell()
             .child(
                 h_flex()
                     .w_full()
                     .gap_2()
                     .items_center()
-                    .child(row_summary(
-                        config.label.clone(),
-                        vec![
-                            format!("Task: {}", config.task_name).into(),
-                            config.file_path.clone(),
-                        ],
-                        cx,
-                    ))
+                    .child(
+                        ui::SummaryLines::new(config.label.clone())
+                            .line(format!("Task: {}", config.task_name))
+                            .line(config.file_path.clone()),
+                    )
                     .child(
                         Button::new(SharedString::from(format!("edit-{id}")))
                             .icon(IconName::Settings2)
@@ -234,7 +208,7 @@ fn config_row(
     let cancel = open.clone();
     let browse = path.clone();
 
-    row_shell(cx)
+    row_shell()
         .child(Input::new(&label).small().w_full())
         .child(Select::new(&task).placeholder("Task").w_full())
         .child(
@@ -358,24 +332,21 @@ fn server_row(
         let url = config.server_url.to_string();
         let creds = config.credentials_file.to_string();
         let duplicate = config.clone();
-        return row_shell(cx)
+        return row_shell()
             .child(
                 h_flex()
                     .w_full()
                     .gap_2()
                     .items_center()
-                    .child(row_summary(
-                        config.label.clone(),
-                        vec![
-                            config.server_url.clone(),
-                            if config.credentials_file.is_empty() {
-                                "No credentials file".into()
+                    .child(
+                        ui::SummaryLines::new(config.label.clone())
+                            .line(config.server_url.clone())
+                            .line(if config.credentials_file.is_empty() {
+                                SharedString::from("No credentials file")
                             } else {
                                 config.credentials_file.clone()
-                            },
-                        ],
-                        cx,
-                    ))
+                            }),
+                    )
                     .when(config.needs_confirmation, |row| {
                         row.child(
                             Label::new("confirms")
@@ -463,7 +434,7 @@ fn server_row(
     let browse = creds.clone();
     let confirm_now = *confirm.read(cx);
 
-    row_shell(cx)
+    row_shell()
         .child(Input::new(&label).small().w_full())
         .child(Input::new(&url).small().w_full())
         .child(

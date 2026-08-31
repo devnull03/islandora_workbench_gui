@@ -10,7 +10,8 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, h_flex, label::Label, v_flex,
 };
-use ui::app_button;
+use ui::tokens::{CHEVRON_SLOT, GAP_XS, INDENT_STEP};
+use ui::{Card, CardTone, app_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
 use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
@@ -116,11 +117,9 @@ impl ConfigBuilder {
             )
             .when(!run_order.is_empty(), |this| {
                 this.child(
-                    v_flex()
-                        .gap_1()
-                        .p_2()
-                        .rounded(cx.theme().radius)
-                        .bg(cx.theme().colors.secondary)
+                    Card::new()
+                        .tone(CardTone::Filled)
+                        .gap(GAP_XS)
                         .child(Label::new("Run order").text_xs().font_semibold())
                         .child(
                             Label::new(run_order.join("  →  "))
@@ -168,7 +167,7 @@ impl ConfigBuilder {
             .w_full()
             .gap_2()
             .items_center()
-            .pl(px(depth as f32 * 18.))
+            .pl(INDENT_STEP * depth as f32)
             .p_2()
             .rounded(cx.theme().radius)
             .bg(if depth == 0 {
@@ -200,7 +199,7 @@ impl ConfigBuilder {
                 ),
             );
         } else {
-            row = row.child(div().w(px(24.)));
+            row = row.child(div().w(CHEVRON_SLOT));
         }
         row = row
             .child(

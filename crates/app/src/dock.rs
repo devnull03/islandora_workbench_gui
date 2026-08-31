@@ -7,12 +7,11 @@
 
 use gpui::*;
 use gpui_component::{
-    ActiveTheme as _, Icon, IconName, Sizable as _,
+    IconName,
     dock::{
         DockArea, DockAreaState, DockEvent, DockLayout, DockPlacement, DockSkin, panel_handle,
         register_panel,
     },
-    h_flex,
 };
 use settings::AppSettings;
 
@@ -147,10 +146,10 @@ impl Render for MainDock {
 
 /// The status-bar button that opens and closes the log dock.
 ///
-/// A plain `div` rather than `gpui_component::Button` on purpose: the library Button hardcodes
-/// `cursor_default` for every non-link variant with no override, so a div is the only way to get
-/// a pointer cursor on a toggle. It also lets the hover highlight be set explicitly instead of
-/// relying on the ghost variant's very subtle default.
+/// Drawn with [`ui::StatusBarButton`] rather than `gpui_component::Button`: the library Button
+/// hardcodes `cursor_default` for every non-link variant with no override, so a plain div is the
+/// only way to get a pointer cursor on a toggle. That reasoning, and the hover treatment it
+/// implies, now lives in `ui` because the update indicator needed exactly the same thing.
 pub struct LogDockButton {
     dock: WeakEntity<DockArea>,
     /// Redraws the button when the dock opens or closes, including from the library's own
@@ -173,40 +172,27 @@ impl Render for LogDockButton {
             .dock
             .upgrade()
             .is_some_and(|area| area.read(cx).is_dock_open(DockPlacement::Bottom));
-        let hover_bg = cx.theme().secondary_hover;
-        let hover_fg = cx.theme().primary;
         let dock = self.dock.clone();
 
-        h_flex()
-            .id("log-dock-toggle")
-            .gap_1()
-            .px(px(4.))
-            .py(px(2.))
-            .rounded_md()
-            .cursor_pointer()
-            .hover(move |this| this.bg(hover_bg).text_color(hover_fg))
-            // The panel-bottom glyph fills in when the dock is open — the button says its state
-            // in shape without forcing an accent colour while the control is idle.
-            .child(
-                Icon::new(if open {
-                    IconName::PanelBottomOpen
-                } else {
-                    IconName::PanelBottom
-                })
-                .small(),
-            )
-            .child("Log")
-            .tooltip(|window, cx| {
-                gpui_component::tooltip::Tooltip::new("Toggle Log")
-                    .action(&ToggleLog, None)
-                    .build(window, cx)
-            })
-            .on_click(move |_, window, cx| {
-                let Some(area) = dock.upgrade() else { return };
-                area.update(cx, |area, cx| {
-                    toggle_bottom_dock(area, window, cx);
-                });
-            })
+        // The panel-bottom glyph fills in when the dock is open — the button says its state in
+        // shape without forcing an accent colour while the control is idle.
+        ui::StatusBarButton::new(
+            "log-dock-toggle",
+            if open {
+                IconName::PanelBottomOpen
+            } else {
+                IconName::PanelBottom
+            },
+            "Log",
+        )
+        .tooltip("Toggle Log")
+        .action(ToggleLog)
+        .on_click(move |window, cx| {
+            let Some(area) = dock.upgrade() else { return };
+            area.update(cx, |area, cx| {
+                toggle_bottom_dock(area, window, cx);
+            });
+        })
     }
 }
 
