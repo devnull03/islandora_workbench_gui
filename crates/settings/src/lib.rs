@@ -28,6 +28,7 @@ use gpui_component::{
 };
 use serde::{Deserialize, Serialize};
 
+use ui::AppFont as _;
 use ui::PathPicker;
 
 // --- Setting Field Enum ---
@@ -311,10 +312,9 @@ impl CheckResult {
 pub struct MainWindowBounds {
     pub width: f32,
     pub height: f32,
-    /// `PlatformDisplay::id` as `u32`; matched at startup against [`App::displays`].
+    /// GPUI's opaque display identifier, matched at startup against [`App::displays`]. Widened
+    /// from `u32`; JSON numbers deserialize into `u64`, so existing settings remain valid.
     #[serde(default)]
-    /// GPUI's opaque display identifier. This was `u32`; JSON numbers deserialize into `u64`, so
-    /// existing settings remain valid after GPUI widened the platform id.
     pub display_id: Option<u64>,
 }
 
@@ -658,6 +658,7 @@ impl Render for SettingsWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
+            .app_font(cx)
             .child(TitleBar::new().child(Label::new("Settings").font_semibold()))
             .child(
                 // `Settings` draws its own search field and filters through

@@ -75,7 +75,7 @@ pub fn check_on_startup(cx: &mut App) {
             return;
         }
         log::info!("update check: {} is available", manifest.version);
-        _ = cx.update(|cx| {
+        cx.update(|cx| {
             cx.set_global(AvailableUpdate {
                 version: manifest.version.into(),
                 release_notes_url: manifest.release_notes_url.into(),

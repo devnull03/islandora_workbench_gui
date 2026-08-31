@@ -5,6 +5,7 @@
 //! second copy of a control in `app` or `config-builder` is how two adjacent buttons end up
 //! different heights, which is the specific defect this crate exists to prevent.
 
+mod app_font;
 mod card;
 mod controls;
 mod field_row;
@@ -21,6 +22,7 @@ mod summary_lines;
 pub mod theme;
 pub mod tokens;
 
+pub use app_font::AppFont;
 pub use card::{Card, CardTone};
 pub use controls::{APP_CONTROL_SIZE, app_button};
 pub use field_row::FieldRow;

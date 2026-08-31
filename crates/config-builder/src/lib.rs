@@ -41,6 +41,8 @@ use workbench_integration::config::{
     validate::{Problem, Severity, validate},
 };
 
+use ui::AppFont as _;
+use ui::tokens::MIN_WINDOW_W;
 use ui::{Card, CardTone, DetailSelectItem, app_button};
 
 actions!(config_builder, [OpenConfigBuilder]);
@@ -98,7 +100,7 @@ fn open_config_builder_with_parent(path: Option<PathBuf>, parent: Option<PathBuf
         .filter(|bounds| {
             bounds.width.is_finite()
                 && bounds.height.is_finite()
-                && bounds.width >= 520.
+                && px(bounds.width) >= MIN_WINDOW_W
                 && bounds.height >= 420.
         })
         .map(|bounds| size(px(bounds.width), px(bounds.height)))
@@ -112,7 +114,7 @@ fn open_config_builder_with_parent(path: Option<PathBuf>, parent: Option<PathBuf
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        window_min_size: Some(Size::new(px(520.0), px(420.0))),
+        window_min_size: Some(Size::new(MIN_WINDOW_W, px(420.0))),
         ..Default::default()
     };
 
@@ -471,12 +473,11 @@ impl ConfigBuilder {
                 .insert(Some(path.clone()), window.window_handle());
         }
         let mut link_notice = None;
-        if was_new {
-            if let Some(parent) = self.parent_path.clone() {
-                if let Err(error) = link_saved_child(&parent, &path) {
-                    link_notice = Some(format!("Saved, but couldn't link child: {error}"));
-                }
-            }
+        if was_new
+            && let Some(parent) = self.parent_path.clone()
+            && let Err(error) = link_saved_child(&parent, &path)
+        {
+            link_notice = Some(format!("Saved, but couldn't link child: {error}"));
         }
         self.draft.label = label;
         self.saved_at = Some("Saved".into());
@@ -497,6 +498,7 @@ impl Render for ConfigBuilder {
 
         v_flex()
             .size_full()
+            .app_font(cx)
             .child(
                 TitleBar::new().child(
                     h_flex()
@@ -676,6 +678,6 @@ impl ConfigBuilder {
         } else {
             current.width - YAML_PANEL_WIDTH
         };
-        window.resize(size(target.max(px(520.)), current.height));
+        window.resize(size(target.max(MIN_WINDOW_W), current.height));
     }
 }

@@ -23,13 +23,14 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 
 ### 1. Shared control audit
 
-- [ ] Audit every visible `Button`, link-like label, and icon control in the main window, Settings,
+- [x] Audit every visible `Button`, link-like label, and icon control in the main window, Settings,
   and Config Builder. Remove dead controls, wire real actions, and stop styling inert text as an
-  affordance.
-- [ ] Use one compact control height, `text_xs`/`text_sm` hierarchy, and the theme radius across
-  adjacent inputs, selects, browse buttons, and action buttons. Long labels must not clip at the
-  supported minimum window size. (Shared `APP_CONTROL_SIZE` is now applied to the main workflow
-  and Config Builder; minimum-size visual verification remains.)
+  affordance. (`helpers::_open_folder` and `catalog_workbench_ref` are gone; the log-dock toggle
+  and update indicator are now one `ui::StatusBarButton`.)
+- [x] Use one compact control height, `text_xs`/`text_sm` hierarchy, and the theme radius across
+  adjacent inputs, selects, browse buttons, and action buttons. `custom_fields` no longer sits a
+  size below the rest of the app, and `ui::StatusBarButton` was the last `rounded_md()` bypass of
+  the theme radius. Long-label clipping at the 520px minimum still needs a visual pass.
 - [ ] Keep primary colour for the primary action and selected/active state. Secondary actions use
   neutral or ghost treatment and gain accent on hover/focus.
 - [ ] Verify disabled controls remain legible and cannot dispatch an action. The status-bar
@@ -44,8 +45,9 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 - [ ] Results must be keyboard reachable (Up/Down, Enter, Escape), not pointer-only.
 - [x] Replace the tall runtime-supplied card with the compact inline locked band from the design:
   `host`, `credentials_file_path`, and `input_csv` plus one short explanation.
-- [ ] Match setting-row, footer, template, list-row, browse, remove, and add control dimensions and
-  corner radii to the rest of the application.
+- [x] Match setting-row, footer, template, list-row, browse, remove, and add control dimensions and
+  corner radii to the rest of the application. Dimensions come from `ui::tokens`; the setting row
+  is `ui::SettingRow` and the list/map box is `ui::RowEditor`.
 - [x] Open the editor side at the main window's current content size. The YAML preview adds its
   width on the right; it must not make the editable column narrower or use an unrelated fixed
   height.
@@ -115,3 +117,31 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   first successful save, preserving the existing re-key invariant.
 - Common dimensions and button treatment belong in shared UI helpers or theme roles where
   possible; do not repeat near-identical pixel values in each setting editor.
+
+## Design-language pass (Claude Design canvas `4c5759a2`, `Design Language.dc.html`)
+
+Applied on top of the checklist above. What landed, and what the spec asked for that was not built.
+
+**Landed.** Archivo and IBM Plex Mono bundled under `assets/fonts/` and applied at each window
+root via `ui::AppFont` — gpui never consults the theme for a UI font, so a bundled family is inert
+until a root asks. `ui::tokens` carries the 4px spacing scale and the control geometry. `ui`
+gained `Card`, `FieldRow`, `SettingRow` + `FieldNote`, `RowEditor`, `Segmented`, `SummaryLines`,
+`StatusBarButton`, and `pick_into`/`pick_into_app`; four hand-rolled path pickers and seven inline
+browse rows collapsed onto them.
+
+**Not built, deliberately.**
+
+- *The blue `qrate-light`/`qrate-dark` palette in the spec's §02 table.* Superseded by the
+  amber/rust family settled in §5 above. Everything else in the spec was adopted.
+- *`SectionHeader`.* Two callers of five lines each, and `StepSection` would only delegate to it.
+- *`RowEditor` owning the cells.* The chrome moved; `render_rows` did not. Its cells come from
+  `ConfigBuilder`'s widget cache by field id and its add/remove go straight to the draft, so
+  lifting it means handing `ui` an input factory and three callbacks to build one `h_flex`.
+- *`UrlField`.* Scheme checking already reaches the row through `validate.rs` → `FieldNote`; a
+  second client-side check is a second place to disagree.
+- *Template-string `${…}` highlighting.* Needs the editor decoration plumbing §3 already tracks.
+- *The `Operation`/`WorkflowStage` state-machine refactor.* Real, but behavioural, not visual.
+
+**Still to verify by eye.** That Archivo actually resolves on a machine without it installed
+(`add_fonts` succeeds and gpui falls back silently if the family name misses), and the 520px
+minimum window width for clipped labels now that the setting row spends 180px on its label column.

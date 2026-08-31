@@ -79,7 +79,7 @@ impl ServerPingIndicator {
                 .spawn(async move { ping_server(&url, credentials_file.as_deref()) })
                 .await;
 
-            _ = cx.update(|cx| {
+            cx.update(|cx| {
                 _ = this.update(cx, |indicator, cx| {
                     let log_msg = match &result {
                         ServerPingState::Unreachable(Some(401)) => Some(format!(

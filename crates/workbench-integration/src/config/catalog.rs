@@ -142,12 +142,11 @@ pub struct SettingDef {
     pub browse: Browse,
 }
 
+/// Only the settings are read. The file also carries `workbench_ref` and `generated` for
+/// provenance; serde ignores keys it has no field for, so they stay in the JSON and out of here
+/// until something actually surfaces them.
 #[derive(Deserialize)]
 struct Catalog {
-    #[allow(dead_code)] // provenance; surfaced in the builder's Help, not used in logic
-    workbench_ref: String,
-    #[allow(dead_code)]
-    generated: String,
     settings: Vec<SettingDef>,
 }
 
@@ -159,11 +158,6 @@ static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
 /// Every known setting, in the order Workbench declares them.
 pub fn catalog() -> &'static [SettingDef] {
     &CATALOG.settings
-}
-
-/// The Workbench commit the catalogue was generated from.
-pub fn catalog_workbench_ref() -> &'static str {
-    &CATALOG.workbench_ref
 }
 
 pub fn find(key: &str) -> Option<&'static SettingDef> {

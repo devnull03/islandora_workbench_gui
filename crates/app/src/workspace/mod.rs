@@ -140,8 +140,6 @@ impl Workspace {
         // `Change`: typing / paste. `Focus`/`Blur` keep action readiness current.
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
         // (Do not use `observe` on `InputState`: it also fires every cursor-blink tick.)
-        // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
-        // `reset_validation` only mutates `self.phase` so it's safe to call before the defer.
         _subscriptions.push(
             cx.subscribe(&gdrive_link, |this, _, event: &InputEvent, cx| {
                 if matches!(

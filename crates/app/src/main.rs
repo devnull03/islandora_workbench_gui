@@ -20,6 +20,7 @@ use settings::{
     AppSettings, MainWindowBounds, SettingsPersistence, SettingsWindow, SettingsWindowHandle,
     SettingsWriter, load_app_settings,
 };
+use ui::AppFont as _;
 use window_wrapper::{
     BarRegistry as _, OpenBrowser, WindowLock,
     status_bar::StatusBar,
@@ -114,6 +115,7 @@ impl Render for App {
 
         div()
             .id("workbench-root")
+            .app_font(cx)
             .key_context("IslandoraWorkbench")
             .track_focus(&self.focus_handle)
             .role(Role::Group)
@@ -249,7 +251,7 @@ fn main() {
             }
             None => log::error!("no local data dir, so there is no log folder to open"),
         });
-        let min_size = Size::new(px(520.0), px(300.0));
+        let min_size = Size::new(ui::tokens::MIN_WINDOW_W, px(300.0));
 
         let window_options = WindowOptions {
             titlebar: Some(TitleBar::title_bar_options()),
