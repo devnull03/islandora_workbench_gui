@@ -1,6 +1,5 @@
-//! The app's theme, ported from the Claude Design canvas
-//! (`4c5759a2-16e4-4f27-b9fb-126fc19f0b30`, `Config Builder Mockups`) and its `qrate-site`
-//! design system.
+//! The app's theme, ported from the Claude Design canvas `4c5759a2` — the `Config Builder
+//! Mockups` palette and the `Design Language` spec's §02 token map and §03 type rules.
 //!
 //! The mockups are drawn dark — near-black grounds, amber `#f99d2a` accent, 4px corners, no
 //! shadows. The design system's own tokens are the light half (paper `#f7f4ee`, ink `#17140f`,
@@ -9,16 +8,37 @@
 //!
 //! `theme.json` is a gpui-component `ThemeSet`, embedded at compile time and installed over the
 //! library defaults. Colours belong there, not in element code — a `bg(rgb(0x1a1a1a))` anywhere
-//! in the app is a bug, because it will not follow the mode.
+//! in the app is a bug, because it will not follow the mode. Dimensions that do not vary by mode
+//! belong in [`crate::tokens`].
 
 use gpui::App;
 use gpui_component::{Theme, ThemeSet};
+use std::borrow::Cow;
 use std::rc::Rc;
+
+/// Archivo for prose and labels, IBM Plex Mono for anything the tool will parse. Bundled rather
+/// than requested from the OS so the app looks the same on a machine that has neither.
+const FONTS: [&[u8]; 5] = [
+    include_bytes!("../../../assets/fonts/Archivo-Regular.ttf"),
+    include_bytes!("../../../assets/fonts/Archivo-Medium.ttf"),
+    include_bytes!("../../../assets/fonts/Archivo-SemiBold.ttf"),
+    include_bytes!("../../../assets/fonts/IBMPlexMono-Regular.ttf"),
+    include_bytes!("../../../assets/fonts/IBMPlexMono-Medium.ttf"),
+];
 
 /// Install the Qrate light/dark pair and re-apply the mode already chosen from the OS.
 ///
 /// Call once, after `gpui_component::init`, which is what puts a `Theme` global in place.
 pub fn init(cx: &mut App) {
+    // Before the theme, so the families it names are already resolvable. A failure here is not
+    // fatal — the platform's default face is ugly, not broken — but it is worth a log line.
+    if let Err(err) = cx
+        .text_system()
+        .add_fonts(FONTS.iter().map(|f| Cow::Borrowed(*f)).collect())
+    {
+        log::warn!("bundled fonts failed to load, falling back to system faces: {err}");
+    }
+
     let set: ThemeSet =
         serde_json::from_str(include_str!("../theme.json")).expect("theme.json is embedded");
 
@@ -81,6 +101,13 @@ mod tests {
             Some("#a8410f")
         );
         assert_eq!(dark.radius, Some(4));
+        // Bundled families, named so gpui resolves the faces `theme::init` just registered.
+        // A typo here is silent: the config keeps `None` and the platform default renders.
+        for t in [dark, light] {
+            assert_eq!(t.font_family.as_deref(), Some("Archivo"));
+            assert_eq!(t.mono_font_family.as_deref(), Some("IBM Plex Mono"));
+        }
+
         // Font sizes are deliberately absent: the gpui-component defaults scale with the
         // platform, and pinning them made the whole app read a size too small.
         assert_eq!(dark.font_size, None);

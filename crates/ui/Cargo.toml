@@ -6,4 +6,5 @@ edition.workspace = true
 [dependencies]
 gpui.workspace = true
 gpui-component.workspace = true
+log.workspace = true
 serde_json.workspace = true

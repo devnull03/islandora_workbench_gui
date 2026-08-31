@@ -72,11 +72,7 @@ pub fn open_child_config_builder(parent: PathBuf, cx: &mut App) {
     open_config_builder_with_parent(None, Some(parent), cx);
 }
 
-fn open_config_builder_with_parent(
-    path: Option<PathBuf>,
-    parent: Option<PathBuf>,
-    cx: &mut App,
-) {
+fn open_config_builder_with_parent(path: Option<PathBuf>, parent: Option<PathBuf>, cx: &mut App) {
     if let Some(handle) = cx.global::<ConfigBuilderWindows>().open.get(&path).copied() {
         if handle
             .update(cx, |_, window, _| window.activate_window())
@@ -500,7 +496,9 @@ impl ConfigBuilder {
         if was_new {
             let windows = cx.global_mut::<ConfigBuilderWindows>();
             windows.open.remove(&None);
-            windows.open.insert(Some(path.clone()), window.window_handle());
+            windows
+                .open
+                .insert(Some(path.clone()), window.window_handle());
         }
         let mut link_notice = None;
         if was_new {
