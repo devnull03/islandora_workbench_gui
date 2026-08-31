@@ -37,18 +37,19 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 
 ### 2. Config Builder shell and density (`1a`, `1b`)
 
-- [ ] Make the add-setting control a search field by itself. Focusing or typing opens results;
-  clearing/blur/Escape closes them. Remove the separate **Add setting / Close** toggle.
-- [ ] Keep the result count inside the palette/status treatment instead of competing with the
-  field. Results must be keyboard reachable (Up/Down, Enter, Escape), not pointer-only.
-- [ ] Replace the tall runtime-supplied card with the compact inline locked band from the design:
+- [x] Make the add-setting control a search field by itself. Typing opens results and clearing or
+  choosing a result closes them. The separate **Add setting / Close** toggle is gone.
+- [x] Keep the result count inside the palette/status treatment instead of competing with the
+  field.
+- [ ] Results must be keyboard reachable (Up/Down, Enter, Escape), not pointer-only.
+- [x] Replace the tall runtime-supplied card with the compact inline locked band from the design:
   `host`, `credentials_file_path`, and `input_csv` plus one short explanation.
 - [ ] Match setting-row, footer, template, list-row, browse, remove, and add control dimensions and
   corner radii to the rest of the application.
-- [ ] Open the editor side at the main window's current content size. The YAML preview adds its
+- [x] Open the editor side at the main window's current content size. The YAML preview adds its
   width on the right; it must not make the editable column narrower or use an unrelated fixed
   height.
-- [ ] Preserve that sizing rule when the YAML panel is toggled and when the main window has no
+- [x] Preserve that sizing rule when the YAML panel is toggled and when the main window has no
   usable handle (startup/fallback case).
 
 ### 3. Read-only YAML editor (`1b`)

@@ -57,7 +57,8 @@ impl Global for ConfigBuilderWindows {}
 /// as the sum, and grows and shrinks by the panel's width when it is shown or hidden — the panel
 /// appearing must not squeeze the editors it exists to explain.
 pub(crate) const YAML_PANEL_WIDTH: Pixels = px(340.);
-const EDITOR_WIDTH: Pixels = px(540.);
+const FALLBACK_EDITOR_WIDTH: Pixels = px(600.);
+const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
 pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
@@ -78,12 +79,25 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
         .get("builder_show_yaml")
         .map(|v| v.bool())
         .unwrap_or(true);
+    // The editable side opens at the main window's last/current size. YAML is an additional
+    // right-hand surface, never width stolen from the form the user is trying to edit.
+    let editor_size = AppSettings::get(cx)
+        .main_window_bounds
+        .as_ref()
+        .filter(|bounds| {
+            bounds.width.is_finite()
+                && bounds.height.is_finite()
+                && bounds.width >= 520.
+                && bounds.height >= 420.
+        })
+        .map(|bounds| size(px(bounds.width), px(bounds.height)))
+        .unwrap_or_else(|| size(FALLBACK_EDITOR_WIDTH, FALLBACK_EDITOR_HEIGHT));
     let width = if with_yaml {
-        EDITOR_WIDTH + YAML_PANEL_WIDTH
+        editor_size.width + YAML_PANEL_WIDTH
     } else {
-        EDITOR_WIDTH
+        editor_size.width
     };
-    let bounds = Bounds::centered(None, size(width, px(820.0)), cx);
+    let bounds = Bounds::centered(None, size(width, editor_size.height), cx);
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -187,8 +201,9 @@ impl ConfigBuilder {
             InputState::new(window, cx)
                 .placeholder("Search settings to add — try \"log\", \"rollback\", \"media\"")
         });
-        let _subscriptions = vec![cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
+        let _subscriptions = vec![cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
+                this.search_open = !this.search.read(cx).value().trim().is_empty();
                 cx.notify();
             }
         })];
@@ -501,31 +516,37 @@ impl Render for ConfigBuilder {
 impl ConfigBuilder {
     /// The three settings the app writes at run time, so nobody thinks they are missing.
     fn render_locked_band(&self, cx: &App) -> impl IntoElement {
-        v_flex()
+        h_flex()
             .w_full()
-            .gap_1()
-            .p_2()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .items_center()
+            .flex_wrap()
             .rounded(cx.theme().radius)
+            .border_1()
+            .border_color(cx.theme().colors.border)
             .bg(cx.theme().colors.secondary)
             .child(
-                Label::new("Supplied by the app at run time — you don't set these here")
+                Label::new("At run time")
                     .text_xs()
+                    .font_semibold()
                     .text_color(cx.theme().muted_foreground),
             )
+            .children(catalog::locked().enumerate().flat_map(|(index, def)| {
+                let separator = (index > 0).then(|| {
+                    Label::new("·")
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                });
+                separator
+                    .into_iter()
+                    .chain(std::iter::once(Label::new(def.key.clone()).text_xs()))
+            }))
             .child(
-                h_flex()
-                    .gap_4()
-                    .flex_wrap()
-                    .children(catalog::locked().map(|def| {
-                        h_flex()
-                            .gap_1()
-                            .child(Label::new(def.key.clone()).text_xs().font_semibold())
-                            .child(
-                                Label::new(def.description.clone())
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground),
-                            )
-                    })),
+                Label::new("filled by the app")
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground),
             )
     }
 

@@ -4,8 +4,7 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, h_flex, input::Input,
-    label::Label, v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, h_flex, input::Input, label::Label, v_flex,
 };
 use serde_yaml::Value;
 use ui::{APP_CONTROL_SIZE, app_button};
@@ -71,43 +70,19 @@ impl ConfigBuilder {
     ) -> impl IntoElement {
         let query = self.search.read(cx).value().to_string();
         let matches = self.matches(&query);
-        let total = catalog::addable().count();
         let show_results = self.search_open && !query.trim().is_empty();
 
         v_flex()
             .w_full()
             .gap_2()
             .child(
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div().flex_1().child(
-                            Input::new(&self.search)
-                                .with_size(APP_CONTROL_SIZE)
-                                .w_full(),
-                        ),
-                    )
-                    .child(
-                        Label::new(format!("{} of {total} settings", matches.len()))
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground),
-                    )
-                    .child(
-                        app_button("toggle-search")
-                            .ghost()
-                            .small()
-                            .label(if self.search_open {
-                                "Close"
-                            } else {
-                                "Add setting"
-                            })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.search_open = !this.search_open;
-                                cx.notify();
-                            })),
+                h_flex().w_full().gap_2().items_center().child(
+                    div().flex_1().child(
+                        Input::new(&self.search)
+                            .with_size(APP_CONTROL_SIZE)
+                            .w_full(),
                     ),
+                ),
             )
             .when(show_results, |this| {
                 this.child(self.render_results(&matches, cx))
@@ -158,6 +133,15 @@ impl ConfigBuilder {
             .rounded(cx.theme().radius)
             .border_1()
             .border_color(cx.theme().colors.border)
+            .child(
+                Label::new(format!(
+                    "{} matching setting{}",
+                    matches.len(),
+                    if matches.len() == 1 { "" } else { "s" }
+                ))
+                .text_xs()
+                .text_color(cx.theme().muted_foreground),
+            )
             .children(matches.iter().take(MAX_RESULTS).map(|def| {
                 let key = def.key.clone();
                 h_flex()
@@ -196,9 +180,12 @@ impl ConfigBuilder {
                             .outline()
                             .xsmall()
                             .icon(IconName::Plus)
-                            .on_click(cx.listener(move |this, _, _, cx| {
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 if let Some(def) = catalog::find(&key) {
                                     this.add_setting(def, cx);
+                                    this.search.update(cx, |search, cx| {
+                                        search.set_value("", window, cx);
+                                    });
                                 }
                             })),
                     )
