@@ -53,6 +53,13 @@ pub const ROW_ACTION_W: Pixels = px(22.);
 pub const DRAG_HANDLE_W: Pixels = px(16.);
 /// Key column of a map editor.
 pub const KEY_COL_W: Pixels = px(140.);
+/// One chip in a map-of-lists row.
+pub const LIST_CELL_W: Pixels = px(90.);
+/// Numeric field. Wide enough for six digits, narrow enough that a port number does not read as
+/// a sentence-length field.
+pub const NUMBER_FIELD_W: Pixels = px(120.);
+/// Single-character field: centred, one grapheme, no room to suggest otherwise.
+pub const CHAR_FIELD_W: Pixels = px(44.);
 
 // -- Windows ---------------------------------------------------------------------------------
 

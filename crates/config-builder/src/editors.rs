@@ -21,7 +21,8 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::tokens::GAP_XS;
+use ui::RowEditor;
+use ui::tokens::{GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
 use ui::{
     APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, SettingRow, app_button,
 };
@@ -372,7 +373,7 @@ impl ConfigBuilder {
                     .items_center()
                     .child(
                         div()
-                            .w(px(120.))
+                            .w(NUMBER_FIELD_W)
                             .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
                     )
                     .children(def.unit.clone().map(|u| {
@@ -492,7 +493,7 @@ impl ConfigBuilder {
         let numeric = shape == Shape::ListOfNumbers;
         let numbered = shape == Shape::CommandList;
 
-        let mut list = v_flex().w_full().gap_1();
+        let mut list = RowEditor::new();
         for (i, (left, items)) in rows.iter().enumerate() {
             let idx = i.to_string();
             let mut row = h_flex().w_full().gap_2().items_center();
@@ -553,7 +554,7 @@ impl ConfigBuilder {
                         );
                         cells = cells.child(
                             div()
-                                .w(px(90.))
+                                .w(LIST_CELL_W)
                                 .child(Input::new(&cell).with_size(APP_CONTROL_SIZE)),
                         );
                     }
@@ -572,7 +573,7 @@ impl ConfigBuilder {
                     row = row
                         .child(
                             div()
-                                .w(px(140.))
+                                .w(KEY_COL_W)
                                 .child(Input::new(&k).with_size(APP_CONTROL_SIZE)),
                         )
                         .child(cells);
@@ -595,7 +596,7 @@ impl ConfigBuilder {
         }
 
         let owned = key.clone();
-        list.child(
+        list.add(
             h_flex()
                 .gap_2()
                 .child(
