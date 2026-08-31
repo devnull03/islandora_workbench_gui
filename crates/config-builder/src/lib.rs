@@ -502,16 +502,17 @@ impl ConfigBuilder {
             windows.open.remove(&None);
             windows.open.insert(Some(path.clone()), window.window_handle());
         }
+        let mut link_notice = None;
         if was_new {
             if let Some(parent) = self.parent_path.clone() {
                 if let Err(error) = link_saved_child(&parent, &path) {
-                    self.notice = Some(format!("Saved, but couldn't link child: {error}").into());
+                    link_notice = Some(format!("Saved, but couldn't link child: {error}"));
                 }
             }
         }
         self.draft.label = label;
         self.saved_at = Some("Saved".into());
-        self.notice = None;
+        self.notice = link_notice.map(Into::into);
         cx.notify();
     }
 }
@@ -539,6 +540,17 @@ impl Render for ConfigBuilder {
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground),
                         )
+                        .children(self.parent_path.as_ref().map(|parent| {
+                            Label::new(format!(
+                                "under {}",
+                                parent
+                                    .file_stem()
+                                    .map(|stem| stem.to_string_lossy())
+                                    .unwrap_or_default()
+                            ))
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                        }))
                         .children(self.saved_at.clone().map(|s| {
                             Label::new(s)
                                 .text_xs()
