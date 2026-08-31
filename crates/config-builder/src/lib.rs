@@ -16,7 +16,7 @@ mod editors;
 mod search;
 mod yaml_panel;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -37,6 +37,7 @@ use settings::{AppSettings, TaskConfig};
 use workbench_integration::config::{
     ConfigDraft,
     catalog::{self, SettingDef},
+    chain::SecondaryConfigNode,
     validate::{Problem, Severity, validate},
 };
 
@@ -141,8 +142,10 @@ pub struct ConfigBuilder {
     /// Load or save failures — shown in the footer rather than swallowed.
     pub(crate) notice: Option<SharedString>,
 
-    /// Secondary-config file state is refreshed by `chain` instead of queried every frame.
-    pub(crate) chain_file_states: HashMap<PathBuf, bool>,
+    /// Secondary-config graph is refreshed by `chain` at most every two seconds, rather than
+    /// recursively parsing every linked YAML on every render.
+    pub(crate) chain_nodes: Vec<SecondaryConfigNode>,
+    pub(crate) collapsed_chain: HashSet<PathBuf>,
     pub(crate) last_chain_scan: Option<Instant>,
 
     _subscriptions: Vec<Subscription>,
@@ -233,7 +236,8 @@ impl ConfigBuilder {
                 .unwrap_or(true),
             saved_at: None,
             notice,
-            chain_file_states: HashMap::new(),
+            chain_nodes: Vec::new(),
+            collapsed_chain: HashSet::new(),
             last_chain_scan: None,
             _subscriptions,
         }

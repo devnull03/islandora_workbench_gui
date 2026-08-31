@@ -69,7 +69,9 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 - [x] Resolve the complete `secondary_tasks` graph relative to each owning config, with a model
   that records path, label, task, setting count, children, load failure, and ancestry.
 - [ ] Render nested rows with `1`, `1.1`, `1.1.1` numbering, connector indentation, expand/collapse,
-  **Collapse all**, per-node Open/Unlink, and **Add a config under this one**.
+  **Collapse all**, per-node Open/Unlink, and **Add a config under this one**. The recursive
+  projection and Add under entry point are now present; connector polish and child-save linking
+  remain.
 - [ ] Show the flattened depth-first run order that Workbench will execute.
 - [ ] Reject self-links, duplicate ancestors, and indirect cycles at the link point. Show the
   error beside the attempted parent; never wait until save to reveal it.
