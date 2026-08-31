@@ -25,6 +25,7 @@ use gpui_component::{
     ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt, TitleBar,
     button::ButtonVariants,
     h_flex,
+    input::EditorState,
     input::{InputEvent, InputState},
     label::Label,
     scroll::ScrollableElement,
@@ -132,6 +133,8 @@ pub struct ConfigBuilder {
     selects: HashMap<SharedString, Entity<SelectState<Vec<DetailSelectItem>>>>,
 
     pub(crate) search: Entity<InputState>,
+    pub(crate) yaml_editor: Entity<EditorState>,
+    pub(crate) yaml_text: String,
     pub(crate) search_open: bool,
     pub(crate) yaml_open: bool,
     pub(crate) saved_at: Option<SharedString>,
@@ -201,6 +204,9 @@ impl ConfigBuilder {
             InputState::new(window, cx)
                 .placeholder("Search settings to add — try \"log\", \"rollback\", \"media\"")
         });
+        let yaml_text = draft.to_yaml();
+        let yaml_editor =
+            cx.new(|cx| EditorState::new(window, cx).default_value(yaml_text.clone()));
         let _subscriptions = vec![cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 this.search_open = !this.search.read(cx).value().trim().is_empty();
@@ -215,6 +221,8 @@ impl ConfigBuilder {
             inputs: HashMap::new(),
             selects: HashMap::new(),
             search,
+            yaml_editor,
+            yaml_text,
             search_open: false,
             // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is the
             // thing that makes the editors legible to someone who knows the YAML already.
@@ -507,7 +515,7 @@ impl Render for ConfigBuilder {
                             .children(self.render_settings(window, cx))
                             .child(self.render_chain(window, cx)),
                     )
-                    .children(self.yaml_open.then(|| self.render_yaml_panel(cx))),
+                    .children(self.yaml_open.then(|| self.render_yaml_panel(window, cx))),
             )
             .child(self.render_footer(errors, warnings, cx))
     }

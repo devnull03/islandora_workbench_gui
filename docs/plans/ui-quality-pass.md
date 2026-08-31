@@ -54,13 +54,15 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 
 ### 3. Read-only YAML editor (`1b`)
 
-- [ ] Replace the per-line `Label` tree with a read-only editor/input surface backed by the
-  generated YAML.
-- [ ] Allow mouse and keyboard selection, Ctrl/Command+A, Ctrl/Command+C, and normal scrolling.
+- [x] Replace the per-line `Label` tree with a read-only editor surface backed by the generated
+  YAML. GPUI's editor supplies line numbers and scrolling.
+- [x] Allow mouse and keyboard selection, Ctrl/Command+A, Ctrl/Command+C, and normal scrolling.
   Editing, paste, cut, undo, and IME commits must not change the YAML.
-- [ ] Keep monospaced text, line numbers, current validation markers, and problem-line emphasis.
-  The draft remains the only editable source of truth.
-- [ ] Preserve selection where practical when the YAML regenerates after a field change.
+- [x] Keep monospaced text, line numbers, and current validation markers in a compact marker
+  summary above the editor. The draft remains the only editable source of truth; per-line
+  highlighting is still a follow-up once GPUI decoration plumbing is needed.
+- [x] Preserve selection where practical when the YAML is unchanged; regenerate the editor only
+  when the draft text changes.
 
 ### 4. Recursive secondary configs (`1d`, `2a`)
 

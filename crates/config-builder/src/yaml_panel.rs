@@ -8,15 +8,17 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::YAML_PANEL_WIDTH;
-use gpui_component::{
-    ActiveTheme, StyledExt, h_flex, label::Label, scroll::ScrollableElement, v_flex,
-};
+use gpui_component::{ActiveTheme, StyledExt, h_flex, input::Editor, label::Label, v_flex};
 use workbench_integration::config::validate::Severity;
 
 use super::ConfigBuilder;
 
 impl ConfigBuilder {
-    pub(super) fn render_yaml_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_yaml_panel(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let yaml = self.draft.to_yaml();
         // A line belongs to the setting whose key starts it; continuation lines inherit it, so
         // a problem on a list setting marks the whole block.
@@ -33,6 +35,29 @@ impl ConfigBuilder {
                 }
                 let severity = self.problems_for(&current_key).map(|p| p.severity).max();
                 (i + 1, text.to_string(), severity)
+            })
+            .collect();
+
+        // Keep the editor's state stable while the draft is unchanged. `set_value` clears the
+        // selection, so calling it every frame would make copying a generated file impossible.
+        if self.yaml_text != yaml {
+            self.yaml_editor.update(cx, |editor, cx| {
+                editor.set_value(yaml.clone(), window, cx);
+            });
+            self.yaml_text = yaml;
+        }
+
+        let problems: Vec<SharedString> = lines
+            .iter()
+            .filter_map(|(line, _, severity)| {
+                severity.map(|severity| {
+                    let label = match severity {
+                        Severity::Error => "error",
+                        Severity::Warn => "warning",
+                        Severity::Ok => "ok",
+                    };
+                    format!("line {line}: {label}").into()
+                })
             })
             .collect();
 
@@ -58,10 +83,9 @@ impl ConfigBuilder {
                 v_flex()
                     .flex_1()
                     .w_full()
+                    .min_h_0()
                     .p_2()
-                    .gap_0()
-                    .overflow_y_scrollbar()
-                    .font_family(cx.theme().mono_font_family.clone())
+                    .gap_2()
                     .when(lines.is_empty(), |this| {
                         this.child(
                             Label::new("Nothing added yet.")
@@ -69,24 +93,21 @@ impl ConfigBuilder {
                                 .text_color(cx.theme().muted_foreground),
                         )
                     })
-                    .children(lines.into_iter().map(|(n, text, severity)| {
-                        let color = match severity {
-                            Some(Severity::Error) => cx.theme().colors.danger,
-                            Some(Severity::Warn) => cx.theme().colors.warning,
-                            _ => cx.theme().foreground,
-                        };
-                        h_flex()
-                            .w_full()
-                            .gap_2()
-                            .child(
-                                div().w(px(24.)).child(
-                                    Label::new(n.to_string())
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground),
-                                ),
-                            )
-                            .child(Label::new(text).text_xs().text_color(color))
-                    })),
+                    .when(!problems.is_empty(), |this| {
+                        this.child(h_flex().gap_2().flex_wrap().children(problems.iter().map(
+                            |problem| {
+                                Label::new(problem.clone())
+                                    .text_xs()
+                                    .text_color(cx.theme().colors.warning)
+                            },
+                        )))
+                    })
+                    .child(
+                        Editor::new(&self.yaml_editor)
+                            .readonly(true)
+                            .h(relative(1.))
+                            .w_full(),
+                    ),
             )
     }
 }
