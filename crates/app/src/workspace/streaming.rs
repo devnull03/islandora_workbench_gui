@@ -5,6 +5,7 @@ use gpui::*;
 use gpui_component::{
     WindowExt,
     button::{Button, ButtonVariants},
+    h_flex,
     label::Label,
 };
 use workbench_integration::{StdinSink, StreamLine, format_stream_line};
@@ -72,7 +73,7 @@ pub fn spawn_stream_to_log(
                                     .overlay_closable(false)
                                     .keyboard(false)
                                     .child(Label::new(prompt_display.clone()))
-                                    .footer(move |_, _window, _cx, _| {
+                                    .footer(h_flex().gap_2().children({
                                         let sy = sink_yes.clone();
                                         let sn = sink_no.clone();
                                         vec![
@@ -89,7 +90,7 @@ pub fn spawn_stream_to_log(
                                                 },
                                             ),
                                         ]
-                                    })
+                                    }))
                             });
                         })
                         .ok();

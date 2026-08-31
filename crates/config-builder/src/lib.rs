@@ -101,8 +101,7 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
                 cx.global_mut::<ConfigBuilderWindows>()
                     .open
                     .insert(key, handle.into());
-            })
-            .ok();
+            });
         }
     })
     .detach();
@@ -155,12 +154,11 @@ pub(crate) fn get_file<T: 'static>(
         if let Ok(Ok(Some(paths))) = receiver.await
             && let Some(path) = paths.first()
         {
-            cx.update(|window, cx| {
+            _ = cx.update(|window, cx| {
                 input.update(cx, |state, cx| {
                     state.set_value(path.to_string_lossy().to_string(), window, cx);
                 });
-            })
-            .ok();
+            });
         }
     })
     .detach();

@@ -106,6 +106,12 @@ Both open questions were put to the user and answered:
    a switch could suppress them, is more machinery than the switch is worth. Path checking stays
    always-on. `config_library_dir` and `builder_show_yaml` are wired: the latter also decides the
    builder window's opening width, or the first toggle corrects it with a visible jump.
+9. **The Settings shell must not add an outer scrollbar around `Settings`.** The component already
+   scrolls its page. The extra `overflow_y_scrollbar` gave its resizable sidebar an auto-height
+   parent, so the search input could latch a collapsed width on first paint and only recover during
+   a window resize. A definite-height `min_h_0` parent is the required layout.
+10. **Settings has a window-wide shortcut.** **Ctrl+,** on Windows/Linux and **Command+,** on macOS
+    dispatches the same `OpenSettings` action as the menu item, so the menu prints the shortcut too.
 
 **Deliberately not built:** the Profiles page and the active-profile footer (Stage 5 owns both,
 and there is nothing to switch between until profiles exist). `AppSettings` is now split the way

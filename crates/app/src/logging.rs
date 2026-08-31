@@ -96,7 +96,8 @@ pub fn init() {
     );
 }
 
-/// Removes GPUI's unactionable focus-node notice and demotes window-teardown errors to debug.
+/// Removes GPUI's unactionable focus-node notice and demotes known platform probes and
+/// window-teardown errors to debug.
 ///
 /// GPUI reports the missing focus node at info level every time focus reaches an internal element
 /// without an accessibility role, and narrates every accessibility tree update — one line per
@@ -117,11 +118,25 @@ fn is_accessibility_focus_noise(record: &Record) -> bool {
 }
 
 fn is_window_teardown(record: &Record) -> bool {
-    if record.level() != Level::Error || !record.target().starts_with("gpui") {
+    if record.level() != Level::Error
+        || !(record.target().is_empty() || record.target().starts_with("gpui"))
+    {
         return false;
     }
     let message = record.args().to_string();
-    message == "window not found" || message.starts_with("Invalid window handle")
+    message == "window not found"
+        || message.starts_with("Invalid window handle")
+        || (message.contains("Invalid window handle")
+            && (message.contains("0x80040102") || message.contains("0x80070578")))
+}
+
+/// In debug builds GPUI asks Windows for the optional DXGI debug interface. Windows logs
+/// `0x887A002D` when the Graphics Tools feature is not installed, then GPUI retries without the
+/// debug flag and emits a useful warning. Keep that warning and demote only the raw failed probe.
+fn is_missing_dxgi_debug_layer(record: &Record) -> bool {
+    record.level() == Level::Error
+        && record.target().is_empty()
+        && record.args().to_string().contains("0x887A002D")
 }
 
 impl Log for QuietGpuiNoise {
@@ -137,7 +152,7 @@ impl Log for QuietGpuiNoise {
         if is_accessibility_focus_noise(record) {
             return;
         }
-        if is_window_teardown(record) {
+        if is_window_teardown(record) || is_missing_dxgi_debug_layer(record) {
             self.0.log(
                 &Record::builder()
                     .level(Level::Debug)
@@ -313,6 +328,16 @@ mod tests {
             error,
             "Invalid window handle (0x80040102)"
         ));
+        assert!(teardown(
+            "",
+            error,
+            "Error { code: HRESULT(0x80040102), message: \"Invalid window handle\" }"
+        ));
+        assert!(teardown(
+            "",
+            error,
+            "Error { code: HRESULT(0x80070578), message: \"Invalid window handle.\" }"
+        ));
 
         assert!(!teardown(
             "gpui_windows::platform",
@@ -325,6 +350,25 @@ mod tests {
             log::Level::Warn,
             "window not found"
         ));
+    }
+
+    #[test]
+    fn only_the_raw_dxgi_debug_probe_is_demoted() {
+        let record = |target: &str, level: log::Level, message: &str| {
+            super::is_missing_dxgi_debug_layer(
+                &log::Record::builder()
+                    .level(level)
+                    .target(target)
+                    .args(format_args!("{message}"))
+                    .build(),
+            )
+        };
+        let message = "Error { code: HRESULT(0x887A002D), message: \"SDK component missing\" }";
+
+        assert!(record("", log::Level::Error, message));
+        assert!(!record("gpui_windows", log::Level::Error, message));
+        assert!(!record("", log::Level::Warn, message));
+        assert!(!record("", log::Level::Error, "DirectX device lost"));
     }
 
     #[test]

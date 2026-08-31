@@ -87,7 +87,7 @@ The interpreter is Workbench's own (`WbInfo::python_command`, `uv run python` wh
 with the workbench directory as the working directory, so a script has the dependencies
 Workbench has without installing anything of its own.
 
-Eight things the plan did not predict:
+Eleven things the plan did not predict:
 
 1. **Source and processor had to be split into two enums, not one.** `process_google_sheet_source`
    fused acquisition and transformation. `preprocess.rs` now has `InputSource` (GoogleSheet, CsvFile)
@@ -115,6 +115,15 @@ Eight things the plan did not predict:
 8. **The mockup's `↳ 2` chain badge is folded into the summary line** as
    `runs N secondary configs` rather than drawn as a separate glyph. Add the badge when the row
    gets crowded enough to need the shorthand.
+9. **The run log is a real bottom dock.** `gpui_component::dock::DockArea` owns its open state and
+   height; both persist in `AppSettings`. The native status bar's Log control and **Ctrl+`** invoke
+   the same toggle action.
+10. **The title-bar menus are one `AppMenuBar`, not independent dropdown buttons.** This restores
+    hover-to-switch, arrow-key navigation, menu action state, focus restoration, and automatic
+    shortcut hints.
+11. **The title and status bars now share dimensions and typography.** The status bar uses
+    gpui-component's native `StatusBar` and the title bar's 34 px height, rather than duplicating
+    the bar in a hand-built flex row.
 
 `Operation::GdriveBusy` / `WorkflowStage::GdriveProcessed` / `gdrive_log.rs` were renamed to
 `Preprocessing` / `SourceProcessed` / `preprocess_log.rs` — nothing about them was ever

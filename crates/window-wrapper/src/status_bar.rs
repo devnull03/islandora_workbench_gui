@@ -6,7 +6,9 @@
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
-use gpui_component::{ActiveTheme as _, divider::Divider, h_flex};
+use gpui_component::{
+    ActiveTheme as _, h_flex, separator::Separator, status_bar::StatusBar as StatusBarElement,
+};
 
 use crate::bar::{BarItem, BarItems, BarRegistry};
 
@@ -58,7 +60,7 @@ impl Render for StatusBar {
             let mut children: Vec<AnyElement> = Vec::new();
             for item in items.iter().filter(|item| item.occupied(cx)) {
                 if !children.is_empty() {
-                    children.push(Divider::vertical().h_3().into_any_element());
+                    children.push(Separator::vertical().h_3().into_any_element());
                 }
                 children.push(item.view.clone().into_any_element());
             }
@@ -78,32 +80,26 @@ impl Render for StatusBar {
             None => (h_flex(), h_flex(), h_flex()),
         };
 
-        h_flex()
-            .id("status-bar")
-            .w_full()
-            .flex_shrink_0()
+        StatusBarElement::new()
+            // Match the title bar exactly; both pieces of window chrome now use the same fixed
+            // height as well as the same text size and foreground colour.
+            // gpui-component keeps the title-bar constant private; its upstream bar is 34 px.
+            .h(px(34.))
             .px_3()
-            .py_1()
-            .gap_3()
-            .items_center()
-            .justify_between()
-            .bg(cx.theme().title_bar)
-            .text_xs()
             .text_color(cx.theme().foreground)
-            .border_t_1()
-            .border_color(cx.theme().title_bar_border)
-            .child(left)
+            .left(left)
             .child(
                 h_flex()
+                    .w_full()
                     .flex_1()
                     .gap_3()
                     .items_center()
                     .when(
                         occupied(|items| &items.left) && occupied(|items| &items.centre),
-                        |row| row.child(Divider::vertical().h_3()),
+                        |row| row.child(div().w(px(1.)).h_3().bg(cx.theme().border)),
                     )
                     .child(centre),
             )
-            .child(right)
+            .right(right)
     }
 }

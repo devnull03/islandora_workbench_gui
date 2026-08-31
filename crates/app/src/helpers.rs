@@ -98,7 +98,7 @@ pub fn get_file<T: 'static>(
     .detach();
 }
 
-/// Opens a folder in the system file manager (Explorer on Windows, Finder on macOS).
+/// Opens a folder in the system file manager.
 pub fn _open_folder(path: &Path) -> std::io::Result<()> {
     if !path.is_dir() {
         return Err(std::io::Error::new(
@@ -117,12 +117,9 @@ pub fn _open_folder(path: &Path) -> std::io::Result<()> {
         Command::new("open").arg(path).spawn()?;
     }
 
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "open_folder is only supported on Windows and macOS",
-        ));
+        Command::new("xdg-open").arg(path).spawn()?;
     }
 
     Ok(())
@@ -154,12 +151,15 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
             .spawn()?;
     }
 
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "reveal_in_folder is only supported on Windows and macOS",
-        ));
+        // xdg-open has no cross-desktop "select this file" operation, so open the file's parent.
+        let folder = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        };
+        Command::new("xdg-open").arg(folder).spawn()?;
     }
 
     Ok(())
@@ -169,6 +169,7 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
 ///
 /// Windows: tries Windows Terminal (`wt`) first, falls back to `cmd.exe`.
 /// macOS: checks `$TERM_PROGRAM` for iTerm2, falls back to Terminal.app.
+/// Linux: opens the desktop's `x-terminal-emulator` and starts in `cwd`.
 pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
     if !cwd.is_dir() {
         return Err(std::io::Error::new(
@@ -233,12 +234,19 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
         }
     }
 
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "spawn_terminal_at is only supported on Windows and macOS",
-        ));
+        let mut terminal = Command::new("x-terminal-emulator");
+        terminal.current_dir(cwd);
+        if !command.trim().is_empty() {
+            terminal.args([
+                "-e",
+                "sh",
+                "-lc",
+                &format!("{command}; exec \"${{SHELL:-sh}}\""),
+            ]);
+        }
+        terminal.spawn()?;
     }
 
     Ok(())

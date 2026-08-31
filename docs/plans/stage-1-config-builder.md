@@ -228,8 +228,9 @@ add a second editable representation.
 normalises them to `(left, Vec<right>)` pairs. Adding a container shape means an arm in
 `rows_of`, `read_widgets` and `render_rows` — not a new editor.
 
-**`IconName` in gpui-component 0.5.1 has no `Pencil`/`Edit`.** The Settings row's edit button
-uses `Settings2`. Worth revisiting if a pencil ever lands upstream.
+**The original gpui-component 0.5.1 icon limitation is no longer the dependency baseline.** The
+workspace now follows the same upstream git components as qrate. The Settings row still uses
+`Settings2`; revisit it against the current icon catalogue when that row is next redesigned.
 
 **Not built, deliberately:** keyboard navigation in the search palette (`↑↓`/Enter/Esc from
 mockup `1a` — it is click-and-Add today), drag-to-reorder in the chain list, and the

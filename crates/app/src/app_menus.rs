@@ -4,7 +4,7 @@ use window_wrapper::OpenBrowser;
 
 use config_builder::OpenConfigBuilder;
 
-actions!(nav, [OpenSettings, Quit]);
+actions!(nav, [OpenSettings, ToggleLog, Quit]);
 actions!(
     help,
     [CheckForUpdates, CopyDebugInfo, OpenLogsFolder, ReportIssue]
@@ -16,6 +16,7 @@ pub fn app_menus() -> Vec<Menu> {
     vec![
         Menu {
             name: "Islandora Workbench".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("Settings", OpenSettings),
                 MenuItem::action("Config Builder", OpenConfigBuilder),
@@ -30,10 +31,17 @@ pub fn app_menus() -> Vec<Menu> {
             ],
         },
         Menu {
+            name: "View".into(),
+            disabled: false,
+            items: vec![MenuItem::action("Toggle Log", ToggleLog)],
+        },
+        Menu {
             name: "Github".into(),
+            disabled: false,
             items: vec![
                 MenuItem::submenu(Menu {
                     name: "Islandora Workbench".into(),
+                    disabled: false,
                     items: vec![
                         MenuItem::action(
                             "Repository",
@@ -51,6 +59,7 @@ pub fn app_menus() -> Vec<Menu> {
                 }),
                 MenuItem::submenu(Menu {
                     name: "GUI".into(),
+                    disabled: false,
                     items: vec![
                         MenuItem::action(
                             "Repository",
@@ -72,6 +81,7 @@ pub fn app_menus() -> Vec<Menu> {
         // copy the machine details, then file it with those details already in the body.
         Menu {
             name: "Help".into(),
+            disabled: false,
             items: vec![
                 // Opens the releases page rather than reporting a result inline: the check that
                 // runs at startup is the one that can answer without making anyone wait.

@@ -82,7 +82,7 @@ impl RenderOnce for PathPickerApp {
                         && let Some(path) = paths.first()
                     {
                         let s: SharedString = path.to_string_lossy().to_string().into();
-                        cx.update(|cx| on_pick(s, cx)).ok();
+                        cx.update(|cx| on_pick(s, cx));
                     }
                 })
                 .detach();
@@ -131,7 +131,9 @@ pub fn picker_with_path_button(
             let input = window.use_keyed_state(
                 SharedString::from(format!(
                     "path-picker-pathbtn-{}-{}-{}",
-                    options.page_ix, options.group_ix, options.item_ix
+                    options.page_ix(),
+                    options.group_ix(),
+                    options.item_ix()
                 )),
                 cx,
                 |window, cx| {
@@ -155,9 +157,9 @@ pub fn picker_with_path_button(
                 .gap_2()
                 .w_full()
                 .child(PathPickerApp {
-                    layout: options.layout,
-                    field_size: options.size,
-                    button_size: Some(options.size),
+                    layout: options.layout(),
+                    field_size: options.size(),
+                    button_size: Some(options.size()),
                     button_id: SharedString::from(format!("browse-{}", key)),
                     files: true,
                     directories: false,
@@ -172,7 +174,7 @@ pub fn picker_with_path_button(
                         .outline()
                         .icon(IconName::Redo2)
                         .tooltip("Get from PATH")
-                        .with_size(options.size)
+                        .with_size(options.size())
                         .on_click(move |_, _, cx| {
                             if let Some(p) = crate::find_on_path(&path_candidates) {
                                 AppSettings::set_text(

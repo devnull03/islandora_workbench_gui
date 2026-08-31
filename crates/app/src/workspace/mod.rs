@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::*;
 use gpui_component::{
-    dock::{Panel, PanelControl, PanelEvent},
+    dock::{BasePanel, Panel, PanelControl, PanelEvent},
     input::{InputEvent, InputState},
     scroll::ScrollableElement,
     select::{SelectEvent, SelectState},
@@ -501,13 +501,9 @@ impl Focusable for Workspace {
 
 impl EventEmitter<PanelEvent> for Workspace {}
 
-impl Panel for Workspace {
+impl BasePanel for Workspace {
     fn panel_name(&self) -> &'static str {
         "Workspace"
-    }
-
-    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        SharedString::from("Workbench")
     }
 
     /// The centre of the window. There is nothing behind it to close it onto.
@@ -515,7 +511,17 @@ impl Panel for Workspace {
         false
     }
 
-    fn zoomable(&self, _cx: &App) -> Option<PanelControl> {
+    fn zoomable(&self, _cx: &App) -> bool {
+        false
+    }
+}
+
+impl Panel for Workspace {
+    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        SharedString::from("Workbench")
+    }
+
+    fn zoom_control(&self, _cx: &App) -> Option<PanelControl> {
         None
     }
 }

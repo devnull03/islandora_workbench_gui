@@ -1,5 +1,5 @@
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::dock::{Panel, PanelControl, PanelEvent};
+use gpui_component::dock::{BasePanel, Panel, PanelControl, PanelEvent};
 use gpui_component::{ActiveTheme, label::Label};
 
 /// Approximate visual line height for text_sm. Used for Y-position → line index mapping.
@@ -206,7 +206,7 @@ impl Render for LogViewer {
                             .on_mouse_down(MouseButton::Left, {
                                 let weak = weak.clone();
                                 move |event: &MouseDownEvent, window, cx| {
-                                    focus_handle.focus(window);
+                                    focus_handle.focus(window, cx);
                                     let Some(entity) = weak.upgrade() else { return };
                                     entity.update(cx, |this, cx| {
                                         // Infer the container's Y origin from this line's known index.
@@ -240,13 +240,9 @@ impl Focusable for LogViewer {
 
 impl EventEmitter<PanelEvent> for LogViewer {}
 
-impl Panel for LogViewer {
+impl BasePanel for LogViewer {
     fn panel_name(&self) -> &'static str {
         "LogPanel"
-    }
-
-    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        SharedString::from("Log")
     }
 
     /// The only panel in the only dock: closing it would leave a tab strip with nothing in it and
@@ -257,7 +253,17 @@ impl Panel for LogViewer {
 
     /// Zoom is a whole-window takeover of a panel, which is what the old inline log's expand
     /// button did. The dock replaces that: drag it taller.
-    fn zoomable(&self, _cx: &App) -> Option<PanelControl> {
+    fn zoomable(&self, _cx: &App) -> bool {
+        false
+    }
+}
+
+impl Panel for LogViewer {
+    fn title(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        SharedString::from("Log")
+    }
+
+    fn zoom_control(&self, _cx: &App) -> Option<PanelControl> {
         None
     }
 }

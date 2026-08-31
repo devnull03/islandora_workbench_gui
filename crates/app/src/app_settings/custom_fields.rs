@@ -609,8 +609,7 @@ fn test_server(index: usize, url: String, credentials_file: String, cx: &mut App
                 CheckResult::now(result.reachable, result.credentials_ok, result.message),
                 cx,
             );
-        })
-        .ok();
+        });
     })
     .detach();
 }

@@ -8,6 +8,7 @@ anyhow.workspace = true
 base64.workspace = true
 dirs.workspace = true
 gpui.workspace = true
+gpui_platform.workspace = true
 gpui-component.workspace = true
 gpui-component-assets.workspace = true
 config-builder = { path = "../config-builder" }

@@ -1,7 +1,7 @@
 # Stage 4 — Builder window placement (docking)
 
 **Mockup:** `2b` (docked → floated → snapping back)
-**Status:** not started
+**Status:** chrome foundation built; Config Builder docking not started
 **Depends on:** Stage 1 (`ConfigBuilderWindow` must render as a plain view, not a window-bound one)
 **Blocks:** nothing
 
@@ -10,6 +10,11 @@
 Stage 1 ships the builder as its own OS window because that is the smallest thing that works.
 For the common case — editing a config while looking at the run controls — two overlapping
 windows is worse than one.
+
+The main window now has the prerequisite dock/chrome stack: a persistent `DockArea`, a native
+gpui-component status bar, a shared title-bar menu, and a shortcut-driven bottom Log panel. That
+work proves dock state and sizing can live in `AppSettings`, but it does not yet split the Config
+Builder view from its OS-window host or add the right-side builder pane described below.
 
 ## Three states
 

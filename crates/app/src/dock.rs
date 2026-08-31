@@ -10,14 +10,17 @@ use gpui::*;
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, Sizable as _,
     dock::{
-        DockArea, DockAreaState, DockEvent, DockItem, DockPlacement, PanelView, register_panel,
+        DockArea, DockAreaState, DockEvent, DockLayout, DockPlacement, DockSkin, panel_handle,
+        register_panel,
     },
     h_flex,
 };
 use settings::AppSettings;
-use std::sync::Arc;
 
-use crate::workspace::{LogViewer, Workspace};
+use crate::{
+    app_menus::ToggleLog,
+    workspace::{LogViewer, Workspace},
+};
 
 /// Settings key under which the serialized [`DockAreaState`] is persisted, so the log pane reopens
 /// at the height it was left and stays shut if that is how the last session ended.
@@ -45,33 +48,33 @@ impl MainDock {
         // run's output — rebuilding either would silently throw that away.
         register_panel(cx, "Workspace", {
             let workspace = workspace.clone();
-            move |_, _, _, _, _| Box::new(workspace.clone())
+            move |_, _, _| panel_handle(workspace.clone())
         });
         register_panel(cx, "LogPanel", {
             let log = log.clone();
-            move |_, _, _, _, _| Box::new(log.clone())
+            move |_, _, _| panel_handle(log.clone())
         });
 
-        let dock_area = cx.new(|cx| DockArea::new("main", Some(LAYOUT_VERSION), window, cx));
-        let weak = dock_area.downgrade();
+        let (dock_area, dock_skin) = DockSkin::dock_area("main", Some(LAYOUT_VERSION), window, cx);
+        dock_skin.set_toggle_button_visible(false, cx);
 
         dock_area.update(cx, |area, cx| {
-            // `panel`, not `tabs`: the centre is the only thing that will ever be there, and a tab
-            // strip over a single permanent panel is a row of chrome that says nothing.
             area.set_center(
-                DockItem::panel(Arc::new(workspace) as Arc<dyn PanelView>),
+                DockLayout::tabs().panel_view(panel_handle(workspace), cx),
                 window,
                 cx,
             );
-            area.set_bottom_dock(
-                DockItem::tabs(vec![Arc::new(log) as Arc<dyn PanelView>], &weak, window, cx),
-                Some(px(220.)),
-                false,
+            area.set_dock(
+                DockPlacement::Bottom,
+                DockLayout::tabs().panel_view(panel_handle(log), cx),
                 window,
                 cx,
             );
-            // The dock is driven from our own status-bar button, so hide the library's toggle arrows.
-            area.set_toggle_button_visible(false, cx);
+            area.set_dock_size(DockPlacement::Bottom, px(220.), window, cx);
+            // Start closed unless a persisted layout below says otherwise.
+            if area.is_dock_open(DockPlacement::Bottom) {
+                area.toggle_dock(DockPlacement::Bottom, window, cx);
+            }
         });
 
         Self::restore_layout(&dock_area, window, cx);
@@ -91,6 +94,13 @@ impl MainDock {
     /// Weak handle to the dock area, so the status-bar button can toggle the log open and closed.
     pub fn dock_area(&self) -> WeakEntity<DockArea> {
         self.dock_area.downgrade()
+    }
+
+    /// Toggle the log from the View menu or its window-wide shortcut.
+    pub fn toggle_log(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.dock_area.update(cx, |area, cx| {
+            toggle_bottom_dock(area, window, cx);
+        });
     }
 
     fn persist_layout(dock_area: &Entity<DockArea>, cx: &mut App) {
@@ -126,9 +136,6 @@ impl MainDock {
             if let Err(err) = area.load(state, window, cx) {
                 log::error!("failed to restore dock layout: {err}");
             }
-            // `load` does not carry this runtime-only flag, so re-apply it or the library's own
-            // toggle arrows come back on a restored layout.
-            area.set_toggle_button_visible(false, cx);
         });
     }
 }
@@ -166,7 +173,7 @@ impl Render for LogDockButton {
         let open = self
             .dock
             .upgrade()
-            .is_some_and(|area| area.read(cx).is_dock_open(DockPlacement::Bottom, cx));
+            .is_some_and(|area| area.read(cx).is_dock_open(DockPlacement::Bottom));
         let hover_bg = cx.theme().secondary_hover;
         let dock = self.dock.clone();
 
@@ -190,6 +197,11 @@ impl Render for LogDockButton {
                 .small(),
             )
             .child("Log")
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Toggle Log")
+                    .action(&ToggleLog, None)
+                    .build(window, cx)
+            })
             .on_click(move |_, window, cx| {
                 let Some(area) = dock.upgrade() else { return };
                 area.update(cx, |area, cx| {
@@ -204,7 +216,6 @@ impl Render for LogDockButton {
 ///
 /// The event is ours to emit: the library's `toggle_dock` notifies its own view and stops there,
 /// and `LayoutChanged` is what `MainDock` persists on.
-fn toggle_bottom_dock(area: &DockArea, window: &mut Window, cx: &mut Context<DockArea>) {
+fn toggle_bottom_dock(area: &mut DockArea, window: &mut Window, cx: &mut Context<DockArea>) {
     area.toggle_dock(DockPlacement::Bottom, window, cx);
-    cx.emit(DockEvent::LayoutChanged);
 }

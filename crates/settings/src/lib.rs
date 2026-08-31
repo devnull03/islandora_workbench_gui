@@ -25,7 +25,6 @@ use gpui_component::{
     h_flex,
     input::InputState,
     label::Label,
-    scroll::ScrollableElement,
     setting::{SettingField, SettingItem, SettingPage, Settings},
     v_flex,
 };
@@ -177,7 +176,9 @@ fn build_path_picker(
             let input = window.use_keyed_state(
                 SharedString::from(format!(
                     "path-picker-{}-{}-{}",
-                    options.page_ix, options.group_ix, options.item_ix
+                    options.page_ix(),
+                    options.group_ix(),
+                    options.item_ix()
                 )),
                 cx,
                 |window, cx| {
@@ -192,9 +193,9 @@ fn build_path_picker(
                 }
             });
             PathPickerApp {
-                layout: options.layout,
-                field_size: options.size,
-                button_size: Some(options.size),
+                layout: options.layout(),
+                field_size: options.size(),
+                button_size: Some(options.size()),
                 button_id: SharedString::from(format!("browse-{}", key)),
                 files,
                 directories,
@@ -314,7 +315,9 @@ pub struct MainWindowBounds {
     pub height: f32,
     /// `PlatformDisplay::id` as `u32`; matched at startup against [`App::displays`].
     #[serde(default)]
-    pub display_id: Option<u32>,
+    /// GPUI's opaque display identifier. This was `u32`; JSON numbers deserialize into `u64`, so
+    /// existing settings remain valid after GPUI widened the platform id.
+    pub display_id: Option<u64>,
 }
 
 impl MainWindowBounds {
@@ -323,7 +326,7 @@ impl MainWindowBounds {
         Self {
             width: b.size.width.into(),
             height: b.size.height.into(),
-            display_id: window.display(cx).map(|d| u32::from(d.id())),
+            display_id: window.display(cx).map(|d| u64::from(d.id())),
         }
     }
 }
@@ -350,7 +353,9 @@ pub fn picker_with_path_button(
             let input = window.use_keyed_state(
                 SharedString::from(format!(
                     "path-picker-pathbtn-{}-{}-{}",
-                    options.page_ix, options.group_ix, options.item_ix
+                    options.page_ix(),
+                    options.group_ix(),
+                    options.item_ix()
                 )),
                 cx,
                 |window, cx| {
@@ -374,9 +379,9 @@ pub fn picker_with_path_button(
                 .gap_2()
                 .w_full()
                 .child(PathPickerApp {
-                    layout: options.layout,
-                    field_size: options.size,
-                    button_size: Some(options.size),
+                    layout: options.layout(),
+                    field_size: options.size(),
+                    button_size: Some(options.size()),
                     button_id: SharedString::from(format!("browse-{}", key)),
                     files: true,
                     directories: false,
@@ -391,7 +396,7 @@ pub fn picker_with_path_button(
                         .outline()
                         .icon(IconName::Redo2)
                         .tooltip("Get from PATH")
-                        .with_size(options.size)
+                        .with_size(options.size())
                         .on_click(move |_, _, cx| {
                             if let Some(p) = find_on_path(&path_candidates) {
                                 AppSettings::set_text(
@@ -457,7 +462,7 @@ impl AppSettings {
             .and_then(|raw| {
                 cx.displays()
                     .into_iter()
-                    .find(|d| u32::from(d.id()) == raw)
+                    .find(|d| u64::from(d.id()) == raw)
                     .map(|d| d.id())
             })
     }
@@ -661,8 +666,10 @@ impl Render for SettingsWindow {
                 // `SettingItem::is_match`, so this window adds none of its own.
                 div()
                     .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
+                    // `Settings` owns the page scroller. Wrapping it in another scrollbar gives
+                    // its resizable sidebar an auto-height parent, so the search field can latch
+                    // a collapsed width on the first frame and only recover while resizing.
+                    .min_h_0()
                     .child(Settings::new("app-settings").pages((self.build_pages)(cx))),
             )
     }

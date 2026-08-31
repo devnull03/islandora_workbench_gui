@@ -105,8 +105,7 @@ impl Render for ReloadConfigs {
                             let mut new_settings = loaded;
                             new_settings.main_window_bounds = current_bounds;
                             cx.set_global(new_settings);
-                        })
-                        .ok();
+                        });
                     })
                     .detach();
                 })),

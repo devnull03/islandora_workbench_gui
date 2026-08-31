@@ -3,6 +3,7 @@
 // The attribute is a no-op on non-Windows targets.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod actions;
 mod app_menus;
 mod app_settings;
 mod dock;
@@ -13,17 +14,21 @@ mod update_check;
 mod workspace;
 
 use gpui::*;
-use gpui_component::{Root, TitleBar, v_flex};
+use gpui_component::{Root, TitleBar, menu::AppMenuBar, v_flex};
 use settings::{
     AppSettings, MainWindowBounds, SettingsPersistence, SettingsWindow, SettingsWindowHandle,
     SettingsWriter, load_app_settings,
 };
-use window_wrapper::{OpenBrowser, WindowLock, status_bar::StatusBar, title_bar::AppTitleBar};
+use window_wrapper::{
+    BarRegistry as _, OpenBrowser, WindowLock,
+    status_bar::StatusBar,
+    title_bar::{AppTitleBar, TitleBarRegistry},
+};
 
 use crate::{
     app_menus::{
         CheckForUpdates, CopyDebugInfo, OpenLogsFolder, OpenSettings, Quit, REPO_URL, ReportIssue,
-        app_menus,
+        ToggleLog, app_menus,
     },
     app_settings::build_pages,
     dock::{LogDockButton, MainDock},
@@ -35,6 +40,7 @@ use config_builder::{ConfigBuilderWindows, OpenConfigBuilder, open_config_builde
 pub struct App {
     dock: Entity<MainDock>,
     status_bar: Entity<StatusBar>,
+    focus_handle: FocusHandle,
     _main_window_bounds_sub: Subscription,
     _ping_log_sub: Subscription,
     _window_lock_sub: Subscription,
@@ -48,7 +54,7 @@ impl App {
         let log_viewer = cx.new(LogViewer::new);
         let workspace = cx.new(|cx| Workspace::new(log_viewer.clone(), window, cx));
         let dock = cx.new(|cx| MainDock::new(workspace, log_viewer.clone(), window, cx));
-        let status_bar = cx.new(|_| StatusBar::new());
+        let status_bar = cx.new(|_| StatusBar);
 
         let ping = cx.new(ServerPingIndicator::new);
         let _ping_log_sub = cx.subscribe(&ping, {
@@ -63,6 +69,12 @@ impl App {
         });
         let registry = build_status_bar_registry(ping, log_button, &mut *cx);
         cx.set_global(registry);
+
+        let mut title_registry = TitleBarRegistry::default();
+        title_registry
+            .items_mut()
+            .add_left(AppMenuBar::new(&mut *cx));
+        cx.set_global(title_registry);
 
         let _main_window_bounds_sub = cx.observe_window_bounds(window, |_, window, cx| {
             let b = MainWindowBounds::capture_from_window(window, cx);
@@ -79,9 +91,15 @@ impl App {
         // Block the OS close button while an ingest run is in progress.
         window.on_window_should_close(cx, |_, cx| !WindowLock::is_locked(cx));
 
+        let focus_handle = cx.focus_handle();
+        if window.focused(cx).is_none() {
+            focus_handle.focus(window, cx);
+        }
+
         Self {
             dock,
             status_bar,
+            focus_handle,
             _main_window_bounds_sub,
             _ping_log_sub,
             _window_lock_sub,
@@ -94,11 +112,18 @@ impl Render for App {
         let dialog_layer = Root::render_dialog_layer(window, cx);
 
         div()
+            .id("workbench-root")
+            .key_context("IslandoraWorkbench")
+            .track_focus(&self.focus_handle)
+            .role(Role::Group)
             .size_full()
+            .on_action(cx.listener(|this, _: &ToggleLog, window, cx| {
+                this.dock.update(cx, |dock, cx| dock.toggle_log(window, cx));
+            }))
             .child(
                 v_flex()
                     .size_full()
-                    .child(AppTitleBar::new(cx).title("Islandora Workbench"))
+                    .child(AppTitleBar::new("Islandora Workbench"))
                     .child(
                         // `min_h(0)` is load-bearing: a flex item's min height defaults to its
                         // content, so without it a tall workspace refuses to shrink and shoves
@@ -123,7 +148,7 @@ fn main() {
     // still reaches the file.
     logging::init();
 
-    let app = Application::new().with_assets(gpui_component_assets::Assets);
+    let app = gpui_platform::application().with_assets(gpui_component_assets::Assets);
 
     app.run(move |cx| {
         gpui_component::init(cx);
@@ -180,15 +205,19 @@ fn main() {
                 if let Ok(window_handle) = result {
                     cx.update(|cx| {
                         cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
-                    })
-                    .ok();
+                    });
                 }
             })
             .detach();
         });
         // ----------------------------------------------
 
-        cx.set_menus(app_menus());
+        let menus = app_menus();
+        cx.set_menus(menus);
+        let owned = app_menus().into_iter().map(|menu| menu.owned()).collect();
+        gpui_component::GlobalState::global_mut(cx).set_app_menus(owned);
+
+        cx.bind_keys(actions::key_bindings());
 
         cx.on_action(|action: &OpenBrowser, cx| {
             cx.open_url(&action.url);
