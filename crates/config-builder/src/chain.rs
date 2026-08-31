@@ -15,14 +15,11 @@ use std::{
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt,
-    button::{Button, ButtonVariants},
-    h_flex,
-    label::Label,
-    v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, h_flex, label::Label, v_flex,
 };
 
 use super::{ConfigBuilder, open_config_builder};
+use ui::app_button;
 
 impl ConfigBuilder {
     pub(super) fn render_chain(
@@ -62,7 +59,7 @@ impl ConfigBuilder {
                 h_flex()
                     .gap_2()
                     .child(
-                        Button::new("link-config")
+                        app_button("link-config")
                             .outline()
                             .small()
                             .label("Link an existing config")
@@ -71,7 +68,7 @@ impl ConfigBuilder {
                             })),
                     )
                     .child(
-                        Button::new("create-child-config")
+                        app_button("create-child-config")
                             .outline()
                             .small()
                             .label("Create a new one")
@@ -123,7 +120,7 @@ impl ConfigBuilder {
             )
             .when(exists, |this| {
                 this.child(
-                    Button::new(SharedString::from(format!("open-child-{index}")))
+                    app_button(SharedString::from(format!("open-child-{index}")))
                         .ghost()
                         .xsmall()
                         .label("Open")
@@ -131,7 +128,7 @@ impl ConfigBuilder {
                 )
             })
             .child(
-                Button::new(SharedString::from(format!("unlink-child-{index}")))
+                app_button(SharedString::from(format!("unlink-child-{index}")))
                     .ghost()
                     .xsmall()
                     .icon(IconName::Close)

@@ -4,14 +4,11 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt,
-    button::{Button, ButtonVariants},
-    h_flex,
-    input::Input,
-    label::Label,
-    v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, h_flex, input::Input,
+    label::Label, v_flex,
 };
 use serde_yaml::Value;
+use ui::{APP_CONTROL_SIZE, app_button};
 use workbench_integration::config::catalog::{self, SettingDef};
 
 use super::ConfigBuilder;
@@ -85,14 +82,20 @@ impl ConfigBuilder {
                     .w_full()
                     .gap_2()
                     .items_center()
-                    .child(div().flex_1().child(Input::new(&self.search).w_full()))
+                    .child(
+                        div().flex_1().child(
+                            Input::new(&self.search)
+                                .with_size(APP_CONTROL_SIZE)
+                                .w_full(),
+                        ),
+                    )
                     .child(
                         Label::new(format!("{} of {total} settings", matches.len()))
                             .text_xs()
                             .text_color(cx.theme().muted_foreground),
                     )
                     .child(
-                        Button::new("toggle-search")
+                        app_button("toggle-search")
                             .ghost()
                             .small()
                             .label(if self.search_open {
@@ -189,7 +192,7 @@ impl ConfigBuilder {
                             .text_color(cx.theme().muted_foreground),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("add-{key}")))
+                        app_button(SharedString::from(format!("add-{key}")))
                             .outline()
                             .xsmall()
                             .icon(IconName::Plus)
@@ -222,7 +225,7 @@ impl ConfigBuilder {
                 |(name, task, extras)| {
                     let task = *task;
                     let extras = *extras;
-                    Button::new(SharedString::from(format!("template-{task}")))
+                    app_button(SharedString::from(format!("template-{task}")))
                         .outline()
                         .small()
                         .label(format!("{name} — task: {task}, plus {}", extras.len()))

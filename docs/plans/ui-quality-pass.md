@@ -28,10 +28,12 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   affordance.
 - [ ] Use one compact control height, `text_xs`/`text_sm` hierarchy, and the theme radius across
   adjacent inputs, selects, browse buttons, and action buttons. Long labels must not clip at the
-  supported minimum window size.
+  supported minimum window size. (Shared `APP_CONTROL_SIZE` is now applied to the main workflow
+  and Config Builder; minimum-size visual verification remains.)
 - [ ] Keep primary colour for the primary action and selected/active state. Secondary actions use
   neutral or ghost treatment and gain accent on hover/focus.
-- [ ] Verify disabled controls remain legible and cannot dispatch an action.
+- [ ] Verify disabled controls remain legible and cannot dispatch an action. The status-bar
+  terminal action is now disabled with a useful tooltip until a Workbench path is configured.
 
 ### 2. Config Builder shell and density (`1a`, `1b`)
 
@@ -106,4 +108,3 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   first successful save, preserving the existing re-key invariant.
 - Common dimensions and button treatment belong in shared UI helpers or theme roles where
   possible; do not repeat near-identical pixel values in each setting editor.
-

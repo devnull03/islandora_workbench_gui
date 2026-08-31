@@ -8,17 +8,11 @@ use std::path::PathBuf;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, Sizable,
-    button::{Button, ButtonVariants},
-    checkbox::Checkbox,
-    h_flex,
-    input::Input,
-    label::Label,
-    select::Select,
-    v_flex,
+    ActiveTheme, Disableable, IconName, Sizable, button::ButtonVariants, checkbox::Checkbox,
+    h_flex, input::Input, label::Label, select::Select, v_flex,
 };
 use settings::AppSettings;
-use ui::{LabeledField, StepSection};
+use ui::{APP_CONTROL_SIZE, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
@@ -38,14 +32,16 @@ impl Workspace {
                 .w_full()
                 .gap_2()
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .child(Input::new(&state).small().w_full().disabled(!idle)),
+                    div().flex_1().min_w(px(0.)).child(
+                        Input::new(&state)
+                            .with_size(APP_CONTROL_SIZE)
+                            .w_full()
+                            .disabled(!idle),
+                    ),
                 )
                 .when(is_csv, |row| {
                     row.child(
-                        Button::new("browse-source-csv")
+                        app_button("browse-source-csv")
                             .icon(IconName::FolderOpen)
                             .outline()
                             .disabled(!idle)
@@ -78,6 +74,7 @@ impl Workspace {
             .note("optional step")
             .child(
                 Select::new(&self.input_source_select)
+                    .with_size(APP_CONTROL_SIZE)
                     .w_full()
                     .disabled(!idle),
             )
@@ -99,13 +96,13 @@ impl Workspace {
                                 .child(
                                     div().flex_1().min_w(px(0.)).child(
                                         Input::new(&self.ingest_files_dir)
-                                            .small()
+                                            .with_size(APP_CONTROL_SIZE)
                                             .disabled(true)
                                             .w_full(),
                                     ),
                                 )
                                 .child(
-                                    Button::new("browse-ingest-dir")
+                                    app_button("browse-ingest-dir")
                                         .icon(IconName::FolderOpen)
                                         .outline()
                                         .disabled(!idle)
@@ -127,7 +124,12 @@ impl Workspace {
                                 "Receives the whole CSV and optional config; \
                                  outputs the new metadata CSV path.",
                             )
-                            .child(Select::new(&self.processor_select).w_full().disabled(!idle)),
+                            .child(
+                                Select::new(&self.processor_select)
+                                    .with_size(APP_CONTROL_SIZE)
+                                    .w_full()
+                                    .disabled(!idle),
+                            ),
                     )
                     .child(
                         h_flex()
@@ -135,7 +137,7 @@ impl Workspace {
                             .items_center()
                             .gap_2()
                             .child(
-                                Button::new("process-gdrive")
+                                app_button("process-gdrive")
                                     .outline()
                                     .label("Process")
                                     .loading(loading)
@@ -145,7 +147,7 @@ impl Workspace {
                                     })),
                             )
                             .child(
-                                Button::new("open-gdrive-output")
+                                app_button("open-gdrive-output")
                                     .outline()
                                     .label("Open processed")
                                     .disabled(!processed)
@@ -203,12 +205,13 @@ impl Workspace {
                         div().flex_1().min_w(px(0.)).child(
                             Select::new(&self.saved_config_select)
                                 .placeholder("Select saved config…")
+                                .with_size(APP_CONTROL_SIZE)
                                 .disabled(!idle)
                                 .w_full(),
                         ),
                     )
                     .child(
-                        Button::new("edit-config")
+                        app_button("edit-config")
                             .outline()
                             .label("Edit")
                             .disabled(!selected)
@@ -221,7 +224,7 @@ impl Workspace {
                             })),
                     )
                     .child(
-                        Button::new("new-config")
+                        app_button("new-config")
                             .outline()
                             .label("New")
                             .on_click(|_, _, cx| open_config_builder(None, cx)),
@@ -259,12 +262,13 @@ impl Workspace {
                         div().flex_1().min_w(px(0.)).child(
                             Select::new(&self.server_select)
                                 .placeholder("Select server…")
+                                .with_size(APP_CONTROL_SIZE)
                                 .disabled(!idle)
                                 .w_full(),
                         ),
                     )
                     .child(
-                        Button::new("manage-servers")
+                        app_button("manage-servers")
                             .outline()
                             .label("Manage")
                             .on_click(|_, _, cx| {
@@ -290,7 +294,7 @@ impl Workspace {
                     )
                     .child(div().flex_1())
                     .child(
-                        Button::new("check")
+                        app_button("check")
                             .outline()
                             .label("Check")
                             .loading(check_loading)
@@ -300,7 +304,7 @@ impl Workspace {
                             })),
                     )
                     .child(
-                        Button::new("run-ingest")
+                        app_button("run-ingest")
                             .primary()
                             .label("Run Ingest")
                             .loading(run_loading)

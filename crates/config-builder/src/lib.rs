@@ -23,7 +23,7 @@ use std::time::Instant;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt, TitleBar,
-    button::{Button, ButtonVariants},
+    button::ButtonVariants,
     h_flex,
     input::{InputEvent, InputState},
     label::Label,
@@ -39,7 +39,7 @@ use workbench_integration::config::{
     validate::{Problem, Severity, validate},
 };
 
-use ui::DetailSelectItem;
+use ui::{DetailSelectItem, app_button};
 
 actions!(config_builder, [OpenConfigBuilder]);
 
@@ -566,7 +566,7 @@ impl ConfigBuilder {
             )
             .child(div().flex_1())
             .child(
-                Button::new("toggle-yaml")
+                app_button("toggle-yaml")
                     .ghost()
                     .small()
                     .label(if self.yaml_open {
@@ -581,7 +581,7 @@ impl ConfigBuilder {
                     })),
             )
             .child(
-                Button::new("discard-draft")
+                app_button("discard-draft")
                     .outline()
                     .small()
                     .label("Discard draft")
@@ -597,7 +597,7 @@ impl ConfigBuilder {
                     })),
             )
             .child(
-                Button::new("save-config")
+                app_button("save-config")
                     .primary()
                     .small()
                     .label("Save to library")

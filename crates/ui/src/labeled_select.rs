@@ -1,11 +1,12 @@
 use gpui::*;
 use gpui_component::{
-    ActiveTheme,
+    ActiveTheme, Sizable,
     label::Label,
     select::{Select, SelectState},
     v_flex,
 };
 
+use crate::APP_CONTROL_SIZE;
 use crate::DetailSelectItem;
 
 #[derive(IntoElement)]
@@ -58,11 +59,12 @@ impl RenderOnce for LabeledSelect {
                 Select::new(&self.select)
                     .placeholder(self.placeholder)
                     .disabled(self.disabled)
+                    .with_size(APP_CONTROL_SIZE)
                     .w_full(),
             )
             .child(
                 Label::new(self.description)
-                    .text_sm()
+                    .text_xs()
                     .text_color(cx.theme().muted_foreground),
             )
     }

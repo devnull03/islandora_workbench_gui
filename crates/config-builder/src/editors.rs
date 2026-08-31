@@ -10,14 +10,8 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt,
-    button::{Button, ButtonVariants},
-    checkbox::Checkbox,
-    h_flex,
-    input::Input,
-    label::Label,
-    select::Select,
-    v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, checkbox::Checkbox, h_flex,
+    input::Input, label::Label, select::Select, v_flex,
 };
 use serde_yaml::{Mapping, Value};
 use workbench_integration::config::{
@@ -27,7 +21,7 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 use crate::get_file;
-use ui::DetailSelectItem;
+use ui::{APP_CONTROL_SIZE, DetailSelectItem, app_button};
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
 /// setting has no upstream default, so the row still renders something editable.
@@ -308,7 +302,7 @@ impl ConfigBuilder {
                     )
                     .when(!def.required, |this| {
                         this.child(
-                            Button::new(SharedString::from(format!("remove-{}", def.key)))
+                            app_button(SharedString::from(format!("remove-{}", def.key)))
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Close)
@@ -349,7 +343,7 @@ impl ConfigBuilder {
             )
             .child(div().flex_1())
             .child(
-                Button::new(SharedString::from(format!("remove-unknown-{key}")))
+                app_button(SharedString::from(format!("remove-unknown-{key}")))
                     .ghost()
                     .xsmall()
                     .icon(IconName::Close)
@@ -390,7 +384,11 @@ impl ConfigBuilder {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(div().w(px(120.)).child(Input::new(&input)))
+                    .child(
+                        div()
+                            .w(px(120.))
+                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
+                    )
                     .children(def.unit.clone().map(|u| {
                         Label::new(u)
                             .text_xs()
@@ -425,6 +423,7 @@ impl ConfigBuilder {
                 let state = self.select(id, &key, items, selected, window, cx);
                 Select::new(&state)
                     .placeholder("Choose…")
+                    .with_size(APP_CONTROL_SIZE)
                     .w_full()
                     .into_any_element()
             }
@@ -441,9 +440,13 @@ impl ConfigBuilder {
                 h_flex()
                     .w_full()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&input)))
                     .child(
-                        Button::new(SharedString::from(format!("browse-{key}")))
+                        div()
+                            .flex_1()
+                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
+                    )
+                    .child(
+                        app_button(SharedString::from(format!("browse-{key}")))
                             .outline()
                             .icon(IconName::FolderOpen)
                             .label("Browse…")
@@ -463,7 +466,10 @@ impl ConfigBuilder {
                     ""
                 };
                 let input = self.input(id, &key, &scalar_text(&value), placeholder, window, cx);
-                Input::new(&input).w_full().into_any_element()
+                Input::new(&input)
+                    .with_size(APP_CONTROL_SIZE)
+                    .w_full()
+                    .into_any_element()
             }
 
             Shape::TemplateString => {
@@ -471,7 +477,7 @@ impl ConfigBuilder {
                 v_flex()
                     .w_full()
                     .gap_1()
-                    .child(Input::new(&input).w_full())
+                    .child(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full())
                     .when(!def.tokens.is_empty(), |this| {
                         this.child(
                             Label::new(format!("Insert: {}", def.tokens.join("  ")))
@@ -526,7 +532,11 @@ impl ConfigBuilder {
                 | Shape::CommandList
                 | Shape::ConfigRef => {
                     let input = self.input(field_id(&[&key, &idx]), &key, left, "", window, cx);
-                    row = row.child(div().flex_1().child(Input::new(&input)));
+                    row = row.child(
+                        div()
+                            .flex_1()
+                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
+                    );
                 }
                 Shape::ListOfOneKeyMaps | Shape::Map => {
                     let k = self.input(field_id(&[&key, &idx, "k"]), &key, left, "key", window, cx);
@@ -539,8 +549,16 @@ impl ConfigBuilder {
                         cx,
                     );
                     row = row
-                        .child(div().flex_1().child(Input::new(&k)))
-                        .child(div().flex_1().child(Input::new(&v)));
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(Input::new(&k).with_size(APP_CONTROL_SIZE)),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(Input::new(&v).with_size(APP_CONTROL_SIZE)),
+                        );
                 }
                 Shape::MapOfLists => {
                     let k = self.input(field_id(&[&key, &idx, "k"]), &key, left, "key", window, cx);
@@ -554,12 +572,16 @@ impl ConfigBuilder {
                             window,
                             cx,
                         );
-                        cells = cells.child(div().w(px(90.)).child(Input::new(&cell)));
+                        cells = cells.child(
+                            div()
+                                .w(px(90.))
+                                .child(Input::new(&cell).with_size(APP_CONTROL_SIZE)),
+                        );
                     }
                     let owned = key.clone();
                     let row_ix = i;
                     cells = cells.child(
-                        Button::new(SharedString::from(format!("add-item-{key}-{i}")))
+                        app_button(SharedString::from(format!("add-item-{key}-{i}")))
                             .ghost()
                             .xsmall()
                             .icon(IconName::Plus)
@@ -569,7 +591,11 @@ impl ConfigBuilder {
                             })),
                     );
                     row = row
-                        .child(div().w(px(140.)).child(Input::new(&k)))
+                        .child(
+                            div()
+                                .w(px(140.))
+                                .child(Input::new(&k).with_size(APP_CONTROL_SIZE)),
+                        )
                         .child(cells);
                 }
                 _ => {}
@@ -578,7 +604,7 @@ impl ConfigBuilder {
             let owned = key.clone();
             let row_ix = i;
             row = row.child(
-                Button::new(SharedString::from(format!("remove-row-{key}-{i}")))
+                app_button(SharedString::from(format!("remove-row-{key}-{i}")))
                     .ghost()
                     .xsmall()
                     .icon(IconName::Close)
@@ -594,7 +620,7 @@ impl ConfigBuilder {
             h_flex()
                 .gap_2()
                 .child(
-                    Button::new(SharedString::from(format!("add-row-{key}")))
+                    app_button(SharedString::from(format!("add-row-{key}")))
                         .ghost()
                         .xsmall()
                         .icon(IconName::Plus)

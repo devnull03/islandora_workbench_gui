@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use gpui::*;
 use gpui_component::{
-    IconName, Sizable,
+    Disableable, IconName, Sizable,
     button::{Button, ButtonVariants},
 };
 use settings::{AppSettings, load_app_settings};
@@ -70,6 +70,10 @@ impl OpenTerminal {
 
 impl Render for OpenTerminal {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let configured = AppSettings::get(cx)
+            .values
+            .get("workbench_path")
+            .is_some_and(|value| !value.text().trim().is_empty());
         div().child(
             Button::new("Open Terminal")
                 .icon(IconName::SquareTerminal)
@@ -78,6 +82,12 @@ impl Render for OpenTerminal {
                 .xsmall()
                 .px_0()
                 .cursor_pointer()
+                .disabled(!configured)
+                .tooltip(if configured {
+                    "Open a terminal in the Workbench folder"
+                } else {
+                    "Set the Workbench path in Settings first"
+                })
                 .on_click(cx.listener(|this, _, window, cx| {
                     log::debug!("terminal button clicked");
                     this.spawn_terminal(window, cx);
