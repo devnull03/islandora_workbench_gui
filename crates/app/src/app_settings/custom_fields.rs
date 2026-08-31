@@ -160,7 +160,7 @@ fn config_row(
                         Button::new(SharedString::from(format!("edit-{id}")))
                             .icon(IconName::Settings2)
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Open in the config builder")
                             .on_click(move |_, _, cx| open_config_builder(Some(path.clone()), cx)),
                     )
@@ -168,7 +168,7 @@ fn config_row(
                         Button::new(SharedString::from(format!("rename-{id}")))
                             .label("Edit")
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| {
                                 toggle.update(cx, |state, cx| {
                                     state.toggle(Some(idx));
@@ -180,7 +180,7 @@ fn config_row(
                         Button::new(SharedString::from(format!("remove-{id}")))
                             .icon(IconName::Close)
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Remove from the library")
                             .on_click(move |_, _, cx| AppSettings::remove_task_config(idx, cx)),
                     ),
@@ -238,30 +238,15 @@ fn config_row(
         .child(Input::new(&label).small().w_full())
         .child(Select::new(&task).placeholder("Task").w_full())
         .child(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .child(Input::new(&path).small().w_full()),
-                )
-                .child(
-                    Button::new(SharedString::from(format!("cfg-browse-{id}")))
-                        .icon(IconName::FolderOpen)
-                        .outline()
-                        .xsmall()
-                        .on_click(move |_, window, cx| {
-                            pick_path(
-                                browse.clone(),
-                                "Select config file".into(),
-                                false,
-                                window,
-                                cx,
-                            )
-                        }),
-                ),
+            ui::FieldRow::new(Input::new(&path).small().w_full()).child(
+                Button::new(SharedString::from(format!("cfg-browse-{id}")))
+                    .icon(IconName::FolderOpen)
+                    .outline()
+                    .with_size(ui::APP_CONTROL_SIZE)
+                    .on_click(move |_, window, cx| {
+                        ui::pick_into_app(window, cx, browse.clone(), "Select config file", false)
+                    }),
+            ),
         )
         .child(
             h_flex()
@@ -271,7 +256,7 @@ fn config_row(
                 .child(
                     Button::new(SharedString::from(format!("cfg-cancel-{id}")))
                         .ghost()
-                        .xsmall()
+                        .with_size(ui::APP_CONTROL_SIZE)
                         .label("Cancel")
                         .on_click(move |_, _, cx| {
                             cancel.update(cx, |state, cx| {
@@ -283,7 +268,7 @@ fn config_row(
                 .child(
                     Button::new(SharedString::from(format!("cfg-save-{id}")))
                         .primary()
-                        .xsmall()
+                        .with_size(ui::APP_CONTROL_SIZE)
                         .label(if index.is_some() { "Save" } else { "Add" })
                         .on_click(move |_, _, cx| {
                             AppSettings::upsert_task_config(
@@ -402,7 +387,7 @@ fn server_row(
                         Button::new(SharedString::from(format!("test-{id}")))
                             .label("Test")
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Check the host, then the credentials")
                             .on_click(move |_, _, cx| {
                                 test_server(idx, url.clone(), creds.clone(), cx)
@@ -412,7 +397,7 @@ fn server_row(
                         Button::new(SharedString::from(format!("srv-edit-{id}")))
                             .label("Edit")
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| {
                                 toggle.update(cx, |state, cx| {
                                     state.toggle(Some(idx));
@@ -424,7 +409,7 @@ fn server_row(
                         Button::new(SharedString::from(format!("srv-dup-{id}")))
                             .icon(IconName::Copy)
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Duplicate")
                             .on_click(move |_, _, cx| {
                                 // A copy has not been tested, whatever the original knows.
@@ -438,7 +423,7 @@ fn server_row(
                         Button::new(SharedString::from(format!("srv-remove-{id}")))
                             .icon(IconName::Close)
                             .ghost()
-                            .xsmall()
+                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| AppSettings::remove_server_config(idx, cx)),
                     ),
             )
@@ -482,30 +467,21 @@ fn server_row(
         .child(Input::new(&label).small().w_full())
         .child(Input::new(&url).small().w_full())
         .child(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .child(Input::new(&creds).small().w_full()),
-                )
-                .child(
-                    Button::new(SharedString::from(format!("srv-browse-{id}")))
-                        .icon(IconName::FolderOpen)
-                        .outline()
-                        .xsmall()
-                        .on_click(move |_, window, cx| {
-                            pick_path(
-                                browse.clone(),
-                                "Select credentials file".into(),
-                                false,
-                                window,
-                                cx,
-                            )
-                        }),
-                ),
+            ui::FieldRow::new(Input::new(&creds).small().w_full()).child(
+                Button::new(SharedString::from(format!("srv-browse-{id}")))
+                    .icon(IconName::FolderOpen)
+                    .outline()
+                    .with_size(ui::APP_CONTROL_SIZE)
+                    .on_click(move |_, window, cx| {
+                        ui::pick_into_app(
+                            window,
+                            cx,
+                            browse.clone(),
+                            "Select credentials file",
+                            false,
+                        )
+                    }),
+            ),
         )
         .child(
             Checkbox::new(SharedString::from(format!("srv-confirm-box-{id}")))
@@ -531,7 +507,7 @@ fn server_row(
                 .child(
                     Button::new(SharedString::from(format!("srv-cancel-{id}")))
                         .ghost()
-                        .xsmall()
+                        .with_size(ui::APP_CONTROL_SIZE)
                         .label("Cancel")
                         .on_click(move |_, _, cx| {
                             cancel.update(cx, |state, cx| {
@@ -543,7 +519,7 @@ fn server_row(
                 .child(
                     Button::new(SharedString::from(format!("srv-save-{id}")))
                         .primary()
-                        .xsmall()
+                        .with_size(ui::APP_CONTROL_SIZE)
                         .label(if index.is_some() { "Save" } else { "Add" })
                         .on_click(move |_, _, cx| {
                             AppSettings::upsert_server_config(
@@ -612,32 +588,4 @@ fn test_server(index: usize, url: String, credentials_file: String, cx: &mut App
         });
     })
     .detach();
-}
-
-fn pick_path(
-    input: Entity<InputState>,
-    prompt: SharedString,
-    directories: bool,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let receiver = cx.prompt_for_paths(PathPromptOptions {
-        files: !directories,
-        directories,
-        multiple: false,
-        prompt: Some(prompt),
-    });
-    window
-        .spawn(cx, async move |cx| {
-            if let Ok(Ok(Some(paths))) = receiver.await
-                && let Some(path) = paths.first()
-            {
-                let value = path.to_string_lossy().to_string();
-                cx.update(|window, cx| {
-                    input.update(cx, |state, cx| state.set_value(value, window, cx));
-                })
-                .ok();
-            }
-        })
-        .detach();
 }

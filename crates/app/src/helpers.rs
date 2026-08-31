@@ -4,8 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
-use gpui::*;
-use gpui_component::input::InputState;
+use gpui::App;
 use settings::AppSettings;
 
 /// `{workbench_path}/input_data` from the `workbench_path` setting, or `None` when it's empty.
@@ -63,66 +62,6 @@ pub fn per_user_workbench_dir() -> Option<PathBuf> {
             .join("islandora_workbench_gui")
             .join("islandora_workbench"),
     )
-}
-
-/// Browse for a file or folder and write the chosen path into `input`.
-///
-/// Generic over the calling view — the workspace and the config builder both use it.
-pub fn get_file<T: 'static>(
-    window: &mut Window,
-    cx: &mut Context<T>,
-    input: &Entity<InputState>,
-    prompt: SharedString,
-    is_folder: bool,
-) {
-    let receiver = cx.prompt_for_paths(PathPromptOptions {
-        files: !is_folder,
-        directories: is_folder,
-        multiple: false,
-        prompt: Some(prompt),
-    });
-
-    let input = input.clone();
-    cx.spawn_in(window, async move |_, cx| {
-        if let Ok(Ok(Some(paths))) = receiver.await
-            && let Some(path) = paths.first()
-        {
-            cx.update(|window, cx| {
-                input.update(cx, |state, cx| {
-                    state.set_value(path.to_string_lossy().to_string(), window, cx);
-                });
-            })
-            .ok();
-        }
-    })
-    .detach();
-}
-
-/// Opens a folder in the system file manager.
-pub fn _open_folder(path: &Path) -> std::io::Result<()> {
-    if !path.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("open_folder expects a directory: {}", path.display()),
-        ));
-    }
-
-    #[cfg(windows)]
-    {
-        Command::new("explorer").arg(path).spawn()?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(path).spawn()?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open").arg(path).spawn()?;
-    }
-
-    Ok(())
 }
 
 /// Opens the file manager and selects `path`.

@@ -170,36 +170,6 @@ pub(crate) fn field_id(parts: &[&str]) -> SharedString {
     parts.join("#").into()
 }
 
-/// Open a native file/folder picker and copy the selected path into a builder input.
-/// Kept here so the config builder owns all of its window and dialog behavior.
-pub(crate) fn get_file<T: 'static>(
-    window: &mut Window,
-    cx: &mut Context<T>,
-    input: &Entity<InputState>,
-    prompt: SharedString,
-    is_folder: bool,
-) {
-    let receiver = cx.prompt_for_paths(PathPromptOptions {
-        files: !is_folder,
-        directories: is_folder,
-        multiple: false,
-        prompt: Some(prompt),
-    });
-    let input = input.clone();
-    cx.spawn_in(window, async move |_, cx| {
-        if let Ok(Ok(Some(paths))) = receiver.await
-            && let Some(path) = paths.first()
-        {
-            _ = cx.update(|window, cx| {
-                input.update(cx, |state, cx| {
-                    state.set_value(path.to_string_lossy().to_string(), window, cx);
-                });
-            });
-        }
-    })
-    .detach();
-}
-
 fn link_saved_child(parent: &std::path::Path, child: &std::path::Path) -> Result<(), String> {
     let mut draft = ConfigDraft::load(parent).map_err(|error| error.to_string())?;
     let reference = child

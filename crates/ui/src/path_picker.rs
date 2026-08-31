@@ -1,5 +1,6 @@
 //! Reusable path-picker controls. Callers own the selected-path behavior.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::prelude::FluentBuilder as _;
@@ -81,23 +82,69 @@ impl RenderOnce for PathPicker {
     }
 }
 
-#[derive(IntoElement)]
-pub struct PathPickerBrowseRow<B: IntoElement + 'static> {
-    pub input: Entity<InputState>,
-    pub browse: B,
+/// Browse for a file or folder and write the chosen path into `input`.
+///
+/// Two entry points rather than one because the two call shapes are genuinely different: a view
+/// renders from a `Context<T>`, while `SettingItem::render` closures only ever get a bare
+/// `&mut App`. The dialog options and the write are shared; only the spawn differs.
+///
+/// ponytail: the `oneshot::Receiver` these hand back is never named, so `ui` needs neither
+/// `futures` nor `anyhow` as a dependency. That costs one duplicated `PathPromptOptions` literal.
+pub fn pick_into<T: 'static>(
+    window: &mut Window,
+    cx: &mut Context<T>,
+    input: &Entity<InputState>,
+    prompt: impl Into<SharedString>,
+    is_folder: bool,
+) {
+    let receiver = cx.prompt_for_paths(PathPromptOptions {
+        files: !is_folder,
+        directories: is_folder,
+        multiple: false,
+        prompt: Some(prompt.into()),
+    });
+    let input = input.clone();
+    cx.spawn_in(window, async move |_, cx| {
+        if let Some(path) = picked(receiver.await) {
+            set_input_path(&input, path, cx);
+        }
+    })
+    .detach();
 }
 
-impl<B: IntoElement + 'static> RenderOnce for PathPickerBrowseRow<B> {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        h_flex()
-            .gap_2()
-            .w_full()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .child(Input::new(&self.input).disabled(true).w_full()),
-            )
-            .child(self.browse)
-    }
+/// [`pick_into`] for callers holding only an `App`.
+pub fn pick_into_app(
+    window: &mut Window,
+    cx: &mut App,
+    input: Entity<InputState>,
+    prompt: impl Into<SharedString>,
+    is_folder: bool,
+) {
+    let receiver = cx.prompt_for_paths(PathPromptOptions {
+        files: !is_folder,
+        directories: is_folder,
+        multiple: false,
+        prompt: Some(prompt.into()),
+    });
+    window
+        .spawn(cx, async move |cx| {
+            if let Some(path) = picked(receiver.await) {
+                set_input_path(&input, path, cx);
+            }
+        })
+        .detach();
+}
+
+/// A cancelled dialog, a dropped channel, and a platform error all mean "the user picked
+/// nothing", so they collapse into one `None`.
+fn picked<E, C>(result: Result<Result<Option<Vec<PathBuf>>, E>, C>) -> Option<PathBuf> {
+    result.ok()?.ok()?.into_iter().flatten().next()
+}
+
+fn set_input_path(input: &Entity<InputState>, path: PathBuf, cx: &mut AsyncWindowContext) {
+    let value = path.to_string_lossy().to_string();
+    cx.update(|window, cx| {
+        input.update(cx, |state, cx| state.set_value(value, window, cx));
+    })
+    .ok();
 }

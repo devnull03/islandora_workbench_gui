@@ -12,11 +12,11 @@ use gpui_component::{
     h_flex, input::Input, label::Label, select::Select, v_flex,
 };
 use settings::AppSettings;
-use ui::{APP_CONTROL_SIZE, LabeledField, StepSection, app_button};
+use ui::{APP_CONTROL_SIZE, FieldRow, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
-use crate::helpers::{get_file, reveal_in_folder, workbench_input_data_dir};
+use crate::helpers::{reveal_in_folder, workbench_input_data_dir};
 use config_builder::open_config_builder;
 
 impl Workspace {
@@ -28,34 +28,29 @@ impl Workspace {
         let state = self.source_field(cx).clone();
 
         LabeledField::new(if is_csv { "Source CSV" } else { "Sheet URL" }).child(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .child(
-                    div().flex_1().min_w(px(0.)).child(
-                        Input::new(&state)
-                            .with_size(APP_CONTROL_SIZE)
-                            .w_full()
-                            .disabled(!idle),
-                    ),
+            FieldRow::new(
+                Input::new(&state)
+                    .with_size(APP_CONTROL_SIZE)
+                    .w_full()
+                    .disabled(!idle),
+            )
+            .when(is_csv, |row| {
+                row.child(
+                    app_button("browse-source-csv")
+                        .icon(IconName::FolderOpen)
+                        .outline()
+                        .disabled(!idle)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            ui::pick_into(
+                                window,
+                                cx,
+                                &this.source_csv,
+                                "Select the source CSV",
+                                false,
+                            );
+                        })),
                 )
-                .when(is_csv, |row| {
-                    row.child(
-                        app_button("browse-source-csv")
-                            .icon(IconName::FolderOpen)
-                            .outline()
-                            .disabled(!idle)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                get_file(
-                                    window,
-                                    cx,
-                                    &this.source_csv,
-                                    "Select the source CSV".into(),
-                                    false,
-                                );
-                            })),
-                    )
-                }),
+            }),
         )
     }
 
@@ -90,32 +85,27 @@ impl Workspace {
                     .child(self.render_source_field(cx))
                     .child(
                         LabeledField::new("Ingest dir").child(
-                            h_flex()
-                                .w_full()
-                                .gap_2()
-                                .child(
-                                    div().flex_1().min_w(px(0.)).child(
-                                        Input::new(&self.ingest_files_dir)
-                                            .with_size(APP_CONTROL_SIZE)
-                                            .disabled(true)
-                                            .w_full(),
-                                    ),
-                                )
-                                .child(
-                                    app_button("browse-ingest-dir")
-                                        .icon(IconName::FolderOpen)
-                                        .outline()
-                                        .disabled(!idle)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            get_file(
-                                                window,
-                                                cx,
-                                                &this.ingest_files_dir,
-                                                "Select directory for ingest files".into(),
-                                                true,
-                                            );
-                                        })),
-                                ),
+                            FieldRow::new(
+                                Input::new(&self.ingest_files_dir)
+                                    .with_size(APP_CONTROL_SIZE)
+                                    .disabled(true)
+                                    .w_full(),
+                            )
+                            .child(
+                                app_button("browse-ingest-dir")
+                                    .icon(IconName::FolderOpen)
+                                    .outline()
+                                    .disabled(!idle)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        ui::pick_into(
+                                            window,
+                                            cx,
+                                            &this.ingest_files_dir,
+                                            "Select directory for ingest files",
+                                            true,
+                                        );
+                                    })),
+                            ),
                         ),
                     )
                     .child(
@@ -197,38 +187,32 @@ impl Workspace {
 
         StepSection::new("2", "Config")
             .child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div().flex_1().min_w(px(0.)).child(
-                            Select::new(&self.saved_config_select)
-                                .placeholder("Select saved config…")
-                                .with_size(APP_CONTROL_SIZE)
-                                .disabled(!idle)
-                                .w_full(),
-                        ),
-                    )
-                    .child(
-                        app_button("edit-config")
-                            .outline()
-                            .label("Edit")
-                            .disabled(!selected)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let Some(path) = this.saved_config_select.read(cx).selected_value()
-                                else {
-                                    return;
-                                };
-                                open_config_builder(Some(PathBuf::from(path.as_ref())), cx);
-                            })),
-                    )
-                    .child(
-                        app_button("new-config")
-                            .outline()
-                            .label("New")
-                            .on_click(|_, _, cx| open_config_builder(None, cx)),
-                    ),
+                FieldRow::new(
+                    Select::new(&self.saved_config_select)
+                        .placeholder("Select saved config…")
+                        .with_size(APP_CONTROL_SIZE)
+                        .disabled(!idle)
+                        .w_full(),
+                )
+                .child(
+                    app_button("edit-config")
+                        .outline()
+                        .label("Edit")
+                        .disabled(!selected)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let Some(path) = this.saved_config_select.read(cx).selected_value()
+                            else {
+                                return;
+                            };
+                            open_config_builder(Some(PathBuf::from(path.as_ref())), cx);
+                        })),
+                )
+                .child(
+                    app_button("new-config")
+                        .outline()
+                        .label("New")
+                        .on_click(|_, _, cx| open_config_builder(None, cx)),
+                ),
             )
             .child(
                 Label::new(self.config_summary.clone().unwrap_or_else(|| {
@@ -254,27 +238,21 @@ impl Workspace {
 
         StepSection::new("3", "Server")
             .child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div().flex_1().min_w(px(0.)).child(
-                            Select::new(&self.server_select)
-                                .placeholder("Select server…")
-                                .with_size(APP_CONTROL_SIZE)
-                                .disabled(!idle)
-                                .w_full(),
-                        ),
-                    )
-                    .child(
-                        app_button("manage-servers")
-                            .outline()
-                            .label("Manage")
-                            .on_click(|_, _, cx| {
-                                cx.dispatch_action(&crate::app_menus::OpenSettings);
-                            }),
-                    ),
+                FieldRow::new(
+                    Select::new(&self.server_select)
+                        .placeholder("Select server…")
+                        .with_size(APP_CONTROL_SIZE)
+                        .disabled(!idle)
+                        .w_full(),
+                )
+                .child(
+                    app_button("manage-servers")
+                        .outline()
+                        .label("Manage")
+                        .on_click(|_, _, cx| {
+                            cx.dispatch_action(&crate::app_menus::OpenSettings);
+                        }),
+                ),
             )
             .child(
                 h_flex()

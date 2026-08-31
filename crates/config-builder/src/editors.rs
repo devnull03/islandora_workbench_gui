@@ -20,8 +20,8 @@ use workbench_integration::config::{
 };
 
 use super::{ConfigBuilder, field_id};
-use crate::get_file;
-use ui::{APP_CONTROL_SIZE, DetailSelectItem, app_button};
+
+use ui::{APP_CONTROL_SIZE, DetailSelectItem, FieldRow, app_button};
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
 /// setting has no upstream default, so the row still renders something editable.
@@ -437,14 +437,7 @@ impl ConfigBuilder {
                 };
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
                 let browse_input = input.clone();
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
-                    )
+                FieldRow::new(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full())
                     .child(
                         app_button(SharedString::from(format!("browse-{key}")))
                             .outline()
@@ -453,7 +446,7 @@ impl ConfigBuilder {
                             // The picker writes into the input asynchronously and the input's
                             // own Change event is what commits, so there is nothing to do here.
                             .on_click(cx.listener(move |_: &mut Self, _, window, cx| {
-                                get_file(window, cx, &browse_input, prompt.clone(), is_dir);
+                                ui::pick_into(window, cx, &browse_input, prompt.clone(), is_dir);
                             })),
                     )
                     .into_any_element()

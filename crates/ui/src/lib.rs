@@ -6,6 +6,7 @@
 //! different heights, which is the specific defect this crate exists to prevent.
 
 mod controls;
+mod field_row;
 mod labeled_field;
 mod labeled_select;
 mod path_picker;
@@ -15,8 +16,9 @@ pub mod theme;
 pub mod tokens;
 
 pub use controls::{APP_CONTROL_SIZE, app_button};
+pub use field_row::FieldRow;
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;
-pub use path_picker::{PathPickFn, PathPicker, PathPickerBrowseRow};
+pub use path_picker::{PathPickFn, PathPicker, pick_into, pick_into_app};
 pub use select_items::DetailSelectItem;
 pub use step_section::StepSection;
