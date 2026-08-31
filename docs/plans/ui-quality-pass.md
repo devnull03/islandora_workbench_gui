@@ -66,7 +66,7 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 
 ### 4. Recursive secondary configs (`1d`, `2a`)
 
-- [ ] Resolve the complete `secondary_tasks` graph relative to each owning config, with a model
+- [x] Resolve the complete `secondary_tasks` graph relative to each owning config, with a model
   that records path, label, task, setting count, children, load failure, and ancestry.
 - [ ] Render nested rows with `1`, `1.1`, `1.1.1` numbering, connector indentation, expand/collapse,
   **Collapse all**, per-node Open/Unlink, and **Add a config under this one**.
