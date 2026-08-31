@@ -40,7 +40,7 @@ impl RowEditor {
     }
 
     /// The add-a-row affordance, drawn as the last child inside a dashed strip.
-    pub fn add(mut self, add: impl IntoElement) -> Self {
+    pub fn add_row(mut self, add: impl IntoElement) -> Self {
         self.add = Some(add.into_any_element());
         self
     }

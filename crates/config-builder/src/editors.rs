@@ -21,10 +21,10 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::RowEditor;
-use ui::tokens::{GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
+use ui::tokens::{CHAR_FIELD_W, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
 use ui::{
-    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, SettingRow, app_button,
+    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, MAX_SEGMENTS,
+    RowEditor, Segmented, SettingRow, app_button,
 };
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
@@ -389,7 +389,7 @@ impl ConfigBuilder {
                 let mut items: Vec<DetailSelectItem> = Vec::new();
                 if nullable {
                     items.push(DetailSelectItem {
-                        label: "not set".into(),
+                        label: "none".into(),
                         subtitle: SharedString::default(),
                         value: SharedString::default(),
                         divider_above: false,
@@ -407,7 +407,34 @@ impl ConfigBuilder {
                         }),
                 );
                 let selected = value.as_str().map(|s| SharedString::from(s.to_string()));
-                let state = self.select(id, &key, items, selected, window, cx);
+                let state = self.select(
+                    id.clone(),
+                    &key,
+                    items.clone(),
+                    selected.clone(),
+                    window,
+                    cx,
+                );
+
+                // A short enum reads better as every option at once than as a dropdown that hides
+                // three of four. The select state still exists and is still what read_widgets
+                // reads back — the segments write into it rather than owning a rival answer.
+                if items.len() <= MAX_SEGMENTS {
+                    let write = state.clone();
+                    return Segmented::new(
+                        id,
+                        items.iter().map(|i| (i.value.clone(), i.label.clone())),
+                    )
+                    .selected(selected)
+                    .on_select(move |value, window, cx| {
+                        let value = value.clone();
+                        write.update(cx, |state, cx| {
+                            state.set_selected_value(&value, window, cx);
+                        });
+                    })
+                    .into_any_element();
+                }
+
                 Select::new(&state)
                     .placeholder("Choose…")
                     .with_size(APP_CONTROL_SIZE)
@@ -439,13 +466,19 @@ impl ConfigBuilder {
                     .into_any_element()
             }
 
-            Shape::String | Shape::Delimiter | Shape::Url => {
-                let placeholder = if def.shape == Shape::Delimiter {
-                    "|"
-                } else {
-                    ""
-                };
-                let input = self.input(id, &key, &scalar_text(&value), placeholder, window, cx);
+            // One character, so a full-width field would be a lie about what fits. 44px is the
+            // design language`s char field: wide enough to see the glyph, narrow enough that
+            // nobody types a word into it.
+            Shape::Delimiter => {
+                let input = self.input(id, &key, &scalar_text(&value), "|", window, cx);
+                div()
+                    .w(CHAR_FIELD_W)
+                    .child(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full())
+                    .into_any_element()
+            }
+
+            Shape::String | Shape::Url => {
+                let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
                 Input::new(&input)
                     .with_size(APP_CONTROL_SIZE)
                     .w_full()
@@ -596,7 +629,7 @@ impl ConfigBuilder {
         }
 
         let owned = key.clone();
-        list.add(
+        list.add_row(
             h_flex()
                 .gap_2()
                 .child(
