@@ -64,7 +64,12 @@ impl Render for StatusBar {
                 }
                 children.push(item.view.clone().into_any_element());
             }
-            h_flex().gap_3().items_center().children(children)
+            h_flex()
+                .gap_3()
+                .items_center()
+                .text_xs()
+                .text_color(cx.theme().foreground)
+                .children(children)
         };
 
         let items = cx.try_global::<StatusBarRegistry>().map(|r| r.items());
@@ -86,6 +91,7 @@ impl Render for StatusBar {
             // gpui-component keeps the title-bar constant private; its upstream bar is 34 px.
             .h(px(34.))
             .px_3()
+            .text_xs()
             .text_color(cx.theme().foreground)
             .left(left)
             .child(

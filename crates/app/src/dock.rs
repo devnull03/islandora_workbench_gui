@@ -5,7 +5,6 @@
 //! between three docks and its bar buttons have to follow them; with a single panel in a single
 //! dock there is nothing to track — the button toggles the bottom dock and that is the whole model.
 
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, Sizable as _,
@@ -175,6 +174,7 @@ impl Render for LogDockButton {
             .upgrade()
             .is_some_and(|area| area.read(cx).is_dock_open(DockPlacement::Bottom));
         let hover_bg = cx.theme().secondary_hover;
+        let hover_fg = cx.theme().primary;
         let dock = self.dock.clone();
 
         h_flex()
@@ -184,10 +184,9 @@ impl Render for LogDockButton {
             .py(px(2.))
             .rounded_md()
             .cursor_pointer()
-            .hover(move |this| this.bg(hover_bg))
-            .when(open, |this| this.text_color(cx.theme().primary))
+            .hover(move |this| this.bg(hover_bg).text_color(hover_fg))
             // The panel-bottom glyph fills in when the dock is open — the button says its state
-            // twice, in colour and in shape, which is what makes it readable at a glance.
+            // in shape without forcing an accent colour while the control is idle.
             .child(
                 Icon::new(if open {
                     IconName::PanelBottomOpen

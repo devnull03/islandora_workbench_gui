@@ -8,6 +8,7 @@ mod streaming;
 pub use log_viewer::LogViewer;
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use gpui::*;
 use gpui_component::{
@@ -72,6 +73,7 @@ pub struct Workspace {
     synced_task_labels: Vec<SharedString>,
     synced_server_labels: Vec<SharedString>,
     synced_script_values: Vec<SharedString>,
+    last_script_scan: Instant,
 
     /// `14 settings · runs 2 secondary configs · edited today`, and the config it describes.
     /// Cached because building it reads the file, which must not happen once per frame.
@@ -230,6 +232,7 @@ impl Workspace {
             synced_task_labels: Vec::new(),
             synced_server_labels: Vec::new(),
             synced_script_values: Vec::new(),
+            last_script_scan: Instant::now(),
             config_summary: None,
             summarised_config: None,
             _subscriptions,
@@ -326,21 +329,24 @@ impl Workspace {
             });
         }
 
-        // Scripts come from a folder, not from settings rows, so the only way to notice one was
-        // added is to look. Comparing values keeps that to a directory read per render.
-        let script_items = sources::processor_items(cx);
-        let script_values: Vec<SharedString> =
-            script_items.iter().map(|i| i.value.clone()).collect();
-        if script_values != self.synced_script_values {
-            self.synced_script_values = script_values;
-            let keep = self.processor_select.read(cx).selected_value().cloned();
-            self.processor_select.update(cx, |state, cx| {
-                state.set_items(script_items, window, cx);
-                // A script that disappeared leaves nothing selected; the caller sees `Builtin`.
-                if let Some(value) = keep {
-                    state.set_selected_value(&value, window, cx);
-                }
-            });
+        // Scripts live on disk rather than in settings. Throttle discovery so typing and spinner
+        // redraws do not become a directory scan on every frame.
+        if self.last_script_scan.elapsed() >= Duration::from_secs(2) {
+            self.last_script_scan = Instant::now();
+            let script_items = sources::processor_items(cx);
+            let script_values: Vec<SharedString> =
+                script_items.iter().map(|i| i.value.clone()).collect();
+            if script_values != self.synced_script_values {
+                self.synced_script_values = script_values;
+                let keep = self.processor_select.read(cx).selected_value().cloned();
+                self.processor_select.update(cx, |state, cx| {
+                    state.set_items(script_items, window, cx);
+                    // A script that disappeared leaves nothing selected; the caller sees `Builtin`.
+                    if let Some(value) = keep {
+                        state.set_selected_value(&value, window, cx);
+                    }
+                });
+            }
         }
 
         self.sync_config_summary(cx);

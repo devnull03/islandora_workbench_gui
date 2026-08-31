@@ -232,6 +232,12 @@ normalises them to `(left, Vec<right>)` pairs. Adding a container shape means an
 workspace now follows the same upstream git components as qrate. The Settings row still uses
 `Settings2`; revisit it against the current icon catalogue when that row is next redesigned.
 
+**A new builder window is re-keyed after its first successful save.** The open-window registry
+removes its `None` entry and inserts the saved path with the same window handle. “New config” can
+therefore open a fresh draft, while Edit focuses the one live draft for that file. Linked-config
+existence checks are cached and refreshed at most every two seconds instead of calling `is_file`
+for every link on every frame.
+
 **Not built, deliberately:** keyboard navigation in the search palette (`↑↓`/Enter/Esc from
 mockup `1a` — it is click-and-Add today), drag-to-reorder in the chain list, and the
 `csv_value_templates` column/template header row. None blocks the flow; add them when the

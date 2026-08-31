@@ -10,6 +10,7 @@ mod dock;
 mod helpers;
 mod logging;
 mod status_items;
+mod theming;
 mod update_check;
 mod workspace;
 
@@ -27,8 +28,8 @@ use window_wrapper::{
 
 use crate::{
     app_menus::{
-        CheckForUpdates, CopyDebugInfo, OpenLogsFolder, OpenSettings, Quit, REPO_URL, ReportIssue,
-        ToggleLog, app_menus,
+        CopyDebugInfo, OpenLogsFolder, OpenSettings, Quit, REPO_URL, ReportIssue, ToggleLog,
+        app_menus,
     },
     app_settings::build_pages,
     dock::{LogDockButton, MainDock},
@@ -166,6 +167,8 @@ fn main() {
         cx.set_global(SettingsWindowHandle::default());
         cx.set_global(ConfigBuilderWindows::default());
 
+        theming::init(cx);
+
         // Written on first launch rather than defaulted silently: the Updates switch reads the
         // stored value, so without this it would sit in the off position while checks were on.
         if !AppSettings::get(cx)
@@ -238,7 +241,6 @@ fn main() {
             let body = logging::urlencode(&logging::debug_info(cx, 30));
             cx.open_url(&format!("{REPO_URL}/issues/new?body={body}"));
         });
-        cx.on_action(|_: &CheckForUpdates, cx| cx.open_url(&update_check::releases_url()));
         cx.on_action(|_: &OpenLogsFolder, _| match logging::reveal_target() {
             Some(target) => {
                 if let Err(err) = helpers::reveal_in_folder(&target) {

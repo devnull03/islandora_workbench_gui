@@ -87,7 +87,7 @@ The interpreter is Workbench's own (`WbInfo::python_command`, `uv run python` wh
 with the workbench directory as the working directory, so a script has the dependencies
 Workbench has without installing anything of its own.
 
-Eleven things the plan did not predict:
+Fifteen things the plan did not predict:
 
 1. **Source and processor had to be split into two enums, not one.** `process_google_sheet_source`
    fused acquisition and transformation. `preprocess.rs` now has `InputSource` (GoogleSheet, CsvFile)
@@ -124,6 +124,14 @@ Eleven things the plan did not predict:
 11. **The title and status bars now share dimensions and typography.** The status bar uses
     gpui-component's native `StatusBar` and the title bar's 34 px height, rather than duplicating
     the bar in a hand-built flex row.
+12. **The status bar owns its item typography.** Items use neutral, borderless ghost controls and
+    inherit the bar's `text_xs` foreground; hover is the only general accent treatment.
+13. **The server indicator pings the saved default at startup,** not only after a later settings
+    mutation.
+14. **The update result explicitly refreshes open windows.** Its item is absent before a result,
+    so notifying that hidden entity cannot make the status bar discover it.
+15. **The run log is bounded.** It retains roughly the latest 5,000 lines and trims in batches,
+    preventing both the backing vector and the rendered element count from growing forever.
 
 `Operation::GdriveBusy` / `WorkflowStage::GdriveProcessed` / `gdrive_log.rs` were renamed to
 `Preprocessing` / `SourceProcessed` / `preprocess_log.rs` — nothing about them was ever

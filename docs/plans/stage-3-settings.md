@@ -112,6 +112,9 @@ Both open questions were put to the user and answered:
    a window resize. A definite-height `min_h_0` parent is the required layout.
 10. **Settings has a window-wide shortcut.** **Ctrl+,** on Windows/Linux and **Command+,** on macOS
     dispatches the same `OpenSettings` action as the menu item, so the menu prints the shortcut too.
+11. **Appearance is a persisted application preference.** A fresh install starts dark; the Dark
+    theme switch under General → Appearance applies light/dark theme changes to all open windows
+    and stores the choice in `AppSettings`.
 
 **Deliberately not built:** the Profiles page and the active-profile footer (Stage 5 owns both,
 and there is nothing to switch between until profiles exist). `AppSettings` is now split the way

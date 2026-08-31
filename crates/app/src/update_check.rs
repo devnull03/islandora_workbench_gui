@@ -14,10 +14,9 @@ use std::time::Duration;
 
 use gpui::*;
 use gpui_component::{ActiveTheme as _, Icon, IconName, Sizable as _, h_flex};
+use semver::Version;
 use serde::Deserialize;
 use settings::AppSettings;
-
-use crate::app_menus::REPO_URL;
 
 /// Setting key for whether to check for updates at startup. On by default — a user who never
 /// hears about a fix does not get it.
@@ -81,6 +80,9 @@ pub fn check_on_startup(cx: &mut App) {
                 version: manifest.version.into(),
                 release_notes_url: manifest.release_notes_url.into(),
             });
+            // This view is absent from the element tree until the global exists. Refresh every
+            // window so the status bar gets a chance to add it immediately.
+            cx.refresh_windows();
         });
     })
     .detach();
@@ -100,34 +102,11 @@ fn fetch(url: &str) -> Option<Manifest> {
 
 /// Whether `candidate` is a later release than `current`.
 ///
-/// Hand-rolled rather than pulling in semver: the only comparison needed is "is the feed ahead of
-/// us", and both sides are versions this project itself produces. A pre-release suffix loses to
-/// the same numbers without one (`0.2.0-alpha.1` < `0.2.0`) and is otherwise compared as text,
-/// which orders `alpha.1 < alpha.2 < beta.1` correctly and is all the ordering we ship.
-///
-/// ponytail: reach for the `semver` crate if channels or build metadata ever enter the feed.
 fn is_newer(candidate: &str, current: &str) -> bool {
-    fn parts(version: &str) -> ([u32; 3], String) {
-        let (core, pre) = version.split_once('-').unwrap_or((version, ""));
-        let core = core.split_once('+').map(|(c, _)| c).unwrap_or(core);
-        let mut numbers = [0; 3];
-        for (slot, text) in numbers.iter_mut().zip(core.split('.')) {
-            *slot = text.parse().unwrap_or(0);
-        }
-        (numbers, pre.to_string())
-    }
-
-    let (candidate_core, candidate_pre) = parts(candidate);
-    let (current_core, current_pre) = parts(current);
-    if candidate_core != current_core {
-        return candidate_core > current_core;
-    }
-    match (candidate_pre.is_empty(), current_pre.is_empty()) {
-        // Same numbers, and only one of them is a release: the release is the later one.
-        (true, false) => true,
-        (false, true) => false,
-        _ => candidate_pre > current_pre,
-    }
+    let (Ok(candidate), Ok(current)) = (Version::parse(candidate), Version::parse(current)) else {
+        return false;
+    };
+    candidate > current
 }
 
 /// Status-bar item: silent until there is an update, then a link to the release notes.
@@ -155,6 +134,7 @@ impl Render for UpdateIndicator {
             return div();
         };
         let hover_bg = cx.theme().secondary_hover;
+        let hover_fg = cx.theme().primary;
 
         div().child(
             h_flex()
@@ -164,8 +144,7 @@ impl Render for UpdateIndicator {
                 .py(px(2.))
                 .rounded_md()
                 .cursor_pointer()
-                .text_color(cx.theme().primary)
-                .hover(move |this| this.bg(hover_bg))
+                .hover(move |this| this.bg(hover_bg).text_color(hover_fg))
                 .child(Icon::new(IconName::ArrowDown).small())
                 .child(format!("Update to {}", update.version))
                 .tooltip(|window, cx| {
@@ -175,12 +154,6 @@ impl Render for UpdateIndicator {
                 .on_click(move |_, _, cx| cx.open_url(&update.release_notes_url)),
         )
     }
-}
-
-/// Where Help ▸ Check for Updates sends someone who has the check switched off, or who asked
-/// before the answer came back.
-pub fn releases_url() -> String {
-    format!("{REPO_URL}/releases/latest")
 }
 
 #[cfg(test)]
@@ -206,6 +179,7 @@ mod tests {
         assert!(is_newer("0.1.0", "0.1.0-alpha.1"));
         assert!(!is_newer("0.1.0-alpha.1", "0.1.0"));
         assert!(is_newer("0.1.0-alpha.2", "0.1.0-alpha.1"));
+        assert!(is_newer("0.1.0-alpha.10", "0.1.0-alpha.9"));
         assert!(!is_newer("0.1.0-alpha.1", "0.1.0-alpha.2"));
     }
 

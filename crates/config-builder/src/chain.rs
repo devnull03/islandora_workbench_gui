@@ -7,7 +7,10 @@
 //! Nesting deeper than one level, the run-order strip and the loop guardrails are Stage 6 —
 //! see `docs/plans/stage-6-chain-map.md`.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
@@ -28,6 +31,17 @@ impl ConfigBuilder {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let tasks = self.draft.resolved_secondary_tasks();
+        let now = Instant::now();
+        if self
+            .last_chain_scan
+            .is_none_or(|last| now.duration_since(last) >= Duration::from_secs(2))
+        {
+            self.chain_file_states = tasks
+                .iter()
+                .map(|path| (path.clone(), path.is_file()))
+                .collect();
+            self.last_chain_scan = Some(now);
+        }
         let links: Vec<AnyElement> = tasks
             .iter()
             .enumerate()
@@ -67,7 +81,7 @@ impl ConfigBuilder {
     }
 
     fn render_link(&self, index: usize, path: &Path, cx: &mut Context<Self>) -> impl IntoElement {
-        let exists = path.is_file();
+        let exists = self.chain_file_states.get(path).copied().unwrap_or(false);
         let name = path
             .file_name()
             .map(|s| s.to_string_lossy().into_owned())
@@ -162,6 +176,7 @@ impl ConfigBuilder {
             cx.notify();
             return;
         }
+        self.chain_file_states.insert(path.clone(), path.is_file());
         tasks.push(path);
         self.draft.set_secondary_tasks(&tasks);
         self.forget_widgets("secondary_tasks");

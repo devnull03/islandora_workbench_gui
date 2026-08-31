@@ -6,7 +6,10 @@ pub mod ping;
 use std::path::PathBuf;
 
 use gpui::*;
-use gpui_component::{IconName, Sizable, button::Button};
+use gpui_component::{
+    IconName, Sizable,
+    button::{Button, ButtonVariants},
+};
 use settings::{AppSettings, load_app_settings};
 use window_wrapper::{BarRegistry as _, status_bar::StatusBarRegistry};
 
@@ -71,7 +74,8 @@ impl Render for OpenTerminal {
             Button::new("Open Terminal")
                 .icon(IconName::SquareTerminal)
                 .label("Open Terminal")
-                .small()
+                .ghost()
+                .xsmall()
                 .px_0()
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -90,7 +94,8 @@ impl Render for ReloadConfigs {
             Button::new("reload-configs")
                 .icon(IconName::Redo2)
                 .label("Reload")
-                .small()
+                .ghost()
+                .xsmall()
                 .px_0()
                 .cursor_pointer()
                 .tooltip("Reload settings and task configs from disk")

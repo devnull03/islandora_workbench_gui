@@ -48,6 +48,13 @@ The qrate-derived window foundation is now current independently of the numbered
   while the window is resized.
 - The app starts through `gpui_platform`, with both Wayland and X11 features enabled for Linux.
   Windows-only dependencies remain target-gated.
+- Dark is the first-run theme. General → Appearance has a persisted light/dark switch that
+  applies to every open window immediately.
+- The title bar deliberately exposes only two top-level menus: Islandora Workbench and Help.
+  Appearance and automatic-update choices live in Settings instead of duplicating controls in
+  the menu bar.
+- App-chrome hardening now includes immediate update-indicator repainting, a startup server ping,
+  bounded run logs, and throttled filesystem discovery for preprocessors and linked configs.
 
 This is infrastructure for Stage 4, not completion of Stage 4: the Config Builder is still a
 separate OS window and does not yet dock into the main window's right side.

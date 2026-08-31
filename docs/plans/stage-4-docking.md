@@ -16,6 +16,10 @@ gpui-component status bar, a shared title-bar menu, and a shortcut-driven bottom
 work proves dock state and sizing can live in `AppSettings`, but it does not yet split the Config
 Builder view from its OS-window host or add the right-side builder pane described below.
 
+The window-host registry is now safe across the future split: after a new builder saves, the same
+window handle moves from the unsaved key to its file-path key. The Stage 4 refactor must preserve
+that one-live-draft-per-path rule when it separates the view from the native window.
+
 ## Three states
 
 1. **Docked.** One window, one title bar, one status bar. The builder takes the right pane and

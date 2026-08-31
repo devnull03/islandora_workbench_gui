@@ -28,6 +28,7 @@ pub enum ServerPingState {
 
 impl ServerPingIndicator {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let initial_url = AppSettings::get(cx).default_server.clone();
         let subscription = cx.observe_global::<AppSettings>(|this, cx| {
             let new_url = AppSettings::get(cx).default_server.clone();
             if new_url == this.last_server_url {
@@ -44,11 +45,15 @@ impl ServerPingIndicator {
             this.ping(cx);
         });
 
-        Self {
+        let mut this = Self {
             state: ServerPingState::NotSet,
-            last_server_url: None,
+            last_server_url: initial_url.clone(),
             _subscription: subscription,
+        };
+        if initial_url.is_some() {
+            this.ping(cx);
         }
+        this
     }
 
     fn ping(&mut self, cx: &mut Context<Self>) {
@@ -153,14 +158,13 @@ impl Render for ServerPingIndicator {
             .h_flex()
             .items_center()
             .justify_center()
-            .text_sm()
             .gap_1()
             .child(icon)
             .child(
                 Button::new("ping-btn")
                     .label(text)
                     .ghost()
-                    .small()
+                    .xsmall()
                     .p_0()
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _window, cx| {

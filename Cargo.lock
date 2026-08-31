@@ -266,6 +266,7 @@ dependencies = [
  "gpui_platform",
  "log",
  "os_info",
+ "semver",
  "serde",
  "serde_json",
  "settings",

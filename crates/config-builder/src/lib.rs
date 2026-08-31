@@ -18,6 +18,7 @@ mod yaml_panel;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use gpui::*;
 use gpui_component::{
@@ -123,6 +124,10 @@ pub struct ConfigBuilder {
     /// Load or save failures — shown in the footer rather than swallowed.
     pub(crate) notice: Option<SharedString>,
 
+    /// Secondary-config file state is refreshed by `chain` instead of queried every frame.
+    pub(crate) chain_file_states: HashMap<PathBuf, bool>,
+    pub(crate) last_chain_scan: Option<Instant>,
+
     _subscriptions: Vec<Subscription>,
 }
 
@@ -205,6 +210,8 @@ impl ConfigBuilder {
                 .unwrap_or(true),
             saved_at: None,
             notice,
+            chain_file_states: HashMap::new(),
+            last_chain_scan: None,
             _subscriptions,
         }
     }
@@ -377,7 +384,7 @@ impl ConfigBuilder {
         Some(PathBuf::from(dir).join(format!("{stem}.yml")))
     }
 
-    fn save(&mut self, cx: &mut Context<Self>) {
+    fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.count(Severity::Error) > 0 {
             self.notice = Some("Fix the problems below before saving.".into());
             cx.notify();
@@ -424,7 +431,13 @@ impl ConfigBuilder {
             }
         });
 
-        self.draft.path = Some(path);
+        let was_new = self.draft.path.is_none();
+        self.draft.path = Some(path.clone());
+        if was_new {
+            let windows = cx.global_mut::<ConfigBuilderWindows>();
+            windows.open.remove(&None);
+            windows.open.insert(Some(path), window.window_handle());
+        }
         self.draft.label = label;
         self.saved_at = Some("Saved".into());
         self.notice = None;
@@ -590,7 +603,7 @@ impl ConfigBuilder {
                     .label("Save to library")
                     .icon(IconName::Check)
                     .disabled(errors > 0)
-                    .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             )
     }
 }

@@ -4,6 +4,8 @@ use gpui_component::{ActiveTheme, label::Label};
 
 /// Approximate visual line height for text_sm. Used for Y-position → line index mapping.
 const LINE_HEIGHT: f32 = 22.0;
+const MAX_LOG_LINES: usize = 5_000;
+const TRIM_TO_LINES: usize = 4_500;
 
 fn line_color(line: &str, cx: &App) -> Hsla {
     let t = cx.theme();
@@ -52,6 +54,14 @@ impl LogViewer {
 
     pub fn append(&mut self, line: &str, cx: &mut Context<Self>) {
         self.lines.push(line.to_string());
+        if self.lines.len() > MAX_LOG_LINES {
+            let removed = self.lines.len() - TRIM_TO_LINES;
+            self.lines.drain(..removed);
+            self.selected_range = self.selected_range.and_then(|(start, end)| {
+                (end >= removed).then(|| (start.saturating_sub(removed), end - removed))
+            });
+            self.drag_anchor = self.drag_anchor.map(|index| index.saturating_sub(removed));
+        }
         self.scroll_handle.scroll_to_bottom();
         cx.notify();
     }

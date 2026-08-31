@@ -36,6 +36,9 @@ fn exe_candidates(base: &'static str) -> Vec<&'static str> {
 pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
     vec![
         SettingPage::new("General").default_open(true).groups(vec![
+            SettingGroup::new()
+                .title("Appearance")
+                .items(vec![crate::theming::appearance_setting()]),
             SettingGroup::new().title("Runs").items(vec![
                 Setting::Switch {
                     key: "auto_accept_prompts",
