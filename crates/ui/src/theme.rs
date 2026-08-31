@@ -64,6 +64,22 @@ mod tests {
             dark.colors.title_bar.as_ref().map(|c| c.as_ref()),
             Some("#141414")
         );
+        assert_eq!(
+            dark.colors.ring.as_ref().map(|c| c.as_ref()),
+            Some("#f99d2a")
+        );
+        assert_eq!(
+            light.colors.ring.as_ref().map(|c| c.as_ref()),
+            Some("#a8410f")
+        );
+        assert_eq!(
+            dark.colors.link.as_ref().map(|c| c.as_ref()),
+            Some("#f99d2a")
+        );
+        assert_eq!(
+            light.colors.link.as_ref().map(|c| c.as_ref()),
+            Some("#a8410f")
+        );
         assert_eq!(dark.radius, Some(4));
         // Font sizes are deliberately absent: the gpui-component defaults scale with the
         // platform, and pinning them made the whole app read a size too small.

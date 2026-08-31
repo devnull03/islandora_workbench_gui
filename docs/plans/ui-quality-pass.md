@@ -85,14 +85,16 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 
 ### 5. Accent and theme fidelity
 
-- [ ] Map the design's app tokens onto GPUI theme roles rather than hard-coding canvas colours:
+- [x] Map the design's app tokens onto GPUI theme roles rather than hard-coding canvas colours:
   active accent, active wash, primary text, muted text, borders, danger, and warning.
-- [ ] Settle the design's two provisional accent families on the app-chrome amber token family;
-  use the SACDA orange only if it is later introduced as an explicit branded theme.
-- [ ] Apply accent consistently to required badges, active enum/selection state, chain markers,
+- [x] Settle the design's two provisional accent families on the app-chrome amber token family;
+  use the SACDA orange only if it is later introduced as an explicit branded theme. The light
+  mode uses the readable rust counterpart from the same token family.
+- [x] Apply accent consistently to required badges, active enum/selection state, chain markers,
   validation markers, focus rings, and the primary save action.
-- [ ] Check light and dark themes for contrast, hover/focus visibility, and no light-only literal
-  colours.
+- [x] Check light and dark theme role coverage for contrast, hover/focus visibility, and no
+  app-side light-only literal colours. Theme regression tests now cover ring/link roles in both
+  modes.
 
 ### 6. Verification gate before docking
 
