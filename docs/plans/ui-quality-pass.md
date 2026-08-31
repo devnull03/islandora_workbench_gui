@@ -78,8 +78,8 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 - [ ] Broken/moved files remain visible with relink/remove actions. Unlink never deletes a file.
 - [x] **Create a new one** creates a child draft with parent context and links it only after its
   first successful save. Cancelling or closing leaves no phantom link.
-- [ ] Child builders show breadcrumb, depth, inherited runtime fields, and **Up to parent**. The
-  same chain component works at every depth.
+- [ ] Child builders show breadcrumb, depth, inherited runtime fields, and **Up to parent**. A
+  compact parent breadcrumb is now shown; depth/inheritance navigation remains.
 - [ ] Add graph tests for depth-first order, relative path resolution, missing files, direct and
   indirect cycles, and diamond/duplicate references.
 
