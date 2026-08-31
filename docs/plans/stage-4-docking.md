@@ -1,7 +1,7 @@
 # Stage 4 — Builder window placement (docking)
 
 **Mockup:** `2b` (docked → floated → snapping back)
-**Status:** chrome foundation built; Config Builder docking not started
+**Status:** blocked until the UI/completeness pass is complete; chrome foundation built
 **Depends on:** Stage 1 (`ConfigBuilderWindow` must render as a plain view, not a window-bound one)
 **Blocks:** nothing
 
@@ -19,6 +19,10 @@ Builder view from its OS-window host or add the right-side builder pane describe
 The window-host registry is now safe across the future split: after a new builder saves, the same
 window handle moves from the unsaved key to its file-path key. The Stage 4 refactor must preserve
 that one-live-draft-per-path rule when it separates the view from the native window.
+
+Do not start the split yet. [The UI quality pass](ui-quality-pass.md) changes the builder shell,
+window sizing, YAML surface, and recursive child context first. Docking starts only after its
+verification gate passes, so the final builder is re-parented once.
 
 ## Three states
 

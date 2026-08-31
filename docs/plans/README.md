@@ -23,13 +23,18 @@ it is stable across canvas edits. Read the canvas with the `claude_design` MCP
 | 1 | [stage-1-config-builder.md](stage-1-config-builder.md) | `1a` `1b` `1c` `1d` | **built** — see its notes section |
 | 2 | [stage-2-main-window.md](stage-2-main-window.md) | `2c` | **built** — see its notes section |
 | 3 | [stage-3-settings.md](stage-3-settings.md) | `3a` → `3b` | **built** — see its notes section |
-| 4 | [stage-4-docking.md](stage-4-docking.md) | `2b` | chrome foundation built; builder docking not started |
+| Q | [ui-quality-pass.md](ui-quality-pass.md) | `1a` `1b` `1d` `2a` | **active** — required before docking |
+| 4 | [stage-4-docking.md](stage-4-docking.md) | `2b` | blocked on the UI/completeness pass |
 | 5 | [stage-5-profiles.md](stage-5-profiles.md) | `3c` | not started |
-| 6 | [stage-6-chain-map.md](stage-6-chain-map.md) | `2a` | not started |
+| 6 | [stage-6-chain-map.md](stage-6-chain-map.md) | `2a` | moved into the active UI/completeness pass |
 
 Stages are ordered by dependency, not by importance. Stage 1 must land before 2, 4 or 6 —
 they all reach into the builder. Stage 3 and Stage 5 touch the same settings surface, so
 Stage 3 should land first and leave room for the profile bundle.
+
+Before Stage 4, complete the UI quality pass. It deliberately pulls Stage 6 forward: recursive
+secondary-config state changes the builder's layout and window relationships, so implementing it
+after docking would mean reworking the same surface twice.
 
 ## Cross-cutting app chrome (31 August 2026)
 

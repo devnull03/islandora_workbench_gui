@@ -2,7 +2,7 @@
 
 **Mockups:** `1a` (new config, search open) · `1b` (seven settings, live validation, YAML panel)
 · `1c` (all 16 value shapes) · `1d` (flat chaining)
-**Status:** built
+**Status:** functional baseline built; UI/completeness pass active
 **Depends on:** nothing
 **Blocks:** Stage 2 (Edit/New beside the config picker), Stage 4 (docking), Stage 6 (chain map)
 
@@ -242,3 +242,9 @@ for every link on every frame.
 mockup `1a` — it is click-and-Add today), drag-to-reorder in the chain list, and the
 `csv_value_templates` column/template header row. None blocks the flow; add them when the
 palette is actually used at speed.
+
+**Follow-up reopened on 31 August 2026.** The functional baseline is not the final builder UI.
+The separate Add setting toggle, tall runtime-supplied card, non-selectable YAML labels, fixed
+window height, inconsistent control density, and pointer-only palette are tracked in
+[the UI quality pass](ui-quality-pass.md). Recursive chaining moved forward from Stage 6 into the
+same pre-docking pass because it changes the builder's structure and child-window plumbing.

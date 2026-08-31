@@ -1,7 +1,7 @@
 # Stage 6 — Config chaining, nested
 
 **Mockup:** `2a` (chains nest without limit)
-**Status:** not started
+**Status:** promoted into the active pre-docking UI/completeness pass
 **Depends on:** Stage 1 (`config_builder/chain.rs` ships the flat one-level list of mockup `1d`)
 **Blocks:** nothing
 
@@ -13,6 +13,10 @@ deep. A child is just a config, so it has its own children, and Workbench walks 
 depth-first.
 
 ## What this stage adds
+
+Implementation and acceptance details now live in
+[UI quality and Config Builder completeness pass](ui-quality-pass.md), checklist 4. This file
+remains the design brief for mockup `2a`.
 
 - **A nested chain panel.** The child rows number `1`, `1.1`, `1.1.1` and expand in place, each
   showing `file · task · N settings · N children`. Collapse all. `+ Add a config under this one`
