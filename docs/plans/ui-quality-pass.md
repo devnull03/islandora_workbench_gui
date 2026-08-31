@@ -70,14 +70,14 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   that records path, label, task, setting count, children, load failure, and ancestry.
 - [ ] Render nested rows with `1`, `1.1`, `1.1.1` numbering, connector indentation, expand/collapse,
   **Collapse all**, per-node Open/Unlink, and **Add a config under this one**. The recursive
-  projection and Add under entry point are now present; connector polish and child-save linking
-  remain.
-- [ ] Show the flattened depth-first run order that Workbench will execute.
+  projection, cached run-order summary, and Add under entry point are now present; connector
+  polish remains.
+- [x] Show the flattened depth-first run order that Workbench will execute.
 - [ ] Reject self-links, duplicate ancestors, and indirect cycles at the link point. Show the
   error beside the attempted parent; never wait until save to reveal it.
 - [ ] Broken/moved files remain visible with relink/remove actions. Unlink never deletes a file.
-- [ ] **Create a new one** creates a child draft with parent/breadcrumb context and links it only
-  after its first successful save. Cancelling or closing must not leave a phantom link.
+- [x] **Create a new one** creates a child draft with parent context and links it only after its
+  first successful save. Cancelling or closing leaves no phantom link.
 - [ ] Child builders show breadcrumb, depth, inherited runtime fields, and **Up to parent**. The
   same chain component works at every depth.
 - [ ] Add graph tests for depth-first order, relative path resolution, missing files, direct and

@@ -64,6 +64,19 @@ const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
 pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
+    open_config_builder_with_parent(path, None, cx);
+}
+
+/// Open a new builder draft that will be linked under `parent` after its first successful save.
+pub fn open_child_config_builder(parent: PathBuf, cx: &mut App) {
+    open_config_builder_with_parent(None, Some(parent), cx);
+}
+
+fn open_config_builder_with_parent(
+    path: Option<PathBuf>,
+    parent: Option<PathBuf>,
+    cx: &mut App,
+) {
     if let Some(handle) = cx.global::<ConfigBuilderWindows>().open.get(&path).copied() {
         if handle
             .update(cx, |_, window, _| window.activate_window())
@@ -110,7 +123,7 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
     cx.spawn(async move |cx| {
         let key = path.clone();
         let opened = cx.open_window(options, |window, cx| {
-            let view = cx.new(|cx| ConfigBuilder::new(path, window, cx));
+            let view = cx.new(|cx| ConfigBuilder::new(path, parent, window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         });
         if let Ok(handle) = opened {
@@ -126,6 +139,8 @@ pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
 
 pub struct ConfigBuilder {
     pub(crate) draft: ConfigDraft,
+    /// Existing config that owns this draft when it was opened via “Add under”.
+    pub(crate) parent_path: Option<PathBuf>,
     pub(crate) problems: Vec<Problem>,
 
     /// Text inputs by field id — see [`field_id`] for the encoding.
@@ -189,8 +204,29 @@ pub(crate) fn get_file<T: 'static>(
     .detach();
 }
 
+fn link_saved_child(parent: &std::path::Path, child: &std::path::Path) -> Result<(), String> {
+    let mut draft = ConfigDraft::load(parent).map_err(|error| error.to_string())?;
+    let reference = child
+        .strip_prefix(parent.parent().unwrap_or_else(|| std::path::Path::new("")))
+        .unwrap_or(child)
+        .to_path_buf();
+    let existing = draft.secondary_tasks();
+    if !existing.iter().any(|item| item == &reference) {
+        let mut tasks = existing;
+        tasks.push(reference);
+        draft.set_secondary_tasks(&tasks);
+        draft.save(parent).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 impl ConfigBuilder {
-    pub fn new(path: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        path: Option<PathBuf>,
+        parent_path: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut notice = None;
         let draft = match &path {
             Some(p) => ConfigDraft::load(p).unwrap_or_else(|e| {
@@ -220,6 +256,7 @@ impl ConfigBuilder {
         let problems = validate(&draft);
         Self {
             draft,
+            parent_path,
             problems,
             inputs: HashMap::new(),
             selects: HashMap::new(),
@@ -463,7 +500,14 @@ impl ConfigBuilder {
         if was_new {
             let windows = cx.global_mut::<ConfigBuilderWindows>();
             windows.open.remove(&None);
-            windows.open.insert(Some(path), window.window_handle());
+            windows.open.insert(Some(path.clone()), window.window_handle());
+        }
+        if was_new {
+            if let Some(parent) = self.parent_path.clone() {
+                if let Err(error) = link_saved_child(&parent, &path) {
+                    self.notice = Some(format!("Saved, but couldn't link child: {error}").into());
+                }
+            }
         }
         self.draft.label = label;
         self.saved_at = Some("Saved".into());

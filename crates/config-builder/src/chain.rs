@@ -13,7 +13,7 @@ use gpui_component::{
 use ui::app_button;
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
-use super::{ConfigBuilder, open_config_builder};
+use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
 
 impl ConfigBuilder {
     pub(super) fn render_chain(
@@ -102,7 +102,16 @@ impl ConfigBuilder {
                         app_button("create-child-config")
                             .outline()
                             .label("Create a new one")
-                            .on_click(|_, _, cx| open_config_builder(None, cx)),
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(parent) = this.draft.path.clone() {
+                                    open_child_config_builder(parent, cx);
+                                } else {
+                                    this.notice = Some(
+                                        "Save this config before creating a nested config.".into(),
+                                    );
+                                    cx.notify();
+                                }
+                            })),
                     ),
             )
             .when(!run_order.is_empty(), |this| {
@@ -227,7 +236,7 @@ impl ConfigBuilder {
                     .xsmall()
                     .label("Add under")
                     .on_click(move |_, _, cx| {
-                        open_config_builder(Some(add_under_path.clone()), cx)
+                        open_child_config_builder(add_under_path.clone(), cx)
                     }),
                 )
             })
