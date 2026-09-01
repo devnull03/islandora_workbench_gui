@@ -536,6 +536,11 @@ impl Render for ConfigBuilder {
                     .child(
                         v_flex()
                             .flex_1()
+                            // A flex item's basis is its content, so without a zero minimum a
+                            // long key or a wide results row makes this column — and with it
+                            // the window — grow. Everything inside must fit the column, never
+                            // the other way round.
+                            .min_w(px(0.))
                             .h_full()
                             .p_4()
                             .gap_3()
