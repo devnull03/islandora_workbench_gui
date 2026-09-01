@@ -38,6 +38,8 @@ pub const RADIUS_SM: Pixels = px(3.);
 pub const CONTROL_H: Pixels = px(30.);
 /// The compact variant: add-row affordances, run-order chips.
 pub const CONTROL_H_SM: Pixels = px(26.);
+/// Vertical padding of one setting row; the 1px rule between rows sits at its edge.
+pub const ROW_PAD_Y: Pixels = px(14.);
 /// Fixed width of a setting row's label column, so labels align down a whole page regardless of
 /// what control sits beside them.
 pub const LABEL_COL_W: Pixels = px(180.);

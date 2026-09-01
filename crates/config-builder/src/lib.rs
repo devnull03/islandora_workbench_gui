@@ -18,6 +18,7 @@ mod yaml_panel;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use gpui::*;
@@ -32,6 +33,7 @@ use gpui_component::{
     select::{SelectEvent, SelectState},
     v_flex,
 };
+use regex::Regex;
 use serde_yaml::Value;
 use settings::{AppSettings, TaskConfig};
 use workbench_integration::config::{
@@ -46,6 +48,14 @@ use ui::tokens::MIN_WINDOW_W;
 use ui::{Card, CardTone, DetailSelectItem, app_button};
 
 actions!(config_builder, [OpenConfigBuilder]);
+
+/// What a `Shape::Integer` field accepts while it is being typed into. Empty is allowed on
+/// purpose (§04: empty means "use the default", not zero), and so is a leading minus, because
+/// a few Workbench settings are offsets.
+///
+/// Compiled once — a `Regex::new` per row would be one compilation per setting per render.
+static INTEGER_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^-?\d*$").expect("a literal that is checked by the tests below"));
 
 /// Open windows, keyed by the config they are editing (`None` for an unsaved new config), so a
 /// second Edit on the same file focuses the window that already has it rather than opening a
@@ -283,6 +293,42 @@ impl ConfigBuilder {
         input
     }
 
+    /// A numeric input for `id`. Same cache and same change handler as [`Self::input`]; the
+    /// difference is the state, which carries a digits-only pattern and a floor of zero.
+    ///
+    /// Those two make `NumberInput` step the value internally, so there is no `Step` event to
+    /// subscribe to and no second copy of the number to keep in agreement with the draft. §04:
+    /// an empty field is legal and means "use the default" — it is not zero, which is why the
+    /// pattern permits an empty string.
+    pub(crate) fn number_input(
+        &mut self,
+        id: SharedString,
+        setting_key: &str,
+        seed: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        if let Some(existing) = self.inputs.get(&id) {
+            return existing.clone();
+        }
+        let seed = seed.to_string();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .pattern(INTEGER_PATTERN.clone())
+                .default_value(seed)
+                .min(0.)
+        });
+        let key = setting_key.to_string();
+        self._subscriptions.push(
+            cx.subscribe(&input, move |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.commit(&key, cx);
+                }
+            }),
+        );
+        self.inputs.insert(id, input.clone());
+        input
+    }
     /// A dropdown for `id`, seeded with `choices` and the current selection.
     pub(crate) fn select(
         &mut self,
@@ -684,5 +730,25 @@ impl ConfigBuilder {
             current.width - YAML_PANEL_WIDTH
         };
         window.resize(size(target.max(MIN_WINDOW_W), current.height));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Not `use super::*`: this module glob-imports `gpui`, whose own `test` macro would
+    // shadow the one this needs.
+    use super::INTEGER_PATTERN;
+
+    /// The pattern is what stands between a typo and a YAML integer field holding a word.
+    /// Empty has to pass — §04 says an empty numeric field means "use the default", not zero —
+    /// and a lone minus has to pass too, or you cannot type a negative number at all.
+    #[test]
+    fn the_integer_pattern_accepts_a_number_being_typed_and_nothing_else() {
+        for ok in ["", "0", "3", "255", "-", "-1"] {
+            assert!(INTEGER_PATTERN.is_match(ok), "{ok:?} should be accepted");
+        }
+        for bad in ["abc", "1.5", "1e3", "1 ", "--1", "1-"] {
+            assert!(!INTEGER_PATTERN.is_match(bad), "{bad:?} should be rejected");
+        }
     }
 }

@@ -10,8 +10,12 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, checkbox::Checkbox, h_flex, input::Input,
-    label::Label, select::Select, v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, h_flex,
+    input::{Input, NumberInput},
+    label::Label,
+    select::Select,
+    switch::Switch,
+    v_flex,
 };
 use serde_yaml::{Mapping, Value};
 use workbench_integration::config::{
@@ -21,9 +25,9 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::tokens::{CHAR_FIELD_W, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
+use ui::tokens::{CHAR_FIELD_W, GAP_MD, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
 use ui::{
-    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, MAX_SEGMENTS,
+    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldRow, InlineMessage, MAX_SEGMENTS,
     RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
 };
 
@@ -245,8 +249,22 @@ impl ConfigBuilder {
                     .into_any_element(),
             ];
         }
+        // §03: rows are separated by a 1px rule and the last row has none — the section's own
+        // edge is already there, and two lines a pixel apart read as a rendering bug.
+        let last = keys.len().saturating_sub(1);
         keys.into_iter()
-            .map(|key| self.render_setting(&key, window, cx))
+            .enumerate()
+            .map(|(i, key)| {
+                let row = self.render_setting(&key, window, cx);
+                div()
+                    .w_full()
+                    .when(i != last, |el| {
+                        el.border_b_1()
+                            .border_color(cx.theme().colors.table_row_border)
+                    })
+                    .child(row)
+                    .into_any_element()
+            })
             .collect()
     }
 
@@ -267,49 +285,47 @@ impl ConfigBuilder {
         // slot under the control by design: a stack of five is a wall nobody reads.
         let note = self
             .problems_for(key)
-            .min_by_key(|p| match p.severity {
-                Severity::Error => 0,
-                Severity::Warn => 1,
-                Severity::Ok => 2,
-            })
-            .and_then(|p| match p.severity {
-                Severity::Error => Some(FieldNote::Error(p.message.clone().into())),
-                Severity::Warn => Some(FieldNote::Warning(p.message.clone().into())),
+            .filter_map(|p| match p.severity {
+                Severity::Error => Some(InlineMessage::error(p.message.clone())),
+                Severity::Warn => Some(InlineMessage::warning(p.message.clone())),
                 Severity::Ok => None,
-            });
-        let muted = cx.theme().muted_foreground;
+            })
+            .min_by_key(InlineMessage::level);
+        // A boolean is one short control, so its label centres against it rather than sitting
+        // at the top of a row that is only 19px tall (§05).
+        let align_center = def.shape == Shape::Boolean;
+        // §03: the hint only appears once the value has moved off the default. Showing
+        // `default: false` beside a `false` is noise on every untouched row.
+        let modified = self
+            .draft
+            .values
+            .get(&def.key)
+            .is_some_and(|value| value != &def.default);
 
-        Card::new()
-            .gap(GAP_XS)
-            .child(
-                SettingRow::new(def.key.clone(), control)
-                    .when(!def.description.is_empty(), |row| {
-                        row.description(def.description.clone())
-                    })
-                    .note(note)
-                    .child(
-                        Label::new(if def.required {
-                            "required"
-                        } else {
-                            def.shape.label()
-                        })
-                        .text_xs()
-                        .text_color(muted),
-                    )
-                    .when(!def.required, |row| {
-                        row.child(
-                            ghost_button(SharedString::from(format!("remove-{}", def.key)))
-                                .icon(IconName::Close)
-                                .tooltip("Remove this setting")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.remove_setting(&owned_key, cx);
-                                })),
-                        )
-                    }),
-            )
+        SettingRow::new(def.key.clone(), control)
+            // The label in the builder is the literal YAML key, so it is set in mono; in the
+            // settings window the same component labels prose and is not.
+            .mono_label(true)
+            .required(def.required)
+            .type_badge(def.shape.label())
+            .align_center(align_center)
+            .modified(modified)
+            .when(!def.description.is_empty(), |row| {
+                row.description(def.description.clone())
+            })
+            .note(note)
+            .when(!def.required, |row| {
+                row.child(
+                    ghost_button(SharedString::from(format!("remove-{}", def.key)))
+                        .icon(IconName::Close)
+                        .tooltip("Remove this setting")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.remove_setting(&owned_key, cx);
+                        })),
+                )
+            })
             .into_any_element()
     }
-
     fn render_unknown(&mut self, key: &str, cx: &mut Context<Self>) -> impl IntoElement {
         let owned = key.to_string();
         Card::new().tone(CardTone::Warning).child(
@@ -347,31 +363,64 @@ impl ConfigBuilder {
         let id = field_id(&[&key]);
 
         match def.shape {
+            // §05: a YAML boolean is always a Switch. The Checkbox is reserved for run-time
+            // options like Auto-accept, which are not written to the file.
             Shape::Boolean => {
                 let checked = value.as_bool().unwrap_or(false);
                 let owned = key.clone();
-                Checkbox::new(SharedString::from(format!("cb-{key}")))
-                    .checked(checked)
-                    .label(if checked { "true" } else { "false" })
-                    .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                        this.draft
-                            .values
-                            .insert(owned.clone(), Value::Bool(*checked));
-                        this.revalidate(cx);
-                    }))
+                let default = def.default.as_bool();
+                h_flex()
+                    .gap(GAP_MD)
+                    .items_center()
+                    .child(
+                        Switch::new(SharedString::from(format!("sw-{key}")))
+                            .checked(checked)
+                            .on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                                this.draft
+                                    .values
+                                    .insert(owned.clone(), Value::Bool(*checked));
+                                this.revalidate(cx);
+                            })),
+                    )
+                    // The literal YAML word, not "On" — this row is a view of a file, and the
+                    // file says `true`. Muted when false, so a page of switches reads at a
+                    // glance as the set that is on.
+                    .child(
+                        Label::new(if checked { "true" } else { "false" })
+                            .text_sm()
+                            .map(|label| {
+                                if checked {
+                                    label
+                                } else {
+                                    label.text_color(cx.theme().muted_foreground)
+                                }
+                            }),
+                    )
+                    .when_some(default.filter(|d| *d != checked), |this, default| {
+                        this.child(
+                            Label::new(format!("default: {default}"))
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                    })
                     .into_any_element()
             }
 
+            // §04: an integer gets − value + rather than a bare field. The state carries the
+            // digits-only pattern and a floor, which is what lets NumberInput step the value
+            // itself — no Step event to subscribe to, and no second copy of the number.
             Shape::Integer => {
-                let input = self.input(id, &key, &scalar_text(&value), "0", window, cx);
+                let input = self.number_input(id, &key, &scalar_text(&value), window, cx);
                 h_flex()
-                    .gap_2()
+                    .gap(GAP_MD)
                     .items_center()
                     .child(
                         div()
                             .w(NUMBER_FIELD_W)
-                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
+                            .child(NumberInput::new(&input).with_size(APP_CONTROL_SIZE)),
                     )
+                    // The unit sits outside the control: it is not editable, and inside the
+                    // frame it reads as part of the value.
                     .children(def.unit.clone().map(|u| {
                         Label::new(u)
                             .text_xs()

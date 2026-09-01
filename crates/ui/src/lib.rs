@@ -9,6 +9,7 @@ mod app_font;
 mod card;
 mod controls;
 mod field_row;
+mod inline_message;
 mod labeled_field;
 mod labeled_select;
 mod path_picker;
@@ -28,13 +29,14 @@ pub use controls::{
     APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, add_row_button, app_button, ghost_button,
 };
 pub use field_row::FieldRow;
+pub use inline_message::{InlineMessage, MessageLevel};
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;
 pub use path_picker::{PathPickFn, PathPicker, pick_into, pick_into_app};
 pub use row_editor::RowEditor;
 pub use segmented::{MAX_SEGMENTS, Segmented};
 pub use select_items::DetailSelectItem;
-pub use setting_row::{FieldNote, SettingRow};
+pub use setting_row::SettingRow;
 pub use status_bar_button::StatusBarButton;
 pub use step_section::StepSection;
 pub use summary_lines::SummaryLines;
