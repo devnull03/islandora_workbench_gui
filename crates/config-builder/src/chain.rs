@@ -8,8 +8,8 @@ use std::{
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{ActiveTheme, IconName, StyledExt, h_flex, label::Label, v_flex};
-use ui::tokens::{CHEVRON_SLOT, GAP_XS, INDENT_STEP};
-use ui::{Card, CardTone, app_button, ghost_button};
+use ui::tokens::{CHEVRON_SLOT, CHIP_H, GAP_SM, INDENT_STEP, RADIUS_SM};
+use ui::{Callout, Card, CardTone, app_button, ghost_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
 use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
@@ -84,6 +84,15 @@ impl ConfigBuilder {
                     }),
             )
             .children(rows)
+            // §08 warns at depth 4 and beyond and does not block. A chain that deep is
+            // usually a mistake and occasionally exactly what someone meant; the app is not
+            // in a position to tell which.
+            .when(max_depth >= 4, |this| {
+                this.child(Callout::warning(format!(
+                    "This chain is {max_depth} levels deep. Each level runs every config below \
+                     it, so the run order is longer than it looks."
+                )))
+            })
             .child(
                 h_flex()
                     .gap_2()
@@ -112,16 +121,37 @@ impl ConfigBuilder {
                     ),
             )
             .when(!run_order.is_empty(), |this| {
+                let colors = cx.theme().colors;
+                let mono = cx.theme().mono_font_family.clone();
                 this.child(
                     Card::new()
                         .tone(CardTone::Filled)
-                        .gap(GAP_XS)
+                        .gap(GAP_SM)
                         .child(Label::new("Run order").text_xs().font_semibold())
-                        .child(
-                            Label::new(run_order.join("  →  "))
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
-                        ),
+                        // §08: the flattened depth-first order as chips that wrap, rather than
+                        // one joined string that truncates. A chain you cannot read the end of
+                        // is the one you most need to read the end of.
+                        .child(h_flex().w_full().gap(GAP_SM).flex_wrap().children(
+                            run_order.into_iter().enumerate().map(|(index, label)| {
+                                h_flex()
+                                    .h(CHIP_H)
+                                    .px(GAP_SM)
+                                    .gap(GAP_SM)
+                                    .items_center()
+                                    .flex_none()
+                                    .rounded(RADIUS_SM)
+                                    .border_1()
+                                    .border_color(colors.border)
+                                    .bg(colors.background)
+                                    .child(
+                                        Label::new(format!("{}", index + 1))
+                                            .text_xs()
+                                            .font_family(mono.clone())
+                                            .text_color(colors.muted_foreground),
+                                    )
+                                    .child(Label::new(label).text_xs().font_family(mono.clone()))
+                            }),
+                        )),
                 )
             })
     }

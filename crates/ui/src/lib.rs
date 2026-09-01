@@ -6,6 +6,7 @@
 //! different heights, which is the specific defect this crate exists to prevent.
 
 mod app_font;
+mod callout;
 mod card;
 mod chips;
 mod controls;
@@ -26,6 +27,7 @@ pub mod theme;
 pub mod tokens;
 
 pub use app_font::AppFont;
+pub use callout::Callout;
 pub use card::{Card, CardTone};
 pub use chips::ChipList;
 pub use controls::{

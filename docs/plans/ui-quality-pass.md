@@ -125,7 +125,7 @@ Applied on top of the checklist above. What landed, and what the spec asked for 
 **Landed.** Archivo and IBM Plex Mono bundled under `assets/fonts/` and applied at each window
 root via `ui::AppFont` — gpui never consults the theme for a UI font, so a bundled family is inert
 until a root asks. `ui::tokens` carries the 4px spacing scale and the control geometry. `ui`
-gained `Card`, `FieldRow`, `SettingRow` + `FieldNote`, `RowEditor`, `Segmented`, `SummaryLines`,
+gained `Card`, `FieldRow`, `SettingRow`, `RowEditor`, `Segmented`, `SummaryLines`,
 `StatusBarButton`, and `pick_into`/`pick_into_app`; four hand-rolled path pickers and seven inline
 browse rows collapsed onto them.
 
@@ -145,3 +145,79 @@ browse rows collapsed onto them.
 **Still to verify by eye.** That Archivo actually resolves on a machine without it installed
 (`add_fonts` succeeds and gpui falls back silently if the family name misses), and the 520px
 minimum window width for clipped labels now that the setting row spends 180px on its label column.
+
+## Component-spec pass (Claude Design canvas `4c5759a2`, `Component Spec.dc.html`)
+
+The third document in the canvas, and the authoritative one. Where it and the mockups disagree
+its §00 wins by its own instruction — the mockups were drawn in three passes and contradict each
+other. Scope was the config builder plus `StepSection`; the settings window, the main window,
+Profiles and `EntityCard` are untouched.
+
+### §00 rulings applied
+
+| Ruling | What changed |
+|---|---|
+| One control height | `APP_CONTROL_SIZE` `Small` → `Medium`. gpui-component's scale is 24/32 and a literal `Size::Size(px)` never reaches input height (`input_h` falls through to `h_6`), so 32 is the closest reachable value to the spec's 30. `.xsmall()` retired at fourteen sites. |
+| No bare clickable text | `ui::ghost_button` is now the skin under every inline action. `ui::add_row_button` is §06's dashed affordance, labelled `+ ` plus a singular noun. |
+| Label column 180 | Kept. The builder mockup's 210 is the drift §00 names. |
+| Rows never tint | The mockup's danger-tinted error row was **not** built. The control's border and the message under it carry the level. |
+| Zebra only in tables | `table_even` on odd rows, inside `RowEditor` and nowhere else. |
+| Four radii, no fifth | `tokens::RADIUS_SM` (3) for chips, tags and nav; the other three stay theme roles. |
+| Type badge 56px, builder only | `SettingRow::type_badge`, opt-in. |
+| One accent | **Overruled by the user.** §00 says `#1a73e8`/`#3c78d8` and calls the orange drift; the amber/rust family from §5 above stands. Every other §00 row was adopted. |
+
+### The three reported defects, and what fixed each
+
+1. *The search panel resized its column.* It was a `Card` in the flow, so its intrinsic width fed
+   the editor column's flex basis. Now absolutely positioned at `w_full` of a relative trigger,
+   with `min_w(px(0.))` on the column and truncation on the only flexing cell in a row.
+2. *Only the `+` button added a setting.* The button is gone; the row is the target, and adding
+   keeps the panel open with the query intact.
+3. *No group headers.* Results bucket under the schema's own sections, in the order their best
+   match ranked, with counts.
+
+### Also landed
+
+`InlineMessage` (fixed 14px glyph column) replacing `FieldNote`; `Callout` for group-level notes;
+`ChipList` for the two order-free list shapes; `Switch` for every YAML boolean and `NumberInput`
+for every integer; `Segmented` rebuilt as one joined strip with a `+N` overflow cell that reuses
+the caller's own `Select`; `RowActions` revealing on row hover; `LockedBand` and `ProblemSummary`;
+an editable name and description in the builder header, the description stored on
+`settings::TaskConfig` because Workbench's schema has nowhere to put it; the YAML panel at 400px.
+
+### Not built, deliberately
+
+- *`SettingPicker` on `list::ListState`.* §08 asks for it. The list widget's search field is fixed
+  (magnifier prefix, no counter slot) and §08's own trigger is not expressible in it, so rows,
+  header bands and trigger would be custom regardless, and 142 rows in a 360px scroll area do not
+  need virtualizing. **Keyboard navigation is the real loss** — the hint strip says what does work
+  rather than advertising keys that do nothing. Wire it when focus routing between a trigger input
+  and a list is needed somewhere else too.
+- *`RowEditor`'s column-spec refactor.* The chrome moved, the cells did not, for the reason
+  recorded in the previous pass and now in the module docs.
+- *`Map` column titles.* §07 wants real names; the catalogue has none, so the header ships
+  `Key`/`Value`. `scripts/gen-config-catalog.py` needs a `columns` field first.
+- *Template `${…}` highlighting.* `InputState` has no highlighter — `ensure_highlighter_factory`
+  exists only on `code_editor` mode (`EditorState`). Writing a text renderer for a one-line field
+  to tint one span is not worth it.
+- *The YAML panel's gutter and per-line error tint.* The panel is a read-only `Editor` so the
+  generated YAML can be selected and copied; a hand-rolled line list would take that away.
+  Click-to-focus additionally needs a YAML-line → setting-row mapping that does not exist.
+- *Drag-to-reorder in `RowEditor`* (§07), *`UrlField`* and *`CharField`'s grapheme cap* (§04),
+  *`PathField`'s drop target and head truncation* (§04). None are visual defects today; all are
+  bounded follow-ups.
+
+### §10's two review invariants
+
+Both hold, and both are one grep:
+
+```
+grep -rnE '#[0-9a-fA-F]{6}' crates/*/src --include=*.rs   # only theme.rs and its parse test
+grep -rnE '\.h\(px\(' crates/*/src --include=*.rs         # only a 1px divider and the 34px bar
+```
+
+### Still to verify by eye
+
+Everything from the previous pass, plus: that the picker panel is not clipped by the scroll
+container when the window is short, and that a twelve-choice enum (`task`) reads well as three
+segments plus `+9` rather than as a truncation.

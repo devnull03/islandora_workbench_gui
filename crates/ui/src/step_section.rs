@@ -1,11 +1,17 @@
 //! A numbered step in a top-to-bottom workflow: `1  Input source          optional step`.
 //!
-//! The main window's three steps (mockup `2c`) all have this exact anatomy, so the shape lives
+//! Component Spec §09. The main window's three steps have this exact anatomy, so the shape lives
 //! here rather than being spelled out once per step.
+//!
+//! The index is mono and muted while the title is semibold body text, because the number is a
+//! position and the title is the thing. Reversing that — a bold number beside a plain title —
+//! makes a form look like a countdown.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{ActiveTheme, StyledExt, h_flex, label::Label, v_flex};
+
+use crate::tokens::{GAP_LG, GAP_MD};
 
 #[derive(IntoElement)]
 pub struct StepSection {
@@ -40,17 +46,24 @@ impl ParentElement for StepSection {
 
 impl RenderOnce for StepSection {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let muted = cx.theme().muted_foreground;
+        let muted = cx.theme().colors.muted_foreground;
+        let mono = cx.theme().mono_font_family.clone();
+
         v_flex()
             .w_full()
             .flex_shrink_0()
-            .gap_2()
+            .gap(GAP_LG)
             .child(
                 h_flex()
                     .w_full()
                     .items_center()
-                    .gap_2()
-                    .child(Label::new(self.number).text_xs().text_color(muted))
+                    .gap(GAP_MD)
+                    .child(
+                        Label::new(self.number)
+                            .text_xs()
+                            .font_family(mono)
+                            .text_color(muted),
+                    )
                     .child(Label::new(self.title).text_sm().font_semibold())
                     .when_some(self.note, |el, note| {
                         el.child(div().flex_1())
