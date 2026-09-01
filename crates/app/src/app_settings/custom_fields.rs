@@ -255,6 +255,17 @@ fn config_row(
                                         .cloned()
                                         .unwrap_or_default(),
                                     file_path: value_of(&p, cx),
+                                    // The description is written in the config builder, not
+                                    // here. Carry the existing one through rather than
+                                    // blanking it because this form has no box for it.
+                                    description: index
+                                        .and_then(|i| {
+                                            AppSettings::get(cx)
+                                                .task_configs
+                                                .get(i)
+                                                .map(|c| c.description.clone())
+                                        })
+                                        .unwrap_or_default(),
                                 },
                                 cx,
                             );

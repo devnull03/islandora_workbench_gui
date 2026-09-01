@@ -240,6 +240,12 @@ pub struct TaskConfig {
     pub label: SharedString,
     pub task_name: SharedString,
     pub file_path: SharedString,
+    /// What this config is for, in the author's words.
+    ///
+    /// It lives here rather than in the YAML because Workbench's schema has nowhere to put
+    /// it: a `description` key in the file would be a setting Workbench does not recognise,
+    /// and the builder would then have to hide its own key from its own editor.
+    pub description: SharedString,
 }
 
 #[derive(Clone, Default)]

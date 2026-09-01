@@ -8,7 +8,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 
 use crate::YAML_PANEL_WIDTH;
-use gpui_component::{ActiveTheme, StyledExt, h_flex, input::Editor, label::Label, v_flex};
+use gpui_component::{ActiveTheme, h_flex, input::Editor, label::Label, v_flex};
 use workbench_integration::config::validate::Severity;
 
 use super::ConfigBuilder;
@@ -72,7 +72,16 @@ impl ConfigBuilder {
                     .p_2()
                     .gap_2()
                     .items_center()
-                    .child(Label::new("YAML preview").text_sm().font_semibold())
+                    .bg(cx.theme().colors.table_head)
+                    .border_b_1()
+                    .border_color(cx.theme().colors.border)
+                    .child(
+                        Label::new("YAML PREVIEW")
+                            .text_xs()
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_color(cx.theme().colors.table_head_foreground),
+                    )
+                    .child(div().flex_1())
                     .child(
                         Label::new("read-only")
                             .text_xs()

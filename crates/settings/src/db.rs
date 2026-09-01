@@ -38,6 +38,11 @@ enum PersistVal {
 struct PersistTaskConfig {
     label: String,
     task_name: String,
+    /// Added in schema v3. `serde(default)` is the whole migration, as it was for the server
+    /// fields below: a config saved before this existed simply has no description, which is the
+    /// truth.
+    #[serde(default)]
+    description: String,
     file_path: String,
 }
 
@@ -103,6 +108,7 @@ impl From<&AppSettings> for PersistSettings {
                 label: t.label.to_string(),
                 task_name: t.task_name.to_string(),
                 file_path: t.file_path.to_string(),
+                description: t.description.to_string(),
             })
             .collect();
 
@@ -156,6 +162,7 @@ impl From<PersistSettings> for AppSettings {
                 label: SharedString::from(t.label),
                 task_name: SharedString::from(t.task_name),
                 file_path: SharedString::from(t.file_path),
+                description: SharedString::from(t.description),
             })
             .collect();
 

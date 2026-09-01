@@ -27,7 +27,7 @@ use gpui_component::{
     button::ButtonVariants,
     h_flex,
     input::EditorState,
-    input::{InputEvent, InputState},
+    input::{Input, InputEvent, InputState},
     label::Label,
     scroll::ScrollableElement,
     select::{SelectEvent, SelectState},
@@ -44,8 +44,10 @@ use workbench_integration::config::{
 };
 
 use ui::AppFont as _;
-use ui::tokens::MIN_WINDOW_W;
-use ui::{Card, CardTone, DetailSelectItem, app_button};
+use ui::tokens::{GAP_2XL, GAP_LG, GAP_MD, GAP_SM, GAP_XL, GAP_XS, MIN_WINDOW_W, PAD_PAGE};
+use ui::{
+    APP_CONTROL_SIZE, DetailSelectItem, LockedBand, ProblemSummary, app_button, ghost_button,
+};
 
 actions!(config_builder, [OpenConfigBuilder]);
 
@@ -70,7 +72,7 @@ impl Global for ConfigBuilderWindows {}
 /// Width of the read-only YAML preview, and of the editor column beside it. The window is sized
 /// as the sum, and grows and shrinks by the panel's width when it is shown or hidden — the panel
 /// appearing must not squeeze the editors it exists to explain.
-pub(crate) const YAML_PANEL_WIDTH: Pixels = px(340.);
+pub(crate) const YAML_PANEL_WIDTH: Pixels = px(400.);
 const FALLBACK_EDITOR_WIDTH: Pixels = px(600.);
 const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
@@ -156,6 +158,10 @@ pub struct ConfigBuilder {
     /// Dropdowns, keyed the same way.
     selects: HashMap<SharedString, Entity<SelectState<Vec<DetailSelectItem>>>>,
 
+    /// What the config is for, in the author's words. Not a Workbench setting — it lives in
+    /// the config library beside the label, because the YAML schema has nowhere to put it.
+    pub(crate) description: String,
+
     pub(crate) search: Entity<InputState>,
     pub(crate) yaml_editor: Entity<EditorState>,
     pub(crate) yaml_text: String,
@@ -231,9 +237,24 @@ impl ConfigBuilder {
             }
         })];
 
+        // The library is the only place the description exists, so a draft opened from a file
+        // has to go and find it. A file the library has never seen simply has none.
+        let description = path
+            .as_ref()
+            .and_then(|p| {
+                let file_path = p.to_string_lossy().to_string();
+                AppSettings::get(cx)
+                    .task_configs
+                    .iter()
+                    .find(|c| c.file_path == file_path)
+                    .map(|c| c.description.to_string())
+            })
+            .unwrap_or_default();
+
         let problems = validate(&draft);
         Self {
             draft,
+            description,
             parent_path,
             problems,
             inputs: HashMap::new(),
@@ -293,6 +314,69 @@ impl ConfigBuilder {
         input
     }
 
+    /// The config's name, edited in place in the header (`1a`).
+    ///
+    /// Cached under a reserved field id like every other input. `#` cannot appear in a Workbench
+    /// setting key, so `#label` cannot collide with one.
+    fn title_input(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<InputState> {
+        let id: SharedString = "#label".into();
+        if let Some(existing) = self.inputs.get(&id) {
+            return existing.clone();
+        }
+        let seed = self.draft.label.clone();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Untitled config")
+                .default_value(seed)
+        });
+        self._subscriptions
+            .push(cx.subscribe(&input, |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.draft.label = state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            }));
+        self.inputs.insert(id, input.clone());
+        input
+    }
+
+    /// The line under the name: what this config is for.
+    fn description_input(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        let id: SharedString = "#description".into();
+        if let Some(existing) = self.inputs.get(&id) {
+            return existing.clone();
+        }
+        let seed = self.description.clone();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Describe what this config is for — your future self will thank you")
+                .default_value(seed)
+        });
+        self._subscriptions
+            .push(cx.subscribe(&input, |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.description = state.read(cx).value().to_string();
+                }
+            }));
+        self.inputs.insert(id, input.clone());
+        input
+    }
+
+    /// The name to show for this draft: what the user typed, else the file's stem, else a
+    /// placeholder. Never an empty string — the title bar would collapse around it.
+    pub(crate) fn display_label(&self) -> String {
+        if !self.draft.label.trim().is_empty() {
+            return self.draft.label.clone();
+        }
+        match &self.draft.path {
+            Some(path) => stem_of(path),
+            None => "New config".to_string(),
+        }
+    }
     /// The add slot of a chip list.
     ///
     /// Unlike every other input here it does **not** commit on change: a per-keystroke commit
@@ -530,6 +614,7 @@ impl ConfigBuilder {
             .unwrap_or_default()
             .to_string();
         let file_path: SharedString = path.to_string_lossy().to_string().into();
+        let description = self.description.clone();
 
         // Add or update the library entry, matched on the file it points at.
         AppSettings::update(cx, |s| {
@@ -537,6 +622,7 @@ impl ConfigBuilder {
                 label: label.clone().into(),
                 task_name: task.clone().into(),
                 file_path: file_path.clone(),
+                description: description.clone().into(),
             };
             match s.task_configs.iter_mut().find(|c| c.file_path == file_path) {
                 Some(existing) => *existing = entry,
@@ -571,44 +657,11 @@ impl Render for ConfigBuilder {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let errors = self.count(Severity::Error);
         let warnings = self.count(Severity::Warn);
-        let title = if self.draft.label.trim().is_empty() {
-            "New config".to_string()
-        } else {
-            self.draft.label.clone()
-        };
 
         v_flex()
             .size_full()
             .app_font(cx)
-            .child(
-                TitleBar::new().child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .child(Label::new("Config Builder").font_semibold())
-                        .child(
-                            Label::new(title.clone())
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                        .children(self.parent_path.as_ref().map(|parent| {
-                            Label::new(format!(
-                                "under {}",
-                                parent
-                                    .file_stem()
-                                    .map(|stem| stem.to_string_lossy())
-                                    .unwrap_or_default()
-                            ))
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                        }))
-                        .children(self.saved_at.clone().map(|s| {
-                            Label::new(s)
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                        })),
-                ),
-            )
+            .child(self.render_title_bar(cx))
             .child(
                 h_flex()
                     .flex_1()
@@ -623,12 +676,13 @@ impl Render for ConfigBuilder {
                             // the other way round.
                             .min_w(px(0.))
                             .h_full()
-                            .p_4()
-                            .gap_3()
+                            .p(PAD_PAGE)
+                            .gap(GAP_2XL)
                             .overflow_y_scrollbar()
+                            .child(self.render_header(window, cx))
                             .child(self.render_locked_band(cx))
                             .child(self.render_search(window, cx))
-                            .children(self.render_settings(window, cx))
+                            .child(v_flex().w_full().children(self.render_settings(window, cx)))
                             .child(self.render_chain(window, cx)),
                     )
                     .children(self.yaml_open.then(|| self.render_yaml_panel(window, cx))),
@@ -638,36 +692,81 @@ impl Render for ConfigBuilder {
 }
 
 impl ConfigBuilder {
-    /// The three settings the app writes at run time, so nobody thinks they are missing.
-    fn render_locked_band(&self, cx: &App) -> impl IntoElement {
-        Card::new().tone(CardTone::Filled).padding(px(6.)).child(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .items_center()
-                .flex_wrap()
-                .child(
-                    Label::new("At run time")
-                        .text_xs()
-                        .font_semibold()
-                        .text_color(cx.theme().muted_foreground),
-                )
-                .children(catalog::locked().enumerate().flat_map(|(index, def)| {
-                    let separator = (index > 0).then(|| {
-                        Label::new("·")
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                    });
-                    separator
-                        .into_iter()
-                        .chain(std::iter::once(Label::new(def.key.clone()).text_xs()))
-                }))
-                .child(
-                    Label::new("filled by the app")
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground),
+    /// Title, then the page crumb, then — pushed to the right, immediately before the window
+    /// controls — whatever transient thing the window has to say (§02).
+    ///
+    /// A child window says so in its crumb rather than in a separate line: `Main batch items /
+    /// Child pages` is `1d`'s breadcrumb, and it is the only place the relationship is stated
+    /// once the child has been floated away from its parent.
+    fn render_title_bar(&self, cx: &Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().colors.muted_foreground;
+        let title = self.display_label();
+
+        TitleBar::new()
+            .child(
+                h_flex()
+                    .flex_1()
+                    .gap(GAP_MD)
+                    .items_center()
+                    .child(Label::new("Config Builder").text_xs())
+                    .children(self.parent_path.as_ref().map(|parent| {
+                        h_flex()
+                            .gap(GAP_SM)
+                            .items_center()
+                            .child(Label::new(stem_of(parent)).text_xs().text_color(muted))
+                            .child(Label::new("/").text_xs().text_color(muted))
+                    }))
+                    .child(Label::new(title).text_xs().text_color(muted)),
+            )
+            .child(
+                h_flex().justify_end().items_center().pr_4().children(
+                    self.saved_at
+                        .clone()
+                        .map(|saved| Label::new(saved).text_xs().text_color(muted)),
                 ),
-        )
+            )
+    }
+
+    /// The config's own name and purpose, editable in place (`1a`).
+    ///
+    /// The description has nowhere to live in Workbench's schema, so it is stored beside the
+    /// label in the config library — see `settings::TaskConfig`. Both are borderless inputs
+    /// rather than a field with a label: a title that looks like a form field reads as one more
+    /// setting, and this is the name of the thing the settings belong to.
+    fn render_header(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let title = self.title_input(window, cx);
+        let description = self.description_input(window, cx);
+
+        v_flex()
+            .w_full()
+            .gap(GAP_XS)
+            .child(
+                Input::new(&title)
+                    .appearance(false)
+                    .with_size(APP_CONTROL_SIZE)
+                    .w_full()
+                    .text_lg()
+                    .font_semibold(),
+            )
+            .child(
+                Input::new(&description)
+                    .appearance(false)
+                    .with_size(APP_CONTROL_SIZE)
+                    .w_full()
+                    .text_color(cx.theme().colors.muted_foreground),
+            )
+    }
+
+    /// The three settings the app writes at run time, so nobody thinks they are missing (§08).
+    fn render_locked_band(&self, _cx: &App) -> impl IntoElement {
+        let mut band = LockedBand::new(
+            "Supplied by the app at run time",
+            "you don't set these here",
+        );
+        for def in catalog::locked() {
+            band = band.entry(def.key.clone(), locked_source(&def.key));
+        }
+        band
     }
 
     fn render_footer(
@@ -676,30 +775,16 @@ impl ConfigBuilder {
         warnings: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let summary = match (errors, warnings) {
-            (0, 0) => "No problems".to_string(),
-            (0, w) => format!("{w} thing{} to know", plural(w)),
-            (e, 0) => format!("{e} problem{} to fix", plural(e)),
-            (e, w) => format!(
-                "{e} problem{} to fix · {w} thing{} to know",
-                plural(e),
-                plural(w)
-            ),
-        };
-        let color = if errors > 0 {
-            cx.theme().colors.danger
-        } else {
-            cx.theme().muted_foreground
-        };
-
         h_flex()
             .w_full()
-            .p_2()
-            .gap_2()
+            .px(GAP_XL)
+            .py(GAP_LG)
+            .gap(GAP_MD)
             .items_center()
             .border_t_1()
             .border_color(cx.theme().colors.border)
-            .child(Label::new(summary).text_sm().text_color(color))
+            .bg(cx.theme().colors.title_bar)
+            .child(ProblemSummary::new(errors, warnings))
             .children(
                 self.notice
                     .clone()
@@ -707,9 +792,7 @@ impl ConfigBuilder {
             )
             .child(div().flex_1())
             .child(
-                app_button("toggle-yaml")
-                    .ghost()
-                    .small()
+                ghost_button("toggle-yaml")
                     .label(if self.yaml_open {
                         "Hide YAML"
                     } else {
@@ -722,9 +805,7 @@ impl ConfigBuilder {
                     })),
             )
             .child(
-                app_button("discard-draft")
-                    .outline()
-                    .small()
+                ghost_button("discard-draft")
                     .label("Discard draft")
                     .disabled(self.draft.values.is_empty())
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -740,17 +821,38 @@ impl ConfigBuilder {
             .child(
                 app_button("save-config")
                     .primary()
-                    .small()
                     .label("Save to library")
                     .icon(IconName::Check)
+                    // §06: disabled by errors only. A warning is something to know, not a
+                    // veto — blocking on one teaches people to write configs that say less.
                     .disabled(errors > 0)
+                    .tooltip(if errors > 0 {
+                        "Fix the problems above first"
+                    } else {
+                        "Write the YAML and add it to the config library"
+                    })
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             )
     }
 }
 
-fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
+/// Where a locked setting's value comes from, in the words `1a` uses.
+///
+/// A `match` rather than catalogue data: three keys, and the answer is about how *this app* runs
+/// Workbench, which the generated catalogue has no business knowing.
+fn locked_source(key: &str) -> &'static str {
+    match key {
+        "host" => "Ingest server",
+        "credentials_file_path" => "App settings",
+        "input_csv" => "Processed sheet",
+        _ => "The app",
+    }
+}
+
+fn stem_of(path: &std::path::Path) -> String {
+    path.file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 impl ConfigBuilder {
