@@ -6,10 +6,7 @@ pub mod ping;
 use std::path::PathBuf;
 
 use gpui::*;
-use gpui_component::{
-    Disableable, IconName, Sizable,
-    button::{Button, ButtonVariants},
-};
+use gpui_component::{Disableable, IconName};
 use settings::{AppSettings, load_app_settings};
 use window_wrapper::{BarRegistry as _, status_bar::StatusBarRegistry};
 
@@ -75,11 +72,9 @@ impl Render for OpenTerminal {
             .get("workbench_path")
             .is_some_and(|value| !value.text().trim().is_empty());
         div().child(
-            Button::new("Open Terminal")
+            ui::ghost_button("Open Terminal")
                 .icon(IconName::SquareTerminal)
                 .label("Open Terminal")
-                .ghost()
-                .xsmall()
                 .px_0()
                 .cursor_pointer()
                 .disabled(!configured)
@@ -101,11 +96,9 @@ pub struct ReloadConfigs;
 impl Render for ReloadConfigs {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div().child(
-            Button::new("reload-configs")
+            ui::ghost_button("reload-configs")
                 .icon(IconName::Redo2)
                 .label("Reload")
-                .ghost()
-                .xsmall()
                 .px_0()
                 .cursor_pointer()
                 .tooltip("Reload settings and task configs from disk")

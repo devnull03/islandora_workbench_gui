@@ -7,11 +7,9 @@ use std::{
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, h_flex, label::Label, v_flex,
-};
+use gpui_component::{ActiveTheme, IconName, StyledExt, h_flex, label::Label, v_flex};
 use ui::tokens::{CHEVRON_SLOT, GAP_XS, INDENT_STEP};
-use ui::{Card, CardTone, app_button};
+use ui::{Card, CardTone, app_button, ghost_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
 use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
@@ -74,9 +72,7 @@ impl ConfigBuilder {
                     .child(div().flex_1())
                     .when(count > 0, |this| {
                         this.child(
-                            app_button("collapse-all-chain")
-                                .ghost()
-                                .xsmall()
+                            ghost_button("collapse-all-chain")
                                 .label("Collapse all")
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     for node in &this.chain_nodes {
@@ -187,8 +183,6 @@ impl ConfigBuilder {
                     "toggle-chain-{}",
                     path.display()
                 )))
-                .ghost()
-                .xsmall()
                 .icon(if open {
                     IconName::ChevronDown
                 } else {
@@ -217,22 +211,18 @@ impl ConfigBuilder {
                 let open_path = child_path.clone();
                 let add_under_path = open_path.clone();
                 this.child(
-                    app_button(SharedString::from(format!(
+                    ghost_button(SharedString::from(format!(
                         "open-chain-{}",
                         open_path.display()
                     )))
-                    .ghost()
-                    .xsmall()
                     .label("Open")
                     .on_click(move |_, _, cx| open_config_builder(Some(open_path.clone()), cx)),
                 )
                 .child(
-                    app_button(SharedString::from(format!(
+                    ghost_button(SharedString::from(format!(
                         "add-under-{}",
                         add_under_path.display()
                     )))
-                    .ghost()
-                    .xsmall()
                     .label("Add under")
                     .on_click(move |_, _, cx| {
                         open_child_config_builder(add_under_path.clone(), cx)
@@ -240,12 +230,10 @@ impl ConfigBuilder {
                 )
             })
             .child(
-                app_button(SharedString::from(format!(
+                ghost_button(SharedString::from(format!(
                     "unlink-chain-{}",
                     child_path.display()
                 )))
-                .ghost()
-                .xsmall()
                 .icon(IconName::Close)
                 .tooltip("Unlink — the config stays in the library")
                 .on_click(cx.listener(move |this, _, _, cx| {

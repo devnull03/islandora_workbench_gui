@@ -4,7 +4,7 @@ use std::time::Duration;
 use base64::Engine as _;
 use gpui::*;
 use gpui_component::ActiveTheme;
-use gpui_component::button::{Button, ButtonVariants};
+
 use gpui_component::{Icon, IconName, Sizable, StyledExt, spinner::Spinner};
 use settings::AppSettings;
 use workbench_integration::read_credentials;
@@ -161,10 +161,8 @@ impl Render for ServerPingIndicator {
             .gap_1()
             .child(icon)
             .child(
-                Button::new("ping-btn")
+                ui::ghost_button("ping-btn")
                     .label(text)
-                    .ghost()
-                    .xsmall()
                     .p_0()
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _window, cx| {

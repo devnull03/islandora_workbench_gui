@@ -10,8 +10,8 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, button::ButtonVariants, checkbox::Checkbox, h_flex,
-    input::Input, label::Label, select::Select, v_flex,
+    ActiveTheme, IconName, Sizable, StyledExt, checkbox::Checkbox, h_flex, input::Input,
+    label::Label, select::Select, v_flex,
 };
 use serde_yaml::{Mapping, Value};
 use workbench_integration::config::{
@@ -24,7 +24,7 @@ use super::{ConfigBuilder, field_id};
 use ui::tokens::{CHAR_FIELD_W, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
 use ui::{
     APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldNote, FieldRow, MAX_SEGMENTS,
-    RowEditor, Segmented, SettingRow, app_button,
+    RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
 };
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
@@ -298,9 +298,7 @@ impl ConfigBuilder {
                     )
                     .when(!def.required, |row| {
                         row.child(
-                            app_button(SharedString::from(format!("remove-{}", def.key)))
-                                .ghost()
-                                .xsmall()
+                            ghost_button(SharedString::from(format!("remove-{}", def.key)))
                                 .icon(IconName::Close)
                                 .tooltip("Remove this setting")
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -327,9 +325,7 @@ impl ConfigBuilder {
                 )
                 .child(div().flex_1())
                 .child(
-                    app_button(SharedString::from(format!("remove-unknown-{key}")))
-                        .ghost()
-                        .xsmall()
+                    ghost_button(SharedString::from(format!("remove-unknown-{key}")))
                         .icon(IconName::Close)
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.remove_setting(&owned, cx)),
@@ -595,8 +591,6 @@ impl ConfigBuilder {
                     let row_ix = i;
                     cells = cells.child(
                         app_button(SharedString::from(format!("add-item-{key}-{i}")))
-                            .ghost()
-                            .xsmall()
                             .icon(IconName::Plus)
                             .tooltip("Add a value")
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -617,9 +611,7 @@ impl ConfigBuilder {
             let owned = key.clone();
             let row_ix = i;
             row = row.child(
-                app_button(SharedString::from(format!("remove-row-{key}-{i}")))
-                    .ghost()
-                    .xsmall()
+                ghost_button(SharedString::from(format!("remove-row-{key}-{i}")))
                     .icon(IconName::Close)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.remove_row(&owned, row_ix, cx);
@@ -633,23 +625,20 @@ impl ConfigBuilder {
             h_flex()
                 .gap_2()
                 .child(
-                    app_button(SharedString::from(format!("add-row-{key}")))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Plus)
-                        .label(
-                            if matches!(
-                                shape,
-                                Shape::Map | Shape::ListOfOneKeyMaps | Shape::MapOfLists
-                            ) {
-                                "Add row"
-                            } else {
-                                "Add"
-                            },
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.push_row(&owned, cx);
-                        })),
+                    add_row_button(
+                        SharedString::from(format!("add-row-{key}")),
+                        if matches!(
+                            shape,
+                            Shape::Map | Shape::ListOfOneKeyMaps | Shape::MapOfLists
+                        ) {
+                            "row"
+                        } else {
+                            "entry"
+                        },
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.push_row(&owned, cx);
+                    })),
                 )
                 .when(numeric, |this| {
                     this.child(

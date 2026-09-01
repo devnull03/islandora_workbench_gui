@@ -174,7 +174,7 @@ impl ConfigBuilder {
                     .child(
                         app_button(SharedString::from(format!("add-{key}")))
                             .outline()
-                            .xsmall()
+                            .small()
                             .icon(IconName::Plus)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 if let Some(def) = catalog::find(&key) {

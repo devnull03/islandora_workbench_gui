@@ -24,7 +24,9 @@ pub mod tokens;
 
 pub use app_font::AppFont;
 pub use card::{Card, CardTone};
-pub use controls::{APP_CONTROL_SIZE, app_button};
+pub use controls::{
+    APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, add_row_button, app_button, ghost_button,
+};
 pub use field_row::FieldRow;
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;
