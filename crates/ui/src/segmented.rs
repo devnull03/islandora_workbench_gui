@@ -1,21 +1,26 @@
-//! A short enum as a row of buttons rather than a dropdown.
+//! A short enum as one strip of joined cells rather than a dropdown.
 //!
-//! Up to four options; past that the row is wider than the dropdown it replaced and the design
-//! language says to use a select instead. The win is one click instead of two, and every legal
+//! Component Spec §05: one border around the group, cells divided by a 1px rule, the selected
+//! cell filled with `primary`. Up to [`MAX_SEGMENTS`] options inline; past that the first
+//! [`VISIBLE_WITH_OVERFLOW`] show and the rest go behind a `+N` cell, so the strip's width stops
+//! growing with the schema. The win over a dropdown is one click instead of two, and every legal
 //! value visible without opening anything.
 //!
 //! Stateless on purpose: the selected value is passed in and the click is a callback, so this
-//! adds nothing to whatever already owns the value. A control that had its own state entity would
-//! be a second place for the answer to live.
+//! adds nothing to whatever already owns the value. A control with its own state entity would be
+//! a second place for the answer to live, and the answer already lives in the draft.
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
-use gpui_component::{Selectable, Sizable as _, button::Button, h_flex};
+use gpui_component::{ActiveTheme, h_flex, label::Label};
 
-use crate::APP_CONTROL_SIZE;
-use crate::tokens::GAP_SM;
+use crate::tokens::{CONTROL_H, GAP_MD};
 
-/// Above this many options, use a dropdown — see the module docs.
+/// Options that fit inline. Past this the strip is wider than the dropdown it replaced.
 pub const MAX_SEGMENTS: usize = 4;
+
+/// How many stay visible once there is an overflow cell to make room for.
+const VISIBLE_WITH_OVERFLOW: usize = 3;
 
 type SelectFn = Box<dyn Fn(&SharedString, &mut Window, &mut App) + 'static>;
 
@@ -24,6 +29,10 @@ pub struct Segmented {
     id: SharedString,
     options: Vec<(SharedString, SharedString)>,
     selected: Option<SharedString>,
+    /// The last cell, when the options did not all fit. Supplied whole by the caller: it is the
+    /// same dropdown the caller would otherwise have rendered on its own, and only the caller
+    /// knows what to label it. Use [`Segmented::split`] to find out whether one is needed.
+    overflow: Option<AnyElement>,
     on_select: Option<SelectFn>,
 }
 
@@ -37,12 +46,19 @@ impl Segmented {
             id: id.into(),
             options: options.into_iter().collect(),
             selected: None,
+            overflow: None,
             on_select: None,
         }
     }
 
     pub fn selected(mut self, selected: Option<SharedString>) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// The trailing cell for the options that did not fit — typically a `+N` dropdown.
+    pub fn overflow(mut self, overflow: impl IntoElement) -> Self {
+        self.overflow = Some(overflow.into_any_element());
         self
     }
 
@@ -53,29 +69,83 @@ impl Segmented {
         self.on_select = Some(Box::new(handler));
         self
     }
+
+    /// How many cells this will draw, and how many are left over. Public so the caller can decide
+    /// whether an overflow control is needed at all before building one.
+    pub fn split(count: usize) -> (usize, usize) {
+        if count <= MAX_SEGMENTS {
+            (count, 0)
+        } else {
+            (VISIBLE_WITH_OVERFLOW, count - VISIBLE_WITH_OVERFLOW)
+        }
+    }
 }
 
 impl RenderOnce for Segmented {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let colors = cx.theme().colors;
         let on_select = self.on_select.map(std::rc::Rc::new);
         let selected = self.selected;
         let id = self.id;
+        let (visible, _hidden) = Self::split(self.options.len());
+        let cells: Vec<(SharedString, SharedString)> =
+            self.options.into_iter().take(visible).collect();
 
         h_flex()
-            .gap(GAP_SM)
-            .children(self.options.into_iter().map(move |(value, label)| {
-                let is_selected = selected.as_ref() == Some(&value);
-                let handler = on_select.clone();
-                Button::new(SharedString::from(format!("{id}-{value}")))
-                    .label(label)
-                    .with_size(APP_CONTROL_SIZE)
-                    .outline()
-                    .selected(is_selected)
-                    .on_click(move |_, window, cx| {
-                        if let Some(handler) = &handler {
-                            handler(&value, window, cx);
-                        }
-                    })
-            }))
+            .h(CONTROL_H)
+            // `fit-content`: a three-option enum must not stretch to the width of the control
+            // column, or it reads as a text field that happens to have words in it.
+            .flex_none()
+            .w_auto()
+            .items_center()
+            .rounded(cx.theme().radius)
+            .border_1()
+            .border_color(colors.border)
+            // The cells paint to the frame's inner edge, so the frame has to clip them or their
+            // square corners show through its curve.
+            .overflow_hidden()
+            .children(
+                cells
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(i, (value, label))| {
+                        let is_selected = selected.as_ref() == Some(&value);
+                        let handler = on_select.clone();
+                        h_flex()
+                            .id(SharedString::from(format!("{id}-{value}")))
+                            .h_full()
+                            .px(GAP_MD)
+                            .items_center()
+                            .cursor_pointer()
+                            // A divider before every cell but the first, so the group reads as one
+                            // control rather than as a row of buttons that happen to touch.
+                            .when(i != 0, |el| el.border_l_1().border_color(colors.border))
+                            .when(is_selected, |el| {
+                                el.bg(colors.primary).text_color(colors.primary_foreground)
+                            })
+                            .when(!is_selected, |el| {
+                                el.bg(colors.table_head)
+                                    .hover(|el| el.bg(colors.list_hover))
+                            })
+                            .child(Label::new(label).text_sm())
+                            .on_click(move |_, window, cx| {
+                                if let Some(handler) = &handler {
+                                    handler(&value, window, cx);
+                                }
+                            })
+                    }),
+            )
+            .when_some(self.overflow, |strip, overflow| {
+                strip.child(
+                    h_flex()
+                        .h_full()
+                        .px(GAP_MD)
+                        .items_center()
+                        .border_l_1()
+                        .border_color(colors.border)
+                        .bg(colors.table_head)
+                        .child(overflow),
+                )
+            })
     }
 }

@@ -7,6 +7,7 @@
 
 mod app_font;
 mod card;
+mod chips;
 mod controls;
 mod field_row;
 mod inline_message;
@@ -25,6 +26,7 @@ pub mod tokens;
 
 pub use app_font::AppFont;
 pub use card::{Card, CardTone};
+pub use chips::ChipList;
 pub use controls::{
     APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, add_row_button, app_button, ghost_button,
 };

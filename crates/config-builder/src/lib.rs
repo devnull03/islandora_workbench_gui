@@ -293,6 +293,41 @@ impl ConfigBuilder {
         input
     }
 
+    /// The add slot of a chip list.
+    ///
+    /// Unlike every other input here it does **not** commit on change: a per-keystroke commit
+    /// would append one chip per character typed. It commits on Enter and on blur (§05) and
+    /// clears itself, so the slot is always empty and ready for the next value.
+    pub(crate) fn chip_input(
+        &mut self,
+        id: SharedString,
+        setting_key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        if let Some(existing) = self.inputs.get(&id) {
+            return existing.clone();
+        }
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("+ Add"));
+        let key = setting_key.to_string();
+        self._subscriptions.push(cx.subscribe_in(
+            &input,
+            window,
+            move |this, state, event: &InputEvent, window, cx| {
+                if !matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    return;
+                }
+                let text = state.read(cx).value().to_string();
+                if text.trim().is_empty() {
+                    return;
+                }
+                this.push_chip(&key, &text, cx);
+                state.update(cx, |state, cx| state.set_value("", window, cx));
+            },
+        ));
+        self.inputs.insert(id, input.clone());
+        input
+    }
     /// A numeric input for `id`. Same cache and same change handler as [`Self::input`]; the
     /// difference is the state, which carries a digits-only pattern and a floor of zero.
     ///

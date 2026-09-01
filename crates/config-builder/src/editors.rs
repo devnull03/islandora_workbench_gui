@@ -25,9 +25,9 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::tokens::{CHAR_FIELD_W, GAP_MD, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
+use ui::tokens::{CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
 use ui::{
-    APP_CONTROL_SIZE, Card, CardTone, DetailSelectItem, FieldRow, InlineMessage, MAX_SEGMENTS,
+    APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, FieldRow, InlineMessage,
     RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
 };
 
@@ -151,25 +151,15 @@ impl ConfigBuilder {
             | Shape::FilePath
             | Shape::Url
             | Shape::TemplateString => Some(Value::String(self.input_value(&field_id(&[key]), cx))),
-            Shape::ListOfStrings | Shape::CommandList | Shape::ConfigRef => {
+            // Chips have no per-item widget to read: committing one and removing one both edit
+            // the draft directly, the same way the switch does.
+            Shape::ListOfStrings | Shape::ListOfNumbers => None,
+            Shape::CommandList | Shape::ConfigRef => {
                 let n = rows_of(def.shape, current).len();
                 Some(Value::Sequence(
                     (0..n)
                         .map(|i| {
                             Value::String(self.input_value(&field_id(&[key, &i.to_string()]), cx))
-                        })
-                        .collect(),
-                ))
-            }
-            Shape::ListOfNumbers => {
-                let n = rows_of(def.shape, current).len();
-                Some(Value::Sequence(
-                    (0..n)
-                        .map(|i| {
-                            parse_scalar(
-                                &self.input_value(&field_id(&[key, &i.to_string()]), cx),
-                                true,
-                            )
                         })
                         .collect(),
                 ))
@@ -461,29 +451,51 @@ impl ConfigBuilder {
                     cx,
                 );
 
-                // A short enum reads better as every option at once than as a dropdown that hides
-                // three of four. The select state still exists and is still what read_widgets
-                // reads back — the segments write into it rather than owning a rival answer.
-                if items.len() <= MAX_SEGMENTS {
-                    let write = state.clone();
-                    return Segmented::new(
-                        id,
-                        items.iter().map(|i| (i.value.clone(), i.label.clone())),
-                    )
+                // §05. A nullable enum keeps the dropdown: `none` is a real row in the menu,
+                // last and below a rule, and selecting it omits the key from the YAML — there
+                // is no separate clear button, and a segment reading "none" beside real values
+                // would imply null is one of them.
+                if nullable {
+                    let choices: Vec<String> =
+                        def.choices.iter().map(|c| c.label.clone()).collect();
+                    return v_flex()
+                        .gap(GAP_XS)
+                        .child(
+                            Select::new(&state)
+                                .placeholder("Choose…")
+                                .with_size(APP_CONTROL_SIZE)
+                                .w_full(),
+                        )
+                        .child(
+                            Label::new(format!("Choices: not set · {}", choices.join(" · ")))
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                        .into_any_element();
+                }
+
+                // An enum reads better as every option at once than as a dropdown hiding three
+                // of four. The select state still exists and is still what `read_widgets` reads
+                // back — the segments write into it rather than owning a rival answer, and the
+                // overflow cell is that same select, so there is never a second copy.
+                let (_, hidden) = Segmented::split(items.len());
+                let write = state.clone();
+                Segmented::new(id, items.iter().map(|i| (i.value.clone(), i.label.clone())))
                     .selected(selected)
+                    .when(hidden > 0, |strip| {
+                        strip.overflow(
+                            Select::new(&state)
+                                .placeholder(format!("+{hidden}"))
+                                .with_size(APP_CONTROL_SIZE)
+                                .appearance(false),
+                        )
+                    })
                     .on_select(move |value, window, cx| {
                         let value = value.clone();
                         write.update(cx, |state, cx| {
                             state.set_selected_value(&value, window, cx);
                         });
                     })
-                    .into_any_element();
-                }
-
-                Select::new(&state)
-                    .placeholder("Choose…")
-                    .with_size(APP_CONTROL_SIZE)
-                    .w_full()
                     .into_any_element()
             }
 
@@ -546,14 +558,86 @@ impl ConfigBuilder {
                     .into_any_element()
             }
 
-            Shape::ListOfStrings
-            | Shape::ListOfNumbers
-            | Shape::CommandList
+            // §05: chips imply order does not matter, so only the two set-shaped lists get
+            // them. `csv_field_templates` and the command hooks stay rows, because their order
+            // is part of the value.
+            Shape::ListOfStrings | Shape::ListOfNumbers => {
+                self.render_chips(def, &value, window, cx)
+            }
+
+            Shape::CommandList
             | Shape::ConfigRef
             | Shape::ListOfOneKeyMaps
             | Shape::Map
             | Shape::MapOfLists => self.render_rows(def, &value, window, cx),
         }
+    }
+
+    /// A set as chips, with a dashed slot on the end to add another (§05).
+    ///
+    /// The add slot is an ordinary cached input, so it survives a re-render; what is unusual is
+    /// that its subscription commits on Enter and on blur rather than on every keystroke. A
+    /// per-keystroke commit would append a chip per character.
+    fn render_chips(
+        &mut self,
+        def: &'static SettingDef,
+        value: &Value,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let key = def.key.clone();
+        let chips: Vec<SharedString> = rows_of(def.shape, value)
+            .into_iter()
+            .map(|(left, _)| SharedString::from(left))
+            .collect();
+        let add = self.chip_input(field_id(&[&key, "add"]), &key, window, cx);
+        let owned = key.clone();
+        // Not `cx.listener`: that hands the callback its event by reference, and a chip index is
+        // a plain `usize`. A weak handle is the same amount of code and says what it does.
+        let this = cx.entity().downgrade();
+
+        v_flex()
+            .w_full()
+            .gap(GAP_XS)
+            .child(ChipList::new(key.clone(), chips).add_slot(&add).on_remove(
+                move |index, _, cx| {
+                    let Some(builder) = this.upgrade() else {
+                        return;
+                    };
+                    builder.update(cx, |builder, cx| builder.remove_row(&owned, index, cx));
+                },
+            ))
+            .when(def.shape == Shape::ListOfNumbers, |this| {
+                this.child(
+                    Label::new("Numbers only")
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// Append `text` to a chip set, unless it is blank or already there.
+    ///
+    /// §05: duplicates are dropped silently rather than flagged. Re-typing a value you already
+    /// have is not an error worth a message — the set already says what you meant.
+    pub(super) fn push_chip(&mut self, key: &str, text: &str, cx: &mut Context<Self>) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        let Some(def) = workbench_integration::config::catalog::find(key) else {
+            return;
+        };
+        let numeric = def.shape == Shape::ListOfNumbers;
+        let chip = parse_scalar(text, numeric);
+        let entry = self.draft.values.entry(key.to_string());
+        let current = entry.or_insert_with(|| empty_value(def.shape));
+        let items = as_sequence(current);
+        if !items.contains(&chip) {
+            items.push(chip);
+        }
+        self.revalidate(cx);
     }
 
     /// The shared editor behind every list and map shape: numbered rows, a remove button per
@@ -752,7 +836,7 @@ impl ConfigBuilder {
         self.revalidate(cx);
     }
 
-    fn remove_row(&mut self, key: &str, row: usize, cx: &mut Context<Self>) {
+    pub(super) fn remove_row(&mut self, key: &str, row: usize, cx: &mut Context<Self>) {
         match self.draft.values.get_mut(key) {
             Some(Value::Sequence(items)) if row < items.len() => {
                 items.remove(row);
