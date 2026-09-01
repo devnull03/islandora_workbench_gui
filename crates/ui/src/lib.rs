@@ -35,7 +35,7 @@ pub use inline_message::{InlineMessage, MessageLevel};
 pub use labeled_field::LabeledField;
 pub use labeled_select::LabeledSelect;
 pub use path_picker::{PathPickFn, PathPicker, pick_into, pick_into_app};
-pub use row_editor::RowEditor;
+pub use row_editor::{RowActions, RowEditor};
 pub use segmented::{MAX_SEGMENTS, Segmented};
 pub use select_items::DetailSelectItem;
 pub use setting_row::SettingRow;

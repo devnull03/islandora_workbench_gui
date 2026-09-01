@@ -25,10 +25,12 @@ use workbench_integration::config::{
 
 use super::{ConfigBuilder, field_id};
 
-use ui::tokens::{CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W};
+use ui::tokens::{
+    CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W, ROW_ACTION_W,
+};
 use ui::{
     APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, FieldRow, InlineMessage,
-    RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
+    RowActions, RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
 };
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
@@ -655,7 +657,47 @@ impl ConfigBuilder {
         let numeric = shape == Shape::ListOfNumbers;
         let numbered = shape == Shape::CommandList;
 
+        // §07 shows the header band only when the columns are named, which is the keyed shapes
+        // and not a plain list — a header over one unnamed column names nothing.
+        //
+        // The titles are generic because the catalogue has none: `scripts/gen-config-catalog.py`
+        // would have to grow a `columns` field before this could say "Media type" / "Drupal
+        // field" the way the mockup does. Generic beats invented.
+        let columns: Option<(&str, &str)> = match shape {
+            Shape::Map => Some(("Key", "Value")),
+            Shape::ListOfOneKeyMaps => Some(("Name", "Template")),
+            Shape::MapOfLists => Some(("Key", "Values")),
+            _ => None,
+        };
+
         let mut list = RowEditor::new();
+        if let Some((left, right)) = columns {
+            let muted = cx.theme().colors.table_head_foreground;
+            let mono = cx.theme().mono_font_family.clone();
+            list = list.header(
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div().flex_1().min_w(px(0.)).child(
+                            Label::new(left.to_uppercase())
+                                .text_xs()
+                                .font_family(mono.clone())
+                                .text_color(muted),
+                        ),
+                    )
+                    .child(
+                        div().flex_1().min_w(px(0.)).child(
+                            Label::new(right.to_uppercase())
+                                .text_xs()
+                                .font_family(mono)
+                                .text_color(muted),
+                        ),
+                    )
+                    .child(div().w(ROW_ACTION_W).flex_none()),
+            );
+        }
         for (i, (left, items)) in rows.iter().enumerate() {
             let idx = i.to_string();
             let mut row = h_flex().w_full().gap_2().items_center();
@@ -744,11 +786,14 @@ impl ConfigBuilder {
             let owned = key.clone();
             let row_ix = i;
             row = row.child(
-                ghost_button(SharedString::from(format!("remove-row-{key}-{i}")))
-                    .icon(IconName::Close)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.remove_row(&owned, row_ix, cx);
-                    })),
+                RowActions::new().child(
+                    ghost_button(SharedString::from(format!("remove-row-{key}-{i}")))
+                        .icon(IconName::Close)
+                        .tooltip("Remove this row")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.remove_row(&owned, row_ix, cx);
+                        })),
+                ),
             );
             list = list.child(row);
         }
