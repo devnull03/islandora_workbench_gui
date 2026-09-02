@@ -12,26 +12,23 @@
 //!   smaller hit area for the same action, and two ways to do one thing.
 //! * Results are **grouped**, under the schema's own section names, with a count.
 //!
-//! ponytail: hand-rolled rather than driven by `list::ListState`, which §08 asks for. The list
-//! widget would bring virtualization and ↑↓/Enter/Esc, but its search field is fixed (magnifier
-//! prefix, no counter slot) and the trigger §08 specifies is not expressible in it, so the rows,
-//! the header bands and the trigger would all be custom anyway. 142 rows in a 360px scroll area
-//! do not need virtualizing. What is genuinely lost is keyboard navigation; the hint strip says
-//! so honestly rather than advertising keys that do nothing — wire it when focus routing between
-//! a trigger input and a list is needed somewhere else too.
+//! Hand-rolled rather than driven by `list::ListState`, whose fixed magnifier trigger cannot
+//! express this design's chevron, inline result counter, grouped metadata rows, or persistent
+//! footer. The picker owns Up/Down, Enter, Escape and scroll-to-selection directly; 142 catalogue
+//! rows behind a 40-result cap do not need virtualization.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Sizable, StyledExt, h_flex, input::Input, label::Label, scroll::ScrollableElement,
-    v_flex,
+    ActiveTheme, Sizable, StyledExt, button::Button, h_flex, input::Input, label::Label,
+    scroll::ScrollableElement, v_flex,
 };
 use serde_yaml::Value;
 use ui::tokens::{
-    CHIP_H, GAP_MD, GAP_SM, GAP_XS, PICKER_MAX_H, PICKER_TRIGGER_H, RADIUS_SM, TYPE_COL_W,
+    GAP_2XL, GAP_MD, GAP_SM, GAP_XS, PICKER_GLYPH_W, PICKER_MAX_H, PICKER_TRIGGER_H, TYPE_COL_W,
 };
-use ui::{APP_CONTROL_SIZE, app_button};
-use workbench_integration::config::catalog::{self, SettingDef};
+use ui::{APP_CONTROL_SIZE, app_tag};
+use workbench_integration::config::catalog::{self, SettingDef, Shape};
 
 use super::ConfigBuilder;
 
@@ -101,6 +98,7 @@ impl ConfigBuilder {
         let query = self.search.read(cx).value().to_string();
         let matches = self.matches(&query);
         let show_results = self.search_open && !query.trim().is_empty();
+        self.ensure_search_selection(&matches);
         let colors = &cx.theme().colors;
         let muted = colors.muted_foreground;
         let border = if show_results {
@@ -121,6 +119,31 @@ impl ConfigBuilder {
                 div()
                     .relative()
                     .w_full()
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+                        let handled = match event.keystroke.key.as_str() {
+                            "up" => {
+                                this.move_search_selection(-1, cx);
+                                true
+                            }
+                            "down" => {
+                                this.move_search_selection(1, cx);
+                                true
+                            }
+                            "enter" => {
+                                this.activate_search_selection(cx);
+                                true
+                            }
+                            "escape" => {
+                                this.search_open = false;
+                                cx.notify();
+                                true
+                            }
+                            _ => false,
+                        };
+                        if handled {
+                            cx.stop_propagation();
+                        }
+                    }))
                     .child(
                         h_flex()
                             .w_full()
@@ -143,9 +166,9 @@ impl ConfigBuilder {
                                         .w_full(),
                                 ),
                             )
-                            .when(show_results, |this| {
+                            .when(!query.trim().is_empty(), |this| {
                                 this.child(
-                                    Label::new(format!("{} of {total}", matches.len()))
+                                    Label::new(format!("{} of {total} settings", matches.len()))
                                         .text_xs()
                                         .text_color(muted),
                                 )
@@ -174,13 +197,75 @@ impl ConfigBuilder {
         found.into_iter().map(|(_, def)| def).collect()
     }
 
+    fn ensure_search_selection(&mut self, matches: &[&SettingDef]) {
+        let keys = visible_result_keys(matches);
+        let valid = self.search_selected.as_ref().is_some_and(|selected| {
+            keys.iter().any(|key| key == selected)
+                && !self.draft.values.contains_key(selected.as_ref())
+        });
+        if !valid {
+            self.search_selected = keys
+                .into_iter()
+                .find(|key| !self.draft.values.contains_key(key.as_ref()));
+        }
+    }
+
+    fn move_search_selection(&mut self, direction: isize, cx: &mut Context<Self>) {
+        let query = self.search.read(cx).value().to_string();
+        if query.trim().is_empty() {
+            return;
+        }
+        self.search_open = true;
+        let matches = self.matches(&query);
+        let keys = visible_result_keys(&matches);
+        let next = next_selectable_key(&keys, self.search_selected.as_ref(), direction, |key| {
+            self.draft.values.contains_key(key.as_ref())
+        });
+        let Some(next) = next else {
+            self.search_selected = None;
+            cx.notify();
+            return;
+        };
+        self.search_selected = Some(next.clone());
+        if let Some(child_index) = result_child_index(&matches, &next) {
+            self.search_scroll.scroll_to_item(child_index);
+        }
+        cx.notify();
+    }
+
+    fn activate_search_selection(&mut self, cx: &mut Context<Self>) {
+        let Some(key) = self.search_selected.clone() else {
+            return;
+        };
+        if self.draft.values.contains_key(key.as_ref()) {
+            return;
+        }
+        let Some(def) = catalog::find(key.as_ref()) else {
+            return;
+        };
+        self.add_setting(def, cx);
+        self.search_open = true;
+
+        let query = self.search.read(cx).value().to_string();
+        let matches = self.matches(&query);
+        let visual_keys = visible_result_keys(&matches);
+        self.search_selected = next_selectable_key(&visual_keys, Some(&key), 1, |candidate| {
+            self.draft.values.contains_key(candidate.as_ref())
+        });
+        if let Some(selected) = &self.search_selected
+            && let Some(child_index) = result_child_index(&matches, selected)
+        {
+            self.search_scroll.scroll_to_item(child_index);
+        }
+        cx.notify();
+    }
+
     /// The results panel: groups in the order their best match ranked, each under a header band.
     ///
-    /// The height chain is load-bearing and was wrong twice. `overflow_y_scrollbar` moves the
-    /// caller's size refinements onto a `size_full` wrapper, so a `max_h` written directly on the
-    /// scrolling element resolves against an auto-height ancestor and clamps nothing. The panel
-    /// therefore caps its own height, and the scroll area takes a definite one from flex —
-    /// `flex_1` plus `min_h(0)`, the vertical twin of the zero minimum every row here needs.
+    /// The result body is content-sized until it reaches [`PICKER_MAX_H`], then scrolls. Do not
+    /// use `overflow_y_scrollbar` here: that convenience wrapper renders a `size_full` container,
+    /// which collapses inside this auto-height absolute popover. Keeping the native GPUI scroll
+    /// element also means keyboard `scroll_to_item` and the visible scrollbar share one handle.
     fn render_results(
         &self,
         query: &str,
@@ -193,17 +278,39 @@ impl ConfigBuilder {
         let groups = group_by_section(&matches[..matches.len().min(MAX_RESULTS)]);
         // Rows are rendered up front rather than inside `children`: that closure cannot borrow
         // `cx`, and the rows need it.
-        let sections: Vec<(String, usize, Vec<AnyElement>)> = groups
-            .into_iter()
-            .map(|(group, items)| {
-                let count = items.len();
-                let rows = items
+        // Headers and rows are direct scroll children. That lets `ScrollHandle::scroll_to_item`
+        // reveal a keyboard-selected row even though the visual list is grouped.
+        let mut children: Vec<AnyElement> = Vec::new();
+        for (group, items) in groups {
+            children.push(
+                h_flex()
+                    .w_full()
+                    .px(GAP_MD)
+                    .py(GAP_XS)
+                    .gap(GAP_SM)
+                    .items_center()
+                    .bg(colors.table_head)
+                    .border_b_1()
+                    .border_color(colors.table_row_border)
+                    .child(
+                        Label::new(group.to_uppercase())
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(colors.table_head_foreground),
+                    )
+                    .child(
+                        Label::new(format!("{} matches", items.len()))
+                            .text_xs()
+                            .text_color(muted),
+                    )
+                    .into_any_element(),
+            );
+            children.extend(
+                items
                     .into_iter()
-                    .map(|def| self.render_result(def, cx).into_any_element())
-                    .collect();
-                (group, count, rows)
-            })
-            .collect();
+                    .map(|def| self.render_result(def, cx).into_any_element()),
+            );
+        }
 
         // `deferred` is what makes this a popover instead of a rectangle the rows draw over.
         // GPUI paints in tree order and absolute positioning does not change that, so the
@@ -221,7 +328,6 @@ impl ConfigBuilder {
                 .child(
                     v_flex()
                         .w_full()
-                        .max_h(PICKER_MAX_H)
                         .rounded(cx.theme().radius_lg)
                         .border_1()
                         .border_color(colors.border)
@@ -229,13 +335,13 @@ impl ConfigBuilder {
                         .overflow_hidden()
                         .child(
                             v_flex()
+                                .id("setting-search-results")
                                 .w_full()
-                                .flex_1()
-                                // The vertical zero minimum. Without it this flex item's basis is
-                                // its content and it simply grows past the cap above.
-                                .min_h(px(0.))
-                                .overflow_y_scrollbar()
-                                .when(sections.is_empty(), |this| {
+                                .max_h(PICKER_MAX_H)
+                                .track_scroll(&self.search_scroll)
+                                .overflow_y_scroll()
+                                .vertical_scrollbar(&self.search_scroll)
+                                .when(children.is_empty(), |this| {
                                     this.child(
                                         h_flex()
                                             .w_full()
@@ -249,33 +355,7 @@ impl ConfigBuilder {
                                             ),
                                     )
                                 })
-                                .children(sections.into_iter().map(|(group, count, rows)| {
-                                    v_flex()
-                                        .w_full()
-                                        .child(
-                                            h_flex()
-                                                .w_full()
-                                                .px(GAP_MD)
-                                                .py(GAP_XS)
-                                                .gap(GAP_SM)
-                                                .items_center()
-                                                .bg(colors.table_head)
-                                                .border_b_1()
-                                                .border_color(colors.table_row_border)
-                                                .child(
-                                                    Label::new(group.to_uppercase())
-                                                        .text_xs()
-                                                        .font_semibold()
-                                                        .text_color(colors.table_head_foreground),
-                                                )
-                                                .child(
-                                                    Label::new(count.to_string())
-                                                        .text_xs()
-                                                        .text_color(muted),
-                                                ),
-                                        )
-                                        .children(rows)
-                                })),
+                                .children(children),
                         )
                         .child(
                             h_flex()
@@ -288,16 +368,9 @@ impl ConfigBuilder {
                                 .bg(colors.table_head)
                                 .border_t_1()
                                 .border_color(colors.table_row_border)
-                                .child(
-                                    Label::new("Click a setting to add it")
-                                        .text_xs()
-                                        .text_color(muted),
-                                )
-                                .child(
-                                    Label::new("clear the box to close")
-                                        .text_xs()
-                                        .text_color(muted),
-                                ),
+                                .child(Label::new("↑↓ to move").text_xs().text_color(muted))
+                                .child(Label::new("Enter to add").text_xs().text_color(muted))
+                                .child(Label::new("Esc to close").text_xs().text_color(muted)),
                         ),
                 ),
         )
@@ -307,7 +380,9 @@ impl ConfigBuilder {
         let colors = cx.theme().colors;
         let muted = colors.muted_foreground;
         let added = self.draft.values.contains_key(&def.key);
-        let key = def.key.clone();
+        let key: SharedString = def.key.clone().into();
+        let selected = self.search_selected.as_ref() == Some(&key);
+        let hover_key = key.clone();
 
         h_flex()
             .id(SharedString::from(format!("pick-{}", def.key)))
@@ -318,22 +393,30 @@ impl ConfigBuilder {
             .items_center()
             .border_b_1()
             .border_color(colors.table_row_border)
+            .when(selected && !added, |this| this.bg(colors.list_hover))
             .when(added, |this| this.opacity(0.5))
             .when(!added, |this| {
                 this.cursor_pointer()
                     .hover(move |this| this.bg(colors.list_hover))
+                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.search_selected = Some(hover_key.clone());
+                            cx.notify();
+                        }
+                    }))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let Some(def) = catalog::find(&key) else {
-                            return;
-                        };
-                        this.add_setting(def, cx);
-                        // §08: adding keeps the panel open with the query intact, so a run of
-                        // related settings is one search and several clicks. `add_setting` closes
-                        // it, which is right for the keyboard flow and wrong here.
-                        this.search_open = true;
-                        cx.notify();
+                        this.search_selected = Some(key.clone());
+                        this.activate_search_selection(cx);
                     }))
             })
+            .child(
+                div().w(PICKER_GLYPH_W).flex_none().child(
+                    Label::new(shape_glyph(def.shape))
+                        .text_xs()
+                        .font_family(cx.theme().mono_font_family.clone())
+                        .text_color(colors.primary),
+                ),
+            )
             .child(
                 // The text column is the only thing allowed to flex, and it truncates. Everything
                 // to its right is fixed width, so a row can never be wider than the panel.
@@ -352,14 +435,8 @@ impl ConfigBuilder {
                     }),
             )
             .child(
-                h_flex()
-                    .h(CHIP_H)
-                    .px(GAP_SM)
-                    .items_center()
+                app_tag()
                     .flex_none()
-                    .rounded(RADIUS_SM)
-                    .border_1()
-                    .border_color(colors.border)
                     .child(Label::new(def.shape.label()).text_xs().text_color(muted)),
             )
             .child(
@@ -371,6 +448,7 @@ impl ConfigBuilder {
                     })
                     .text_xs()
                     .text_color(muted)
+                    .text_right()
                     .truncate(),
                 ),
             )
@@ -379,24 +457,55 @@ impl ConfigBuilder {
     fn render_templates(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .w_full()
-            .gap_2()
+            .mt(GAP_2XL)
+            .pt(GAP_2XL)
+            .gap(GAP_MD)
+            .border_t_1()
+            .border_color(cx.theme().colors.border)
             .child(
-                Label::new("Or start from a template")
-                    .text_sm()
+                Label::new("OR START FROM A TEMPLATE")
+                    .text_xs()
+                    .font_semibold()
                     .text_color(cx.theme().muted_foreground),
             )
-            .child(h_flex().gap_2().flex_wrap().children(TEMPLATES.iter().map(
-                |(name, task, extras)| {
-                    let task = *task;
-                    let extras = *extras;
-                    app_button(SharedString::from(format!("template-{task}")))
-                        .outline()
-                        .label(format!("{name} — task: {task}, plus {}", extras.len()))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.apply_template(task, extras, cx);
-                        }))
-                },
-            )))
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap(GAP_MD)
+                    .items_stretch()
+                    .flex_wrap()
+                    .children(TEMPLATES.iter().map(|(name, task, extras)| {
+                        let task = *task;
+                        let extras = *extras;
+                        div().flex_1().min_w(px(140.)).child(
+                            Button::new(SharedString::from(format!("template-{task}")))
+                                .outline()
+                                .w_full()
+                                .h_auto()
+                                .p(GAP_MD)
+                                .items_start()
+                                .justify_start()
+                                .child(
+                                    v_flex()
+                                        .w_full()
+                                        .gap(GAP_XS)
+                                        .items_start()
+                                        .child(Label::new(*name).text_sm().font_semibold())
+                                        .child(
+                                            Label::new(format!(
+                                                "task: {task}, plus {} settings",
+                                                extras.len()
+                                            ))
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground),
+                                        ),
+                                )
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.apply_template(task, extras, cx);
+                                })),
+                        )
+                    })),
+            )
     }
 
     fn apply_template(&mut self, task: &str, extras: &[&str], cx: &mut Context<Self>) {
@@ -419,7 +528,7 @@ impl ConfigBuilder {
 /// The default, short enough to sit at the end of a search row.
 fn default_preview(value: &Value) -> String {
     match value {
-        Value::Null => String::new(),
+        Value::Null => "—".to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Number(n) => n.to_string(),
         Value::String(s) if s.len() <= 24 => s.clone(),
@@ -428,6 +537,63 @@ fn default_preview(value: &Value) -> String {
         Value::Mapping(m) => format!("{} entries", m.len()),
         _ => String::new(),
     }
+}
+
+fn shape_glyph(shape: Shape) -> &'static str {
+    match shape {
+        Shape::Boolean => "□",
+        Shape::Integer => "12",
+        Shape::FilePath | Shape::ConfigRef => "/",
+        Shape::String | Shape::Delimiter | Shape::Url | Shape::TemplateString => "ab",
+        Shape::Enum | Shape::NullableEnum => "◇",
+        Shape::ListOfStrings | Shape::ListOfNumbers | Shape::ListOfOneKeyMaps => "[]",
+        Shape::Map | Shape::MapOfLists => "{}",
+        Shape::CommandList => ">",
+    }
+}
+
+/// Visible result order after the group projection, rather than catalogue rank order. Keyboard
+/// movement must follow what the eye sees when two groups interleave in the ranked input.
+fn visible_result_keys(matches: &[&SettingDef]) -> Vec<SharedString> {
+    group_by_section(&matches[..matches.len().min(MAX_RESULTS)])
+        .into_iter()
+        .flat_map(|(_, items)| items.into_iter().map(|def| def.key.clone().into()))
+        .collect()
+}
+
+/// Direct-child index in the scroll body. Each group header consumes one slot before its rows.
+fn result_child_index(matches: &[&SettingDef], selected: &SharedString) -> Option<usize> {
+    let mut child_index = 0;
+    for (_, items) in group_by_section(&matches[..matches.len().min(MAX_RESULTS)]) {
+        child_index += 1;
+        for def in items {
+            if def.key.as_str() == selected.as_ref() {
+                return Some(child_index);
+            }
+            child_index += 1;
+        }
+    }
+    None
+}
+
+fn next_selectable_key(
+    keys: &[SharedString],
+    current: Option<&SharedString>,
+    direction: isize,
+    is_unavailable: impl Fn(&SharedString) -> bool,
+) -> Option<SharedString> {
+    if keys.is_empty() {
+        return None;
+    }
+    let step = if direction < 0 { -1 } else { 1 };
+    let start = current
+        .and_then(|selected| keys.iter().position(|key| key == selected))
+        .map(|index| index as isize)
+        .unwrap_or(if step < 0 { 0 } else { -1 });
+    (1..=keys.len()).find_map(|offset| {
+        let index = (start + step * offset as isize).rem_euclid(keys.len() as isize) as usize;
+        (!is_unavailable(&keys[index])).then(|| keys[index].clone())
+    })
 }
 
 /// How well `def` answers `query`, or `None` if it does not. Lower is better: an exact prefix
@@ -475,7 +641,11 @@ fn group_by_section<'a>(matches: &[&'a SettingDef]) -> Vec<(String, Vec<&'a Sett
 mod tests {
     // Not `use super::*`: this module glob-imports `gpui`, whose own `test` macro would
     // shadow the one this needs.
-    use super::{group_by_section, rank};
+    use super::{
+        group_by_section, next_selectable_key, rank, result_child_index, shape_glyph,
+        visible_result_keys,
+    };
+    use gpui::SharedString;
     use serde_yaml::Value;
     use workbench_integration::config::catalog::{Browse, SettingDef, Shape};
 
@@ -545,5 +715,51 @@ mod tests {
     #[test]
     fn no_matches_means_no_sections_rather_than_one_empty_one() {
         assert!(group_by_section(&[]).is_empty());
+    }
+
+    #[test]
+    fn visible_keys_and_scroll_indices_follow_grouped_order() {
+        let a = def("a", "First", "");
+        let b = def("b", "Second", "");
+        let c = def("c", "First", "");
+        let matches = [&a, &b, &c];
+
+        assert_eq!(
+            visible_result_keys(&matches),
+            vec![SharedString::from("a"), "c".into(), "b".into()]
+        );
+        // Header, a, c, header, b.
+        assert_eq!(result_child_index(&matches, &"c".into()), Some(2));
+        assert_eq!(result_child_index(&matches, &"b".into()), Some(4));
+    }
+
+    #[test]
+    fn keyboard_selection_wraps_and_skips_unavailable_rows() {
+        let keys: Vec<SharedString> = vec!["a".into(), "b".into(), "c".into()];
+        let unavailable = |key: &SharedString| key.as_ref() == "b";
+
+        assert_eq!(
+            next_selectable_key(&keys, Some(&"a".into()), 1, unavailable),
+            Some("c".into())
+        );
+        assert_eq!(
+            next_selectable_key(&keys, Some(&"c".into()), 1, unavailable),
+            Some("a".into())
+        );
+        assert_eq!(
+            next_selectable_key(&keys, None, -1, unavailable),
+            Some("c".into())
+        );
+        assert_eq!(next_selectable_key(&keys, None, 1, |_| true), None);
+    }
+
+    #[test]
+    fn every_shape_family_has_a_compact_palette_glyph() {
+        assert_eq!(shape_glyph(Shape::Boolean), "□");
+        assert_eq!(shape_glyph(Shape::Integer), "12");
+        assert_eq!(shape_glyph(Shape::FilePath), "/");
+        assert_eq!(shape_glyph(Shape::TemplateString), "ab");
+        assert_eq!(shape_glyph(Shape::ListOfStrings), "[]");
+        assert_eq!(shape_glyph(Shape::Map), "{}");
     }
 }

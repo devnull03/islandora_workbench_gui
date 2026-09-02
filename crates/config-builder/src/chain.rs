@@ -7,9 +7,12 @@ use std::{
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::{ActiveTheme, IconName, StyledExt, h_flex, label::Label, v_flex};
-use ui::tokens::{CHEVRON_SLOT, CHIP_H, GAP_SM, INDENT_STEP, RADIUS_SM};
-use ui::{Callout, Card, CardTone, app_button, ghost_button};
+use gpui_component::{
+    ActiveTheme, Icon, IconName, Sizable, Size, StyledExt, alert::Alert, h_flex, label::Label,
+    v_flex,
+};
+use ui::tokens::{CHEVRON_SLOT, GAP_SM, INDENT_STEP};
+use ui::{Card, CardTone, app_button, app_tag, ghost_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
 use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
@@ -88,10 +91,21 @@ impl ConfigBuilder {
             // usually a mistake and occasionally exactly what someone meant; the app is not
             // in a position to tell which.
             .when(max_depth >= 4, |this| {
-                this.child(Callout::warning(format!(
-                    "This chain is {max_depth} levels deep. Each level runs every config below \
-                     it, so the run order is longer than it looks."
-                )))
+                let colors = cx.theme().colors;
+                this.child(
+                    Alert::warning(
+                        "chain-depth-warning",
+                        format!(
+                            "This chain is {max_depth} levels deep. Each level runs every config \
+                             below it, so the run order is longer than it looks."
+                        ),
+                    )
+                    .with_size(Size::Small)
+                    .icon(Icon::new(IconName::TriangleAlert).text_color(colors.warning))
+                    .bg(colors.table_head)
+                    .border_color(colors.border)
+                    .text_color(colors.muted_foreground),
+                )
             })
             .child(
                 h_flex()
@@ -133,15 +147,9 @@ impl ConfigBuilder {
                         // is the one you most need to read the end of.
                         .child(h_flex().w_full().gap(GAP_SM).flex_wrap().children(
                             run_order.into_iter().enumerate().map(|(index, label)| {
-                                h_flex()
-                                    .h(CHIP_H)
-                                    .px(GAP_SM)
+                                app_tag()
                                     .gap(GAP_SM)
-                                    .items_center()
                                     .flex_none()
-                                    .rounded(RADIUS_SM)
-                                    .border_1()
-                                    .border_color(colors.border)
                                     .bg(colors.background)
                                     .child(
                                         Label::new(format!("{}", index + 1))

@@ -163,6 +163,10 @@ pub struct ConfigBuilder {
     pub(crate) description: String,
 
     pub(crate) search: Entity<InputState>,
+    /// Stable catalogue key selected in the add-setting palette. A key survives filtering and
+    /// regrouping; a row index would point at a different setting after either operation.
+    pub(crate) search_selected: Option<SharedString>,
+    pub(crate) search_scroll: ScrollHandle,
     pub(crate) yaml_editor: Entity<EditorState>,
     pub(crate) yaml_text: String,
     pub(crate) search_open: bool,
@@ -231,8 +235,12 @@ impl ConfigBuilder {
         let yaml_editor =
             cx.new(|cx| EditorState::new(window, cx).default_value(yaml_text.clone()));
         let _subscriptions = vec![cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change) {
-                this.search_open = !this.search.read(cx).value().trim().is_empty();
+            if matches!(event, InputEvent::Change | InputEvent::Focus) {
+                let query = this.search.read(cx).value().trim().to_string();
+                this.search_open = !query.is_empty();
+                if matches!(event, InputEvent::Change) {
+                    this.search_selected = None;
+                }
                 cx.notify();
             }
         })];
@@ -260,6 +268,8 @@ impl ConfigBuilder {
             inputs: HashMap::new(),
             selects: HashMap::new(),
             search,
+            search_selected: None,
+            search_scroll: ScrollHandle::new(),
             yaml_editor,
             yaml_text,
             search_open: false,

@@ -72,11 +72,9 @@ impl Render for OpenTerminal {
             .get("workbench_path")
             .is_some_and(|value| !value.text().trim().is_empty());
         div().child(
-            ui::ghost_button("Open Terminal")
+            ui::status_bar_button("Open Terminal")
                 .icon(IconName::SquareTerminal)
                 .label("Open Terminal")
-                .px_0()
-                .cursor_pointer()
                 .disabled(!configured)
                 .tooltip(if configured {
                     "Open a terminal in the Workbench folder"
@@ -96,11 +94,9 @@ pub struct ReloadConfigs;
 impl Render for ReloadConfigs {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div().child(
-            ui::ghost_button("reload-configs")
+            ui::status_bar_button("reload-configs")
                 .icon(IconName::Redo2)
                 .label("Reload")
-                .px_0()
-                .cursor_pointer()
                 .tooltip("Reload settings and task configs from disk")
                 .on_click(cx.listener(|_, _, _, cx| {
                     let current_bounds = AppSettings::get(cx).main_window_bounds.clone();

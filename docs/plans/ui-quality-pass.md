@@ -26,10 +26,10 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
 - [x] Audit every visible `Button`, link-like label, and icon control in the main window, Settings,
   and Config Builder. Remove dead controls, wire real actions, and stop styling inert text as an
   affordance. (`helpers::_open_folder` and `catalog_workbench_ref` are gone; the log-dock toggle
-  and update indicator are now one `ui::StatusBarButton`.)
+  and update indicator now share the library-backed `ui::status_bar_button` constructor.)
 - [x] Use one compact control height, `text_xs`/`text_sm` hierarchy, and the theme radius across
   adjacent inputs, selects, browse buttons, and action buttons. `custom_fields` no longer sits a
-  size below the rest of the app, and `ui::StatusBarButton` was the last `rounded_md()` bypass of
+  size below the rest of the app, and the shared status button removed the last `rounded_md()` bypass of
   the theme radius. Long-label clipping at the 520px minimum still needs a visual pass.
 - [ ] Keep primary colour for the primary action and selected/active state. Secondary actions use
   neutral or ghost treatment and gain accent on hover/focus.
@@ -42,7 +42,8 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   choosing a result closes them. The separate **Add setting / Close** toggle is gone.
 - [x] Keep the result count inside the palette/status treatment instead of competing with the
   field.
-- [ ] Results must be keyboard reachable (Up/Down, Enter, Escape), not pointer-only.
+- [x] Results are keyboard reachable (Up/Down, Enter, Escape), with selection kept visible while
+  the result body scrolls.
 - [x] Replace the tall runtime-supplied card with the compact inline locked band from the design:
   `host`, `credentials_file_path`, and `input_csv` plus one short explanation.
 - [x] Match setting-row, footer, template, list-row, browse, remove, and add control dimensions and
@@ -125,8 +126,8 @@ Applied on top of the checklist above. What landed, and what the spec asked for 
 **Landed.** Archivo and IBM Plex Mono bundled under `assets/fonts/` and applied at each window
 root via `ui::AppFont` — gpui never consults the theme for a UI font, so a bundled family is inert
 until a root asks. `ui::tokens` carries the 4px spacing scale and the control geometry. `ui`
-gained `Card`, `FieldRow`, `SettingRow`, `RowEditor`, `Segmented`, `SummaryLines`,
-`StatusBarButton`, and `pick_into`/`pick_into_app`; four hand-rolled path pickers and seven inline
+gained `Card`, `FieldRow`, `SettingRow`, `RowEditor`, `SummaryLines`, shared library-backed
+tag/status-button constructors, and `pick_into`/`pick_into_app`; four hand-rolled path pickers and seven inline
 browse rows collapsed onto them.
 
 **Not built, deliberately.**
@@ -178,10 +179,11 @@ Profiles and `EntityCard` are untouched.
 
 ### Also landed
 
-`InlineMessage` (fixed 14px glyph column) replacing `FieldNote`; `Callout` for group-level notes;
-`ChipList` for the two order-free list shapes; `Switch` for every YAML boolean and `NumberInput`
-for every integer; `Segmented` rebuilt as one joined strip with a `+N` overflow cell that reuses
-the caller's own `Select`; `RowActions` revealing on row hover; `LockedBand` and `ProblemSummary`;
+`InlineMessage` (fixed 14px glyph column) replacing `FieldNote`; a styled upstream `Alert` for
+group-level notes; `ChipList` composed from the shared upstream `Tag` skin for the two order-free
+list shapes; `Switch` for every YAML boolean and `NumberInput` for every integer; upstream
+`ButtonGroup` for short enums and the caller's own `Select` for longer ones; `RowActions`
+revealing on row hover; `LockedBand` and `ProblemSummary`;
 an editable name and description in the builder header, the description stored on
 `settings::TaskConfig` because Workbench's schema has nowhere to put it; the YAML panel at 400px.
 
@@ -189,10 +191,9 @@ an editable name and description in the builder header, the description stored o
 
 - *`SettingPicker` on `list::ListState`.* §08 asks for it. The list widget's search field is fixed
   (magnifier prefix, no counter slot) and §08's own trigger is not expressible in it, so rows,
-  header bands and trigger would be custom regardless, and 142 rows in a 360px scroll area do not
-  need virtualizing. **Keyboard navigation is the real loss** — the hint strip says what does work
-  rather than advertising keys that do nothing. Wire it when focus routing between a trigger input
-  and a list is needed somewhere else too.
+  header bands and trigger remain custom; 142 rows in a 360px scroll area do not need virtualizing.
+  The custom picker now owns the missing Up/Down, Enter and Escape contract directly, with one
+  stable selected key shared by pointer hover and keyboard movement.
 - *`RowEditor`'s column-spec refactor.* The chrome moved, the cells did not, for the reason
   recorded in the previous pass and now in the module docs.
 - *`Map` column titles.* §07 wants real names; the catalogue has none, so the header ships

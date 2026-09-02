@@ -6,8 +6,8 @@
 //! gets a [`crate::RowEditor`]. Rendering an ordered list as chips tells the user a lie about the
 //! value they are editing.
 //!
-//! Stateless about the set itself, like [`crate::Segmented`]: the chips are handed in and removal
-//! is a callback, so the draft stays the only place the answer lives. The one piece of state is
+//! Stateless about the set itself: the chips are handed in and removal is a callback, so the
+//! draft stays the only place the answer lives. The one piece of state is
 //! the add slot's own input, which belongs to the caller for the same reason every other input in
 //! the builder does — it is cached by field id and survives a re-render.
 
@@ -19,8 +19,8 @@ use gpui_component::{
     label::Label,
 };
 
-use crate::APP_CONTROL_SIZE_SM;
 use crate::tokens::{CHIP_H, GAP_SM, RADIUS_SM};
+use crate::{APP_CONTROL_SIZE_SM, app_tag};
 
 type RemoveFn = Box<dyn Fn(usize, &mut Window, &mut App) + 'static>;
 
@@ -73,15 +73,9 @@ impl RenderOnce for ChipList {
                 let mono = mono.clone();
                 move |(i, chip)| {
                     let remove = on_remove.clone();
-                    h_flex()
-                        .h(CHIP_H)
-                        .px(GAP_SM)
+                    app_tag()
                         .gap(GAP_SM)
-                        .items_center()
                         .flex_none()
-                        .rounded(RADIUS_SM)
-                        .border_1()
-                        .border_color(colors.border)
                         .bg(colors.table_head)
                         .child(Label::new(chip.clone()).text_xs().font_family(mono.clone()))
                         .when_some(remove, |el, remove| {

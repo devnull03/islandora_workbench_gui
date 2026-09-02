@@ -6,45 +6,38 @@
 //! different heights, which is the specific defect this crate exists to prevent.
 
 mod app_font;
-mod callout;
 mod card;
 mod chips;
 mod controls;
 mod field_row;
 mod inline_message;
 mod labeled_field;
-mod labeled_select;
 mod locked_band;
 mod path_field;
 mod path_picker;
 mod row_editor;
-mod segmented;
 mod select_items;
 mod setting_row;
-mod status_bar_button;
 mod step_section;
 mod summary_lines;
 pub mod theme;
 pub mod tokens;
 
 pub use app_font::AppFont;
-pub use callout::Callout;
 pub use card::{Card, CardTone};
 pub use chips::ChipList;
 pub use controls::{
-    APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, add_row_button, app_button, ghost_button,
+    APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, MAX_INLINE_ENUM_OPTIONS, add_row_button, app_button,
+    app_tag, ghost_button, status_bar_button,
 };
 pub use field_row::FieldRow;
 pub use inline_message::{InlineMessage, MessageLevel};
 pub use labeled_field::LabeledField;
-pub use labeled_select::LabeledSelect;
 pub use locked_band::{LockedBand, ProblemSummary};
 pub use path_field::{PathField, PathPickFn};
 pub use path_picker::{pick_into, pick_into_app};
 pub use row_editor::{RowActions, RowEditor};
-pub use segmented::{MAX_SEGMENTS, Segmented};
 pub use select_items::{DetailSelectItem, app_select};
 pub use setting_row::SettingRow;
-pub use status_bar_button::StatusBarButton;
 pub use step_section::StepSection;
 pub use summary_lines::SummaryLines;

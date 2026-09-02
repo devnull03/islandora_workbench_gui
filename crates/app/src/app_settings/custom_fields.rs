@@ -16,7 +16,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, IconName, Sizable,
-    button::{Button, ButtonVariants},
+    button::ButtonVariants,
     checkbox::Checkbox,
     h_flex,
     input::{Input, InputState},
@@ -105,10 +105,8 @@ fn config_row(
     if !expanded {
         let toggle = open.clone();
         if index.is_none() {
-            return Button::new("add-config")
-                .ghost()
+            return ui::add_row_button("add-config", "configuration")
                 .w_full()
-                .label("+ Add configuration")
                 .on_click(move |_, _, cx| {
                     toggle.update(cx, |state, cx| {
                         state.toggle(None);
@@ -131,18 +129,16 @@ fn config_row(
                             .line(config.file_path.clone()),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("edit-{id}")))
+                        ui::app_button(SharedString::from(format!("edit-{id}")))
                             .icon(IconName::Settings2)
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Open in the config builder")
                             .on_click(move |_, _, cx| open_config_builder(Some(path.clone()), cx)),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("rename-{id}")))
+                        ui::app_button(SharedString::from(format!("rename-{id}")))
                             .label("Edit")
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| {
                                 toggle.update(cx, |state, cx| {
                                     state.toggle(Some(idx));
@@ -151,10 +147,9 @@ fn config_row(
                             }),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("remove-{id}")))
+                        ui::app_button(SharedString::from(format!("remove-{id}")))
                             .icon(IconName::Close)
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Remove from the library")
                             .on_click(move |_, _, cx| AppSettings::remove_task_config(idx, cx)),
                     ),
@@ -219,9 +214,8 @@ fn config_row(
                 .gap_2()
                 .justify_end()
                 .child(
-                    Button::new(SharedString::from(format!("cfg-cancel-{id}")))
+                    ui::app_button(SharedString::from(format!("cfg-cancel-{id}")))
                         .ghost()
-                        .with_size(ui::APP_CONTROL_SIZE)
                         .label("Cancel")
                         .on_click(move |_, _, cx| {
                             cancel.update(cx, |state, cx| {
@@ -231,9 +225,8 @@ fn config_row(
                         }),
                 )
                 .child(
-                    Button::new(SharedString::from(format!("cfg-save-{id}")))
+                    ui::app_button(SharedString::from(format!("cfg-save-{id}")))
                         .primary()
-                        .with_size(ui::APP_CONTROL_SIZE)
                         .label(if index.is_some() { "Save" } else { "Add" })
                         .on_click(move |_, _, cx| {
                             AppSettings::upsert_task_config(
@@ -318,10 +311,8 @@ fn server_row(
     if !expanded {
         let toggle = open.clone();
         if index.is_none() {
-            return Button::new("add-server")
-                .ghost()
+            return ui::add_row_button("add-server", "server")
                 .w_full()
-                .label("+ Add server")
                 .on_click(move |_, _, cx| {
                     toggle.update(cx, |state, cx| {
                         state.toggle(None);
@@ -357,20 +348,18 @@ fn server_row(
                         )
                     })
                     .child(
-                        Button::new(SharedString::from(format!("test-{id}")))
+                        ui::app_button(SharedString::from(format!("test-{id}")))
                             .label("Test")
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Check the host, then the credentials")
                             .on_click(move |_, _, cx| {
                                 test_server(idx, url.clone(), creds.clone(), cx)
                             }),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("srv-edit-{id}")))
+                        ui::app_button(SharedString::from(format!("srv-edit-{id}")))
                             .label("Edit")
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| {
                                 toggle.update(cx, |state, cx| {
                                     state.toggle(Some(idx));
@@ -379,10 +368,9 @@ fn server_row(
                             }),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("srv-dup-{id}")))
+                        ui::app_button(SharedString::from(format!("srv-dup-{id}")))
                             .icon(IconName::Copy)
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .tooltip("Duplicate")
                             .on_click(move |_, _, cx| {
                                 // A copy has not been tested, whatever the original knows.
@@ -393,10 +381,9 @@ fn server_row(
                             }),
                     )
                     .child(
-                        Button::new(SharedString::from(format!("srv-remove-{id}")))
+                        ui::app_button(SharedString::from(format!("srv-remove-{id}")))
                             .icon(IconName::Close)
                             .ghost()
-                            .with_size(ui::APP_CONTROL_SIZE)
                             .on_click(move |_, _, cx| AppSettings::remove_server_config(idx, cx)),
                     ),
             )
@@ -464,9 +451,8 @@ fn server_row(
                 .gap_2()
                 .justify_end()
                 .child(
-                    Button::new(SharedString::from(format!("srv-cancel-{id}")))
+                    ui::app_button(SharedString::from(format!("srv-cancel-{id}")))
                         .ghost()
-                        .with_size(ui::APP_CONTROL_SIZE)
                         .label("Cancel")
                         .on_click(move |_, _, cx| {
                             cancel.update(cx, |state, cx| {
@@ -476,9 +462,8 @@ fn server_row(
                         }),
                 )
                 .child(
-                    Button::new(SharedString::from(format!("srv-save-{id}")))
+                    ui::app_button(SharedString::from(format!("srv-save-{id}")))
                         .primary()
-                        .with_size(ui::APP_CONTROL_SIZE)
                         .label(if index.is_some() { "Save" } else { "Add" })
                         .on_click(move |_, _, cx| {
                             AppSettings::upsert_server_config(

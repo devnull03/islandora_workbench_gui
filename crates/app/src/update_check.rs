@@ -134,13 +134,11 @@ impl Render for UpdateIndicator {
             return div();
         };
         div().child(
-            ui::StatusBarButton::new(
-                "update-available",
-                IconName::ArrowDown,
-                format!("Update to {}", update.version),
-            )
-            .tooltip("Open the release notes to download")
-            .on_click(move |_, cx| cx.open_url(&update.release_notes_url)),
+            ui::status_bar_button("update-available")
+                .icon(IconName::ArrowDown)
+                .label(format!("Update to {}", update.version))
+                .tooltip("Open the release notes to download")
+                .on_click(move |_, _, cx| cx.open_url(&update.release_notes_url)),
         )
     }
 }

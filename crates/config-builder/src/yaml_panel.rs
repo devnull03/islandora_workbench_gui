@@ -93,15 +93,7 @@ impl ConfigBuilder {
                     .flex_1()
                     .w_full()
                     .min_h_0()
-                    .p_2()
                     .gap_2()
-                    .when(lines.is_empty(), |this| {
-                        this.child(
-                            Label::new("Nothing added yet.")
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                    })
                     .when(!problems.is_empty(), |this| {
                         this.child(h_flex().gap_2().flex_wrap().children(problems.iter().map(
                             |problem| {
@@ -115,7 +107,8 @@ impl ConfigBuilder {
                         Editor::new(&self.yaml_editor)
                             .readonly(true)
                             .h(relative(1.))
-                            .w_full(),
+                            .w_full()
+                            .rounded_none(),
                     ),
             )
     }

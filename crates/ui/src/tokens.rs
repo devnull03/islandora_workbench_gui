@@ -77,6 +77,9 @@ pub const CHAR_FIELD_W: Pixels = px(44.);
 /// The builder's trailing value-shape column. Builder only — Component Spec §00 calls this the
 /// one legitimate difference between the builder and the settings window.
 pub const TYPE_COL_W: Pixels = px(56.);
+/// Shape glyph column in the setting picker. Wider than an inline-message glyph so two-character
+/// marks such as `ab` and `12` align with the single-character path and boolean marks.
+pub const PICKER_GLYPH_W: Pixels = px(20.);
 /// The glyph slot in front of a validation message, fixed so a warning's text and an error's text
 /// start at the same x.
 pub const GLYPH_COL_W: Pixels = px(14.);

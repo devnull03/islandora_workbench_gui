@@ -5,7 +5,7 @@ use base64::Engine as _;
 use gpui::*;
 use gpui_component::ActiveTheme;
 
-use gpui_component::{Icon, IconName, Sizable, StyledExt, spinner::Spinner};
+use gpui_component::{Disableable as _, Icon, IconName, Sizable, StyledExt as _, spinner::Spinner};
 use settings::AppSettings;
 use workbench_integration::read_credentials;
 
@@ -154,23 +154,18 @@ impl Render for ServerPingIndicator {
                 SharedString::from("Not Set"),
             ),
         };
-        div()
-            .h_flex()
-            .items_center()
-            .justify_center()
-            .gap_1()
-            .child(icon)
+        let pinging = matches!(self.state, ServerPingState::Pinging);
+        ui::status_bar_button("ping-btn")
+            .accessibility_label(text.clone())
             .child(
-                ui::ghost_button("ping-btn")
-                    .label(text)
-                    .p_0()
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        if matches!(this.state, ServerPingState::Pinging) {
-                            return;
-                        }
-                        this.ping(cx);
-                    })),
+                div()
+                    .h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(icon)
+                    .child(text),
             )
+            .disabled(pinging)
+            .on_click(cx.listener(|this, _, _window, cx| this.ping(cx)))
     }
 }

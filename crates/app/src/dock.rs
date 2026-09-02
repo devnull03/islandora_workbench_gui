@@ -7,7 +7,7 @@
 
 use gpui::*;
 use gpui_component::{
-    IconName,
+    IconName, Selectable as _,
     dock::{
         DockArea, DockAreaState, DockEvent, DockLayout, DockPlacement, DockSkin, panel_handle,
         register_panel,
@@ -140,16 +140,13 @@ impl MainDock {
 
 impl Render for MainDock {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.dock_area.clone())
+        div().size_full().child(self.dock_area.clone()).my_neg_4()
     }
 }
 
 /// The status-bar button that opens and closes the log dock.
 ///
-/// Drawn with [`ui::StatusBarButton`] rather than `gpui_component::Button`: the library Button
-/// hardcodes `cursor_default` for every non-link variant with no override, so a plain div is the
-/// only way to get a pointer cursor on a toggle. That reasoning, and the hover treatment it
-/// implies, now lives in `ui` because the update indicator needed exactly the same thing.
+/// Uses the same library-backed status button as every other action in the bottom strip.
 pub struct LogDockButton {
     dock: WeakEntity<DockArea>,
     /// Redraws the button when the dock opens or closes, including from the library's own
@@ -176,23 +173,22 @@ impl Render for LogDockButton {
 
         // The panel-bottom glyph fills in when the dock is open — the button says its state in
         // shape without forcing an accent colour while the control is idle.
-        ui::StatusBarButton::new(
-            "log-dock-toggle",
-            if open {
+        ui::status_bar_button("log-dock-toggle")
+            .icon(if open {
                 IconName::PanelBottomOpen
             } else {
                 IconName::PanelBottom
-            },
-            "Log",
-        )
-        .tooltip("Toggle Log")
-        .action(ToggleLog)
-        .on_click(move |window, cx| {
-            let Some(area) = dock.upgrade() else { return };
-            area.update(cx, |area, cx| {
-                toggle_bottom_dock(area, window, cx);
-            });
-        })
+            })
+            .label("Log")
+            .selected(open)
+            .toggled(open)
+            .tooltip_with_action("Toggle Log", &ToggleLog, None)
+            .on_click(move |_, window, cx| {
+                let Some(area) = dock.upgrade() else { return };
+                area.update(cx, |area, cx| {
+                    toggle_bottom_dock(area, window, cx);
+                });
+            })
     }
 }
 

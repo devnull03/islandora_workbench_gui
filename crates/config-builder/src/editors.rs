@@ -10,7 +10,9 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, IconName, Sizable, StyledExt, h_flex,
+    ActiveTheme, IconName, Selectable as _, Sizable, StyledExt,
+    button::{Button, ButtonGroup},
+    h_flex,
     input::{Input, NumberInput},
     label::Label,
     switch::Switch,
@@ -28,8 +30,9 @@ use ui::tokens::{
     CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W, ROW_ACTION_W,
 };
 use ui::{
-    APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, InlineMessage, PathField,
-    RowActions, RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
+    APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, InlineMessage,
+    MAX_INLINE_ENUM_OPTIONS, PathField, RowActions, RowEditor, SettingRow, add_row_button,
+    app_button, ghost_button,
 };
 
 /// What a setting of this shape looks like before anything has been typed into it. Used when a
@@ -462,7 +465,7 @@ impl ConfigBuilder {
 
                 // Past four options a strip is wider than the dropdown it replaced, so the
                 // dropdown wins — `task` with its twelve values included.
-                if !Segmented::fits(items.len()) {
+                if items.len() > MAX_INLINE_ENUM_OPTIONS {
                     return ui::app_select(&state)
                         .placeholder("Choose…")
                         .w_full()
@@ -476,15 +479,26 @@ impl ConfigBuilder {
                 // Segments show the bare YAML value, never the prose label: `replace` fits a
                 // cell, `replace - Replace the field values` does not, and the row is a view of
                 // a file that says `replace`.
-                let write = state.clone();
-                Segmented::new(id, items.iter().map(|i| (i.value.clone(), i.value.clone())))
-                    .selected(selected)
-                    .on_select(move |value, window, cx| {
-                        let value = value.clone();
-                        write.update(cx, |state, cx| {
-                            state.set_selected_value(&value, window, cx);
-                        });
-                    })
+                let group_id = id.clone();
+                ButtonGroup::new(id)
+                    .with_size(APP_CONTROL_SIZE)
+                    .outline()
+                    .children(items.into_iter().map(move |item| {
+                        let value = item.value;
+                        let is_selected = selected.as_ref() == Some(&value);
+                        let write = state.clone();
+                        Button::new(SharedString::from(format!("{group_id}-{value}")))
+                            .label(value.clone())
+                            .selected(is_selected)
+                            .toggled(is_selected)
+                            // Keep the handler on the child: ButtonGroup's aggregate callback
+                            // intentionally does not receive keyboard activation upstream.
+                            .on_click(move |_, window, cx| {
+                                write.update(cx, |state, cx| {
+                                    state.set_selected_value(&value, window, cx);
+                                });
+                            })
+                    }))
                     .into_any_element()
             }
 

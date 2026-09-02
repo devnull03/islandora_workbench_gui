@@ -1,7 +1,7 @@
 //! A label above an arbitrary control, with an optional help line under it.
 //!
-//! [`crate::LabeledSelect`] is the same idea specialised to one widget; this is the version for
-//! everything else (inputs, browse rows, button clusters).
+//! It accepts any control, including a select, so labels and descriptions do not need a second
+//! widget-specific wrapper.
 
 use gpui::prelude::FluentBuilder;
 use gpui::*;

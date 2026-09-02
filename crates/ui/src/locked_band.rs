@@ -11,9 +11,9 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{ActiveTheme, h_flex, label::Label, v_flex};
 
-use crate::Card;
 use crate::card::CardTone;
-use crate::tokens::{GAP_MD, GAP_SM, RADIUS_SM};
+use crate::tokens::{GAP_MD, GAP_SM};
+use crate::{Card, app_tag};
 
 #[derive(IntoElement)]
 pub struct LockedBand {
@@ -62,15 +62,11 @@ impl RenderOnce for LockedBand {
             )
             .child(h_flex().w_full().gap(GAP_SM).flex_wrap().children(
                 self.entries.into_iter().map(|(key, source)| {
-                    h_flex()
-                        .px(GAP_SM)
+                    app_tag()
                         .py(px(4.))
                         .gap(GAP_SM)
                         .items_baseline()
                         .flex_none()
-                        .rounded(RADIUS_SM)
-                        .border_1()
-                        .border_color(colors.border)
                         .bg(colors.background)
                         .child(Label::new(key).text_xs().font_family(mono.clone()))
                         .child(Label::new(source).text_xs().text_color(muted))
