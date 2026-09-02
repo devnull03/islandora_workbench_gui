@@ -27,7 +27,7 @@ use workbench_integration::config::{
 use super::{ConfigBuilder, field_id};
 
 use ui::tokens::{
-    CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W, ROW_ACTION_W,
+    CHAR_FIELD_W, GAP_MD, GAP_SM, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W, ROW_ACTION_W,
 };
 use ui::{
     APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, InlineMessage,
@@ -513,6 +513,7 @@ impl ConfigBuilder {
                 PathField::new(SharedString::from(format!("browse-{key}")), &input)
                     .prompt(prompt)
                     .directories(is_dir)
+                    .button_label("Browse…")
                     .into_any_element()
             }
             // One character, so a full-width field would be a lie about what fits. 44px is the
@@ -533,17 +534,59 @@ impl ConfigBuilder {
 
             Shape::TemplateString => {
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
+                let preview = scalar_text(&value);
                 v_flex()
                     .w_full()
-                    .gap_1()
+                    .gap(GAP_SM)
                     .child(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full())
                     .when(!def.tokens.is_empty(), |this| {
                         this.child(
-                            Label::new(format!("Insert: {}", def.tokens.join("  ")))
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
+                            h_flex()
+                                .gap(GAP_SM)
+                                .items_center()
+                                .flex_wrap()
+                                .child(
+                                    Label::new("Insert:")
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                                .children(def.tokens.iter().enumerate().map(|(index, token)| {
+                                    let field = input.clone();
+                                    let token: SharedString = token.clone().into();
+                                    app_button(SharedString::from(format!(
+                                        "insert-token-{key}-{index}"
+                                    )))
+                                    .with_size(gpui_component::Size::Small)
+                                    .outline()
+                                    .label(token.clone())
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            field.update(cx, |state, cx| {
+                                                let mut next = state.value().to_string();
+                                                next.push_str(&token);
+                                                state.set_value(next, window, cx);
+                                            });
+                                        },
+                                    )
+                                })),
                         )
                     })
+                    .child(
+                        h_flex()
+                            .gap(GAP_SM)
+                            .items_baseline()
+                            .child(
+                                Label::new("Preview:")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .child(
+                                Label::new(preview)
+                                    .text_xs()
+                                    .font_family(cx.theme().mono_font_family.clone())
+                                    .text_color(cx.theme().muted_foreground),
+                            ),
+                    )
                     .into_any_element()
             }
 
@@ -647,17 +690,15 @@ impl ConfigBuilder {
         // §07 shows the header band only when the columns are named, which is the keyed shapes
         // and not a plain list — a header over one unnamed column names nothing.
         //
-        // The titles are generic because the catalogue has none: `scripts/gen-config-catalog.py`
-        // would have to grow a `columns` field before this could say "Media type" / "Drupal
-        // field" the way the mockup does. Generic beats invented.
-        let columns: Option<(&str, &str)> = match shape {
-            Shape::Map => Some(("Key", "Value")),
-            Shape::ListOfOneKeyMaps => Some(("Name", "Template")),
-            Shape::MapOfLists => Some(("Key", "Values")),
+        // The vocabulary explicitly names the media-fields columns. Other maps keep schema-safe
+        // generic names until the catalogue grows per-setting column metadata.
+        let columns: Option<(&str, &str)> = match (shape, key.as_str()) {
+            (Shape::Map, "media_fields") => Some(("Media type", "Drupal field")),
+            (Shape::Map, _) => Some(("Key", "Value")),
             _ => None,
         };
 
-        let mut list = RowEditor::new();
+        let mut list = RowEditor::new().framed(shape == Shape::Map);
         if let Some((left, right)) = columns {
             let muted = cx.theme().colors.table_head_foreground;
             let mono = cx.theme().mono_font_family.clone();
@@ -743,10 +784,38 @@ impl ConfigBuilder {
                             window,
                             cx,
                         );
+                        let owned = key.clone();
+                        let row_ix = i;
+                        let item_ix = j;
                         cells = cells.child(
-                            div()
+                            h_flex()
+                                .h(ui::tokens::CHIP_H)
                                 .w(LIST_CELL_W)
-                                .child(Input::new(&cell).with_size(APP_CONTROL_SIZE)),
+                                .px(GAP_SM)
+                                .gap(GAP_XS)
+                                .items_center()
+                                .rounded(ui::tokens::RADIUS_SM)
+                                .border_1()
+                                .border_color(cx.theme().colors.border)
+                                .child(
+                                    Input::new(&cell)
+                                        .with_size(gpui_component::Size::Small)
+                                        .appearance(false)
+                                        .w_full(),
+                                )
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "remove-item-{key}-{i}-{j}"
+                                        )))
+                                        .cursor_pointer()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .hover(|el| el.text_color(cx.theme().colors.danger))
+                                        .child(Label::new("✕").text_xs())
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.remove_inner_item(&owned, row_ix, item_ix, cx);
+                                        })),
+                                ),
                         );
                     }
                     let owned = key.clone();
@@ -859,10 +928,27 @@ impl ConfigBuilder {
     }
 
     fn push_inner_item(&mut self, key: &str, row: usize, cx: &mut Context<Self>) {
-        if let Some(Value::Mapping(map)) = self.draft.values.get_mut(key)
-            && let Some((_, value)) = map.iter_mut().nth(row)
+        if let Some(items) = self
+            .draft
+            .values
+            .get_mut(key)
+            .and_then(|value| inner_items_at_mut(value, row))
         {
-            as_sequence(value).push(Value::String(String::new()));
+            items.push(Value::String(String::new()));
+        }
+        self.forget_widgets(key);
+        self.revalidate(cx);
+    }
+
+    fn remove_inner_item(&mut self, key: &str, row: usize, item: usize, cx: &mut Context<Self>) {
+        if let Some(items) = self
+            .draft
+            .values
+            .get_mut(key)
+            .and_then(|value| inner_items_at_mut(value, row))
+            && item < items.len()
+        {
+            items.remove(item);
         }
         self.forget_widgets(key);
         self.revalidate(cx);
@@ -883,6 +969,22 @@ impl ConfigBuilder {
         self.forget_widgets(key);
         self.revalidate(cx);
     }
+}
+
+/// Return one map-of-lists row's values in either representation accepted by Workbench: a YAML
+/// mapping or its generated-default form, a sequence of one-key mappings.
+fn inner_items_at_mut(value: &mut Value, row: usize) -> Option<&mut Vec<Value>> {
+    let row_value = match value {
+        Value::Mapping(map) => map.iter_mut().nth(row).map(|(_, value)| value)?,
+        Value::Sequence(rows) => rows
+            .get_mut(row)?
+            .as_mapping_mut()?
+            .iter_mut()
+            .next()
+            .map(|(_, value)| value)?,
+        _ => return None,
+    };
+    row_value.as_sequence_mut()
 }
 
 /// Coerce a value into a sequence in place, so a shape change or a hand-edited file cannot

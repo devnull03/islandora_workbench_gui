@@ -30,6 +30,7 @@ pub struct RowEditor {
     header: Option<AnyElement>,
     rows: Vec<AnyElement>,
     add: Option<AnyElement>,
+    framed: bool,
 }
 
 impl RowEditor {
@@ -38,6 +39,7 @@ impl RowEditor {
             header: None,
             rows: Vec::new(),
             add: None,
+            framed: true,
         }
     }
 
@@ -49,6 +51,14 @@ impl RowEditor {
     /// The add-a-row affordance, drawn as a strip below the last row.
     pub fn add_row(mut self, add: impl IntoElement) -> Self {
         self.add = Some(add.into_any_element());
+        self
+    }
+
+    /// Remove table chrome for ordered lists whose rows already contain bordered controls.
+    /// Maps keep the frame and header because they are tables; commands and pairs read more
+    /// clearly as the compact inline rows shown in the value-shape vocabulary.
+    pub fn framed(mut self, framed: bool) -> Self {
+        self.framed = framed;
         self
     }
 }
@@ -72,12 +82,14 @@ impl RenderOnce for RowEditor {
 
         v_flex()
             .w_full()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(colors.border)
+            .when(self.framed, |el| {
+                el.rounded(cx.theme().radius)
+                    .border_1()
+                    .border_color(colors.border)
+            })
             // Rows paint to the frame's inner edge, so the frame has to clip them or their square
             // corners show through its curve.
-            .overflow_hidden()
+            .when(self.framed, |el| el.overflow_hidden())
             .when_some(self.header, |el, header| {
                 el.child(
                     h_flex()
@@ -104,10 +116,10 @@ impl RenderOnce for RowEditor {
                     .items_center()
                     // §00 confines zebra to row-editor tables, which is what this is. It is what
                     // lets the eye follow one row of a five-column map across the whole width.
-                    .when(i % 2 == 1, |el| el.bg(colors.table_even))
+                    .when(self.framed && i % 2 == 1, |el| el.bg(colors.table_even))
                     // No rule under the final row: the box's own border is already there, and two
                     // lines a pixel apart read as a rendering bug.
-                    .when(i != last, |el| {
+                    .when(self.framed && i != last, |el| {
                         el.border_b_1().border_color(colors.table_row_border)
                     })
                     .child(row)

@@ -11,11 +11,11 @@ use gpui_component::{
     ActiveTheme, Icon, IconName, Sizable, Size, StyledExt, alert::Alert, h_flex, label::Label,
     v_flex,
 };
-use ui::tokens::{CHEVRON_SLOT, GAP_SM, INDENT_STEP};
+use ui::tokens::{CHEVRON_SLOT, GAP_MD, GAP_SM, INDENT_STEP};
 use ui::{Card, CardTone, app_button, app_tag, ghost_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
-use super::{ConfigBuilder, open_child_config_builder, open_config_builder};
+use super::{BuilderChromeEvent, ConfigBuilder, open_config_builder_in_chain};
 
 impl ConfigBuilder {
     pub(super) fn render_chain(
@@ -33,12 +33,17 @@ impl ConfigBuilder {
         }
 
         let (count, max_depth) = chain_stats(&self.chain_nodes, 1);
+        let mut current_ancestry = self.ancestors.clone();
+        if let Some(path) = self.draft.path.clone() {
+            current_ancestry.push(path);
+        }
         let mut rows = Vec::new();
         for (index, node) in self.chain_nodes.iter().enumerate() {
             self.render_node(
                 node,
                 format!("{}", index + 1),
                 self.draft.path.clone(),
+                current_ancestry.clone(),
                 0,
                 &mut rows,
                 cx,
@@ -58,15 +63,26 @@ impl ConfigBuilder {
             .into()
         };
 
-        v_flex()
-            .w_full()
-            .gap_2()
-            .pt_2()
+        let chain_panel = Card::new()
+            .tone(CardTone::Filled)
+            .padding(GAP_MD)
+            .gap(GAP_MD)
             .child(
                 h_flex()
-                    .gap_2()
+                    .gap(GAP_SM)
                     .items_center()
-                    .child(Label::new("Secondary configs").text_sm().font_semibold())
+                    .child(
+                        Label::new("↳")
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(cx.theme().colors.warning),
+                    )
+                    .child(
+                        Label::new("CHAIN")
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(cx.theme().colors.warning),
+                    )
                     .child(
                         Label::new(summary)
                             .text_xs()
@@ -87,6 +103,43 @@ impl ConfigBuilder {
                     }),
             )
             .children(rows)
+            .child(
+                h_flex()
+                    .gap(GAP_MD)
+                    .child(
+                        app_button("link-config")
+                            .outline()
+                            .label("Link an existing config")
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.link_existing(window, cx)),
+                            ),
+                    )
+                    .child(
+                        app_button("create-child-config")
+                            .outline()
+                            .label("Create a new one")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(parent) = this.draft.path.clone() {
+                                    let mut ancestors = this.ancestors.clone();
+                                    ancestors.push(parent);
+                                    open_config_builder_in_chain(None, ancestors, cx);
+                                } else {
+                                    this.chrome.transition(BuilderChromeEvent::Failed {
+                                        title: "Save required".into(),
+                                        detail: "Save this config before creating a nested config."
+                                            .into(),
+                                    });
+                                    cx.notify();
+                                }
+                            })),
+                    ),
+            );
+
+        v_flex()
+            .w_full()
+            .gap(GAP_MD)
+            .pt_2()
+            .child(chain_panel)
             // §08 warns at depth 4 and beyond and does not block. A chain that deep is
             // usually a mistake and occasionally exactly what someone meant; the app is not
             // in a position to tell which.
@@ -107,33 +160,6 @@ impl ConfigBuilder {
                     .text_color(colors.muted_foreground),
                 )
             })
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        app_button("link-config")
-                            .outline()
-                            .label("Link an existing config")
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.link_existing(window, cx)),
-                            ),
-                    )
-                    .child(
-                        app_button("create-child-config")
-                            .outline()
-                            .label("Create a new one")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(parent) = this.draft.path.clone() {
-                                    open_child_config_builder(parent, cx);
-                                } else {
-                                    this.notice = Some(
-                                        "Save this config before creating a nested config.".into(),
-                                    );
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-            )
             .when(!run_order.is_empty(), |this| {
                 let colors = cx.theme().colors;
                 let mono = cx.theme().mono_font_family.clone();
@@ -141,7 +167,12 @@ impl ConfigBuilder {
                     Card::new()
                         .tone(CardTone::Filled)
                         .gap(GAP_SM)
-                        .child(Label::new("Run order").text_xs().font_semibold())
+                        .child(
+                            Label::new("RUN ORDER")
+                                .text_xs()
+                                .font_semibold()
+                                .text_color(colors.muted_foreground),
+                        )
                         // §08: the flattened depth-first order as chips that wrap, rather than
                         // one joined string that truncates. A chain you cannot read the end of
                         // is the one you most need to read the end of.
@@ -150,6 +181,7 @@ impl ConfigBuilder {
                                 app_tag()
                                     .gap(GAP_SM)
                                     .flex_none()
+                                    .when(index == 0, |tag| tag.border_color(colors.warning))
                                     .bg(colors.background)
                                     .child(
                                         Label::new(format!("{}", index + 1))
@@ -169,6 +201,7 @@ impl ConfigBuilder {
         node: &SecondaryConfigNode,
         numbering: String,
         parent: Option<PathBuf>,
+        ancestors: Vec<PathBuf>,
         depth: usize,
         rows: &mut Vec<AnyElement>,
         cx: &mut Context<Self>,
@@ -197,22 +230,26 @@ impl ConfigBuilder {
         let error = node.error.is_some();
         let child_path = node.path.clone();
         let parent_path = parent.clone();
+        let colors = cx.theme().colors;
         let mut row = h_flex()
             .w_full()
-            .gap_2()
+            .min_w(px(0.))
+            .gap(GAP_SM)
             .items_center()
-            .pl(INDENT_STEP * depth as f32)
             .p_2()
             .rounded(cx.theme().radius)
-            .bg(if depth == 0 {
-                cx.theme().colors.secondary
+            .border_1()
+            .border_color(if error || depth == 0 {
+                if error { colors.danger } else { colors.warning }
             } else {
-                cx.theme().colors.background
+                colors.border
             })
+            .bg(colors.background)
             .child(
                 Label::new(numbering.clone())
                     .text_xs()
-                    .text_color(cx.theme().muted_foreground),
+                    .font_family(cx.theme().mono_font_family.clone())
+                    .text_color(colors.muted_foreground),
             );
         if has_children {
             let toggle_path = path.clone();
@@ -221,6 +258,7 @@ impl ConfigBuilder {
                     "toggle-chain-{}",
                     path.display()
                 )))
+                .compact()
                 .icon(if open {
                     IconName::ChevronDown
                 } else {
@@ -238,23 +276,50 @@ impl ConfigBuilder {
                 v_flex()
                     .flex_1()
                     .min_w(px(0.))
-                    .child(Label::new(node.label.clone()).text_sm().font_semibold())
-                    .child(Label::new(metadata).text_xs().text_color(if error {
-                        cx.theme().colors.danger
-                    } else {
-                        cx.theme().muted_foreground
-                    })),
+                    .child(
+                        h_flex()
+                            .gap(GAP_SM)
+                            .items_center()
+                            .child(Label::new(node.label.clone()).text_sm().font_semibold())
+                            .when(!error, |this| {
+                                this.child(
+                                    Label::new("● OPEN")
+                                        .text_xs()
+                                        .font_semibold()
+                                        .text_color(colors.warning),
+                                )
+                            }),
+                    )
+                    .child(
+                        Label::new(metadata)
+                            .text_xs()
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_color(if error {
+                                colors.danger
+                            } else {
+                                colors.muted_foreground
+                            }),
+                    ),
             )
             .when(!error, |this| {
                 let open_path = child_path.clone();
+                let open_ancestors = ancestors.clone();
                 let add_under_path = open_path.clone();
+                let mut child_ancestors = ancestors.clone();
+                child_ancestors.push(add_under_path.clone());
                 this.child(
                     ghost_button(SharedString::from(format!(
                         "open-chain-{}",
                         open_path.display()
                     )))
                     .label("Open")
-                    .on_click(move |_, _, cx| open_config_builder(Some(open_path.clone()), cx)),
+                    .on_click(move |_, _, cx| {
+                        open_config_builder_in_chain(
+                            Some(open_path.clone()),
+                            open_ancestors.clone(),
+                            cx,
+                        )
+                    }),
                 )
                 .child(
                     ghost_button(SharedString::from(format!(
@@ -263,7 +328,7 @@ impl ConfigBuilder {
                     )))
                     .label("Add under")
                     .on_click(move |_, _, cx| {
-                        open_child_config_builder(add_under_path.clone(), cx)
+                        open_config_builder_in_chain(None, child_ancestors.clone(), cx)
                     }),
                 )
             })
@@ -272,19 +337,31 @@ impl ConfigBuilder {
                     "unlink-chain-{}",
                     child_path.display()
                 )))
-                .icon(IconName::Close)
+                .label("Unlink")
                 .tooltip("Unlink — the config stays in the library")
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.unlink_node(parent_path.clone(), child_path.clone(), cx)
                 })),
             );
-        rows.push(row.into_any_element());
+        rows.push(
+            div()
+                .w_full()
+                .pl(INDENT_STEP * depth as f32)
+                .when(depth > 0, |this| {
+                    this.border_l_1().border_color(colors.border)
+                })
+                .child(row)
+                .into_any_element(),
+        );
         if open {
             for (index, child) in node.children.iter().enumerate() {
+                let mut child_ancestors = ancestors.clone();
+                child_ancestors.push(node.path.clone());
                 self.render_node(
                     child,
                     format!("{numbering}.{}", index + 1),
                     Some(node.path.clone()),
+                    child_ancestors,
                     depth + 1,
                     rows,
                     cx,
@@ -296,8 +373,11 @@ impl ConfigBuilder {
     fn unlink_node(&mut self, parent: Option<PathBuf>, child: PathBuf, cx: &mut Context<Self>) {
         if let Some(parent) = parent {
             let Ok(mut draft) = config::ConfigDraft::load(&parent) else {
-                self.notice =
-                    Some(format!("Couldn't open {} to unlink the child.", parent.display()).into());
+                self.chrome.transition(BuilderChromeEvent::Failed {
+                    title: "Unlink failed".into(),
+                    detail: format!("Couldn't open {} to unlink the child.", parent.display())
+                        .into(),
+                });
                 cx.notify();
                 return;
             };
@@ -305,7 +385,10 @@ impl ConfigBuilder {
             tasks.retain(|path| !same_path(&draft, path, &child));
             draft.set_secondary_tasks(&tasks);
             if let Err(error) = draft.save(&parent) {
-                self.notice = Some(format!("Couldn't save {}: {error}", parent.display()).into());
+                self.chrome.transition(BuilderChromeEvent::Failed {
+                    title: "Unlink failed".into(),
+                    detail: format!("Couldn't save {}: {error}", parent.display()).into(),
+                });
             }
         } else {
             let mut tasks = self.draft.secondary_tasks();
@@ -337,7 +420,10 @@ impl ConfigBuilder {
 
     fn push_link(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         if let Some(error) = config::chain::link_error(&self.draft, &path) {
-            self.notice = Some(error.into());
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Link failed".into(),
+                detail: error.into(),
+            });
             cx.notify();
             return;
         }
@@ -346,7 +432,10 @@ impl ConfigBuilder {
             .iter()
             .any(|existing| same_path(&self.draft, existing, &path))
         {
-            self.notice = Some("That config already runs in this chain.".into());
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Link blocked".into(),
+                detail: "That config already runs in this chain.".into(),
+            });
             cx.notify();
             return;
         }

@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::Instant;
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt, TitleBar,
@@ -31,6 +32,7 @@ use gpui_component::{
     label::Label,
     scroll::ScrollableElement,
     select::{SelectEvent, SelectState},
+    status_bar::StatusBar as StatusBarElement,
     v_flex,
 };
 use regex::Regex;
@@ -44,9 +46,9 @@ use workbench_integration::config::{
 };
 
 use ui::AppFont as _;
-use ui::tokens::{GAP_2XL, GAP_MD, GAP_SM, GAP_XL, GAP_XS, MIN_WINDOW_W, PAD_PAGE, TITLE_BAR_H};
+use ui::tokens::{GAP_2XL, GAP_MD, GAP_SM, GAP_XS, MIN_WINDOW_W, PAD_PAGE};
 use ui::{
-    APP_CONTROL_SIZE, DetailSelectItem, LockedBand, ProblemSummary, app_button, ghost_button,
+    APP_CONTROL_SIZE, DetailSelectItem, LockedBand, ProblemSummary, ghost_button, status_bar_button,
 };
 
 actions!(config_builder, [OpenConfigBuilder]);
@@ -78,15 +80,27 @@ const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
 pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
-    open_config_builder_with_parent(path, None, cx);
+    open_config_builder_with_ancestors(path, Vec::new(), cx);
 }
 
 /// Open a new builder draft that will be linked under `parent` after its first successful save.
 pub fn open_child_config_builder(parent: PathBuf, cx: &mut App) {
-    open_config_builder_with_parent(None, Some(parent), cx);
+    open_config_builder_with_ancestors(None, vec![parent], cx);
 }
 
-fn open_config_builder_with_parent(path: Option<PathBuf>, parent: Option<PathBuf>, cx: &mut App) {
+pub(crate) fn open_config_builder_in_chain(
+    path: Option<PathBuf>,
+    ancestors: Vec<PathBuf>,
+    cx: &mut App,
+) {
+    open_config_builder_with_ancestors(path, ancestors, cx);
+}
+
+fn open_config_builder_with_ancestors(
+    path: Option<PathBuf>,
+    ancestors: Vec<PathBuf>,
+    cx: &mut App,
+) {
     if let Some(handle) = cx.global::<ConfigBuilderWindows>().open.get(&path).copied() {
         if handle
             .update(cx, |_, window, _| window.activate_window())
@@ -133,7 +147,7 @@ fn open_config_builder_with_parent(path: Option<PathBuf>, parent: Option<PathBuf
     cx.spawn(async move |cx| {
         let key = path.clone();
         let opened = cx.open_window(options, |window, cx| {
-            let view = cx.new(|cx| ConfigBuilder::new(path, parent, window, cx));
+            let view = cx.new(|cx| ConfigBuilder::new(path, ancestors, window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         });
         if let Ok(handle) = opened {
@@ -151,6 +165,8 @@ pub struct ConfigBuilder {
     pub(crate) draft: ConfigDraft,
     /// Existing config that owns this draft when it was opened via “Add under”.
     pub(crate) parent_path: Option<PathBuf>,
+    /// Root-to-parent path used for chained-window breadcrumbs and level numbering.
+    pub(crate) ancestors: Vec<PathBuf>,
     pub(crate) problems: Vec<Problem>,
 
     /// Text inputs by field id — see [`field_id`] for the encoding.
@@ -170,10 +186,7 @@ pub struct ConfigBuilder {
     pub(crate) yaml_editor: Entity<EditorState>,
     pub(crate) yaml_text: String,
     pub(crate) search_open: bool,
-    pub(crate) yaml_open: bool,
-    pub(crate) saved_at: Option<SharedString>,
-    /// Load or save failures — shown in the footer rather than swallowed.
-    pub(crate) notice: Option<SharedString>,
+    pub(crate) chrome: BuilderChromeState,
 
     /// Secondary-config graph is refreshed by `chain` at most every two seconds, rather than
     /// recursively parsing every linked YAML on every render.
@@ -182,6 +195,89 @@ pub struct ConfigBuilder {
     pub(crate) last_chain_scan: Option<Instant>,
 
     _subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone)]
+enum BuilderTitleNavigation {
+    Root {
+        title: SharedString,
+    },
+    Chained {
+        crumbs: Vec<SharedString>,
+        title: SharedString,
+        depth: usize,
+    },
+}
+
+#[derive(Clone, Default)]
+enum BuilderTitleSaveState {
+    #[default]
+    Clean,
+    Dirty,
+    Saved,
+    Error(SharedString),
+}
+
+struct BuilderTitleChromeState {
+    navigation: BuilderTitleNavigation,
+    save: BuilderTitleSaveState,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum BuilderYamlState {
+    #[default]
+    Hidden,
+    Visible,
+}
+
+#[derive(Clone)]
+pub(crate) enum BuilderChromeEvent {
+    Edited,
+    ToggleYaml,
+    Saved {
+        notice: Option<SharedString>,
+    },
+    Failed {
+        title: SharedString,
+        detail: SharedString,
+    },
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct BuilderChromeState {
+    save: BuilderTitleSaveState,
+    yaml: BuilderYamlState,
+    /// Load, save, and chain failures are shown in the status bar.
+    notice: Option<SharedString>,
+}
+
+impl BuilderChromeState {
+    pub(crate) fn transition(&mut self, event: BuilderChromeEvent) {
+        match event {
+            BuilderChromeEvent::Edited => {
+                self.save = BuilderTitleSaveState::Dirty;
+                self.notice = None;
+            }
+            BuilderChromeEvent::ToggleYaml => {
+                self.yaml = match self.yaml {
+                    BuilderYamlState::Hidden => BuilderYamlState::Visible,
+                    BuilderYamlState::Visible => BuilderYamlState::Hidden,
+                };
+            }
+            BuilderChromeEvent::Saved { notice } => {
+                self.save = BuilderTitleSaveState::Saved;
+                self.notice = notice;
+            }
+            BuilderChromeEvent::Failed { title, detail } => {
+                self.save = BuilderTitleSaveState::Error(title);
+                self.notice = Some(detail);
+            }
+        }
+    }
+
+    pub(crate) fn yaml_visible(&self) -> bool {
+        self.yaml == BuilderYamlState::Visible
+    }
 }
 
 /// Field id for a scalar setting, one list item, or one cell of a row.
@@ -209,9 +305,30 @@ fn link_saved_child(parent: &std::path::Path, child: &std::path::Path) -> Result
 }
 
 impl ConfigBuilder {
+    fn title_chrome_state(&self) -> BuilderTitleChromeState {
+        let title: SharedString = self.display_label().into();
+        let navigation = if self.ancestors.is_empty() {
+            BuilderTitleNavigation::Root { title }
+        } else {
+            BuilderTitleNavigation::Chained {
+                crumbs: self
+                    .ancestors
+                    .iter()
+                    .map(|path| SharedString::from(stem_of(path)))
+                    .collect(),
+                title,
+                depth: self.ancestors.len() + 1,
+            }
+        };
+        BuilderTitleChromeState {
+            navigation,
+            save: self.chrome.save.clone(),
+        }
+    }
+
     pub fn new(
         path: Option<PathBuf>,
-        parent_path: Option<PathBuf>,
+        ancestors: Vec<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -263,7 +380,8 @@ impl ConfigBuilder {
         Self {
             draft,
             description,
-            parent_path,
+            parent_path: ancestors.last().cloned(),
+            ancestors,
             problems,
             inputs: HashMap::new(),
             selects: HashMap::new(),
@@ -275,13 +393,24 @@ impl ConfigBuilder {
             search_open: false,
             // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is the
             // thing that makes the editors legible to someone who knows the YAML already.
-            yaml_open: AppSettings::get(cx)
-                .values
-                .get("builder_show_yaml")
-                .map(|v| v.bool())
-                .unwrap_or(true),
-            saved_at: None,
-            notice,
+            chrome: BuilderChromeState {
+                save: if notice.is_some() {
+                    BuilderTitleSaveState::Error("Load failed".into())
+                } else {
+                    BuilderTitleSaveState::Clean
+                },
+                yaml: if AppSettings::get(cx)
+                    .values
+                    .get("builder_show_yaml")
+                    .map(|v| v.bool())
+                    .unwrap_or(true)
+                {
+                    BuilderYamlState::Visible
+                } else {
+                    BuilderYamlState::Hidden
+                },
+                notice,
+            },
             chain_nodes: Vec::new(),
             collapsed_chain: HashSet::new(),
             last_chain_scan: None,
@@ -343,6 +472,7 @@ impl ConfigBuilder {
             .push(cx.subscribe(&input, |this, state, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.draft.label = state.read(cx).value().to_string();
+                    this.chrome.transition(BuilderChromeEvent::Edited);
                     cx.notify();
                 }
             }));
@@ -370,6 +500,8 @@ impl ConfigBuilder {
             .push(cx.subscribe(&input, |this, state, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.description = state.read(cx).value().to_string();
+                    this.chrome.transition(BuilderChromeEvent::Edited);
+                    cx.notify();
                 }
             }));
         self.inputs.insert(id, input.clone());
@@ -525,6 +657,7 @@ impl ConfigBuilder {
 
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
         self.problems = validate(&self.draft);
+        self.chrome.transition(BuilderChromeEvent::Edited);
         cx.notify();
     }
 
@@ -593,18 +726,26 @@ impl ConfigBuilder {
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.count(Severity::Error) > 0 {
-            self.notice = Some("Fix the problems below before saving.".into());
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Save blocked".into(),
+                detail: "Fix the problems below before saving.".into(),
+            });
             cx.notify();
             return;
         }
         let Some(path) = self.target_path(cx) else {
-            self.notice =
-                Some("Set a config folder in Settings before saving a new config.".into());
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Save failed".into(),
+                detail: "Set a config folder in Settings before saving a new config.".into(),
+            });
             cx.notify();
             return;
         };
         if let Err(e) = self.draft.save(&path) {
-            self.notice = Some(format!("Couldn't save {}: {e}", path.display()).into());
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Save failed".into(),
+                detail: format!("Couldn't save {}: {e}", path.display()).into(),
+            });
             cx.notify();
             return;
         }
@@ -657,8 +798,9 @@ impl ConfigBuilder {
             link_notice = Some(format!("Saved, but couldn't link child: {error}"));
         }
         self.draft.label = label;
-        self.saved_at = Some("Saved".into());
-        self.notice = link_notice.map(Into::into);
+        self.chrome.transition(BuilderChromeEvent::Saved {
+            notice: link_notice.map(Into::into),
+        });
         cx.notify();
     }
 }
@@ -695,7 +837,11 @@ impl Render for ConfigBuilder {
                             .child(v_flex().w_full().children(self.render_settings(window, cx)))
                             .child(self.render_chain(window, cx)),
                     )
-                    .children(self.yaml_open.then(|| self.render_yaml_panel(window, cx))),
+                    .children(
+                        self.chrome
+                            .yaml_visible()
+                            .then(|| self.render_yaml_panel(window, cx)),
+                    ),
             )
             .child(self.render_footer(errors, warnings, cx))
     }
@@ -710,30 +856,81 @@ impl ConfigBuilder {
     /// once the child has been floated away from its parent.
     fn render_title_bar(&self, cx: &Context<Self>) -> impl IntoElement {
         let muted = cx.theme().colors.muted_foreground;
-        let title = self.display_label();
+        let state = self.title_chrome_state();
+        let mut crumbs = Vec::new();
+        let depth = match state.navigation {
+            BuilderTitleNavigation::Root { title } => {
+                crumbs.push(Label::new("Config Builder").text_xs().into_any_element());
+                crumbs.push(
+                    Label::new(title)
+                        .text_xs()
+                        .text_color(muted)
+                        .into_any_element(),
+                );
+                None
+            }
+            BuilderTitleNavigation::Chained {
+                crumbs: path,
+                title,
+                depth,
+            } => {
+                crumbs.push(
+                    Label::new("↳")
+                        .text_xs()
+                        .font_semibold()
+                        .text_color(cx.theme().colors.warning)
+                        .into_any_element(),
+                );
+                for ancestor in path {
+                    crumbs.push(
+                        Label::new(ancestor)
+                            .text_xs()
+                            .text_color(muted)
+                            .into_any_element(),
+                    );
+                    crumbs.push(
+                        Label::new("/")
+                            .text_xs()
+                            .text_color(muted)
+                            .into_any_element(),
+                    );
+                }
+                crumbs.push(Label::new(title).text_xs().into_any_element());
+                Some(depth)
+            }
+        };
+        let save = match state.save {
+            BuilderTitleSaveState::Clean => None,
+            BuilderTitleSaveState::Dirty => Some(("Edited".into(), muted)),
+            BuilderTitleSaveState::Saved => Some(("Saved".into(), muted)),
+            BuilderTitleSaveState::Error(message) => Some((message, cx.theme().colors.danger)),
+        };
 
         TitleBar::new()
             .child(
                 h_flex()
                     .flex_1()
-                    .gap(GAP_MD)
+                    .gap(GAP_SM)
                     .items_center()
-                    .child(Label::new("Config Builder").text_xs())
-                    .children(self.parent_path.as_ref().map(|parent| {
-                        h_flex()
-                            .gap(GAP_SM)
-                            .items_center()
-                            .child(Label::new(stem_of(parent)).text_xs().text_color(muted))
-                            .child(Label::new("/").text_xs().text_color(muted))
-                    }))
-                    .child(Label::new(title).text_xs().text_color(muted)),
+                    .children(crumbs),
             )
             .child(
-                h_flex().justify_end().items_center().pr_4().children(
-                    self.saved_at
-                        .clone()
-                        .map(|saved| Label::new(saved).text_xs().text_color(muted)),
-                ),
+                h_flex()
+                    .justify_end()
+                    .items_center()
+                    .gap(GAP_MD)
+                    .pr_4()
+                    .children(
+                        save.map(|(label, color)| Label::new(label).text_xs().text_color(color)),
+                    )
+                    .when_some(depth, |this, depth| {
+                        this.child(
+                            Label::new(format!("level {depth}"))
+                                .text_xs()
+                                .font_family(cx.theme().mono_font_family.clone())
+                                .text_color(muted),
+                        )
+                    }),
             )
     }
 
@@ -768,7 +965,39 @@ impl ConfigBuilder {
     }
 
     /// The three settings the app writes at run time, so nobody thinks they are missing (§08).
-    fn render_locked_band(&self, _cx: &App) -> impl IntoElement {
+    fn render_locked_band(&self, cx: &App) -> AnyElement {
+        if let Some(parent) = self.parent_path.clone() {
+            let parent_ancestors =
+                self.ancestors[..self.ancestors.len().saturating_sub(1)].to_vec();
+            return h_flex()
+                .w_full()
+                .items_center()
+                .px(GAP_MD)
+                .py(GAP_SM)
+                .rounded(cx.theme().radius)
+                .border_1()
+                .border_color(cx.theme().colors.border)
+                .bg(cx.theme().colors.secondary)
+                .child(
+                    Label::new("Inherits host and credentials_file_path from the root")
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground),
+                )
+                .child(div().flex_1())
+                .child(
+                    ghost_button("open-parent-config")
+                        .label("Up to parent")
+                        .on_click(move |_, _, cx| {
+                            open_config_builder_in_chain(
+                                Some(parent.clone()),
+                                parent_ancestors.clone(),
+                                cx,
+                            )
+                        }),
+                )
+                .into_any_element();
+        }
+
         let mut band = LockedBand::new(
             "Supplied by the app at run time",
             "you don't set these here",
@@ -776,7 +1005,7 @@ impl ConfigBuilder {
         for def in catalog::locked() {
             band = band.entry(def.key.clone(), locked_source(&def.key));
         }
-        band
+        band.into_any_element()
     }
 
     fn render_footer(
@@ -785,40 +1014,35 @@ impl ConfigBuilder {
         warnings: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        h_flex()
-            .w_full()
-            // The footer is the builder status bar, and §02 gives it the title bar height so the
-            // window reads as one frame rather than as a form with a tray bolted underneath.
-            .h(TITLE_BAR_H)
-            .flex_none()
-            .px(GAP_XL)
+        let left = h_flex()
             .gap(GAP_MD)
             .items_center()
-            .border_t_1()
-            .border_color(cx.theme().colors.border)
-            .bg(cx.theme().colors.title_bar)
             .child(ProblemSummary::new(errors, warnings))
             .children(
-                self.notice
+                self.chrome
+                    .notice
                     .clone()
-                    .map(|n| Label::new(n).text_sm().text_color(cx.theme().colors.danger)),
-            )
-            .child(div().flex_1())
+                    .map(|n| Label::new(n).text_xs().text_color(cx.theme().colors.danger)),
+            );
+
+        let right = h_flex()
+            .gap(GAP_SM)
+            .items_center()
             .child(
-                ghost_button("toggle-yaml")
-                    .label(if self.yaml_open {
+                status_bar_button("toggle-yaml")
+                    .label(if self.chrome.yaml_visible() {
                         "Hide YAML"
                     } else {
                         "Show YAML"
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.yaml_open = !this.yaml_open;
+                        this.chrome.transition(BuilderChromeEvent::ToggleYaml);
                         this.resize_for_yaml(window);
                         cx.notify();
                     })),
             )
             .child(
-                ghost_button("discard-draft")
+                status_bar_button("discard-draft")
                     .label("Discard draft")
                     .disabled(self.draft.values.is_empty())
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -827,12 +1051,12 @@ impl ConfigBuilder {
                             this.forget_widgets(&key);
                         }
                         this.draft.values.clear();
-                        this.saved_at = None;
+                        this.chrome.transition(BuilderChromeEvent::Edited);
                         this.revalidate(cx);
                     })),
             )
             .child(
-                app_button("save-config")
+                status_bar_button("save-config")
                     .primary()
                     .label("Save to library")
                     .icon(IconName::Check)
@@ -845,7 +1069,17 @@ impl ConfigBuilder {
                         "Write the YAML and add it to the config library"
                     })
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
-            )
+            );
+
+        // The builder footer and the main task/status bar are one piece of window chrome. Using
+        // the same container and compact button skin keeps both outer and inner metrics aligned.
+        StatusBarElement::new()
+            .h(px(34.))
+            .px_3()
+            .text_xs()
+            .text_color(cx.theme().colors.foreground)
+            .left(left)
+            .right(right)
     }
 }
 
@@ -874,7 +1108,7 @@ impl ConfigBuilder {
     /// does not push its own controls off the edge.
     fn resize_for_yaml(&self, window: &mut Window) {
         let current = window.bounds().size;
-        let target = if self.yaml_open {
+        let target = if self.chrome.yaml_visible() {
             current.width + YAML_PANEL_WIDTH
         } else {
             current.width - YAML_PANEL_WIDTH
@@ -887,7 +1121,7 @@ impl ConfigBuilder {
 mod tests {
     // Not `use super::*`: this module glob-imports `gpui`, whose own `test` macro would
     // shadow the one this needs.
-    use super::INTEGER_PATTERN;
+    use super::{BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, INTEGER_PATTERN};
 
     /// The pattern is what stands between a typo and a YAML integer field holding a word.
     /// Empty has to pass — §04 says an empty numeric field means "use the default", not zero —
@@ -900,5 +1134,37 @@ mod tests {
         for bad in ["abc", "1.5", "1e3", "1 ", "--1", "1-"] {
             assert!(!INTEGER_PATTERN.is_match(bad), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn chrome_transitions_keep_title_and_status_in_sync() {
+        let mut chrome = BuilderChromeState::default();
+        chrome.transition(BuilderChromeEvent::Failed {
+            title: "Save failed".into(),
+            detail: "Disk is full".into(),
+        });
+        assert!(matches!(
+            chrome.save,
+            BuilderTitleSaveState::Error(ref title) if title.as_ref() == "Save failed"
+        ));
+        assert_eq!(chrome.notice.as_deref(), Some("Disk is full"));
+
+        chrome.transition(BuilderChromeEvent::Edited);
+        assert!(matches!(chrome.save, BuilderTitleSaveState::Dirty));
+        assert!(chrome.notice.is_none());
+
+        chrome.transition(BuilderChromeEvent::Saved { notice: None });
+        assert!(matches!(chrome.save, BuilderTitleSaveState::Saved));
+        assert!(chrome.notice.is_none());
+    }
+
+    #[test]
+    fn yaml_visibility_is_a_reversible_chrome_transition() {
+        let mut chrome = BuilderChromeState::default();
+        assert!(!chrome.yaml_visible());
+        chrome.transition(BuilderChromeEvent::ToggleYaml);
+        assert!(chrome.yaml_visible());
+        chrome.transition(BuilderChromeEvent::ToggleYaml);
+        assert!(!chrome.yaml_visible());
     }
 }

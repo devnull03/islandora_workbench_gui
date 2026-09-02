@@ -102,12 +102,12 @@ impl RenderOnce for ProblemSummary {
                 .gap(GAP_SM)
                 .items_center()
                 .child(Label::new(glyph).text_xs().text_color(color))
-                .child(Label::new(text).text_sm().text_color(color))
+                .child(Label::new(text).text_xs().text_color(color))
         };
 
         v_flex().child(
             h_flex()
-                .gap(px(14.))
+                .gap_3()
                 .items_center()
                 // Both counters empty is itself worth one line: silence would read as "the
                 // validator has not run yet".

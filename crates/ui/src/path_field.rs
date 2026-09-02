@@ -12,6 +12,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
     Disableable as _, IconName, Sizable as _, Size,
@@ -39,6 +40,9 @@ pub struct PathField {
     disabled: bool,
     /// Set when the picked path must go somewhere other than `input`.
     on_pick: Option<PathPickFn>,
+    /// Optional visible action label. The compact settings surface uses the icon-only default;
+    /// wider form rows can opt into the explicit `Browse…` treatment from the builder mockup.
+    button_label: Option<SharedString>,
 }
 
 impl PathField {
@@ -52,6 +56,7 @@ impl PathField {
             readonly: false,
             disabled: false,
             on_pick: None,
+            button_label: None,
         }
     }
 
@@ -85,6 +90,11 @@ impl PathField {
         self.on_pick = Some(on_pick);
         self
     }
+
+    pub fn button_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.button_label = Some(label.into());
+        self
+    }
 }
 
 impl RenderOnce for PathField {
@@ -94,53 +104,53 @@ impl RenderOnce for PathField {
         let input = self.input.clone();
         let on_pick = self.on_pick.clone();
 
+        let picker = Button::new(self.id)
+            .with_size(self.size)
+            .outline()
+            .map(|button| match self.button_label {
+                Some(label) => button.label(label),
+                None => button.icon(IconName::FolderOpen),
+            })
+            .tooltip(if directories {
+                "Choose a folder"
+            } else {
+                "Choose a file"
+            })
+            .flex_none()
+            .disabled(self.disabled)
+            .on_click(move |_, window, cx| match &on_pick {
+                // The picker writes into the input asynchronously and the input's own Change
+                // event is what commits, so the common case has nothing to do here.
+                None => {
+                    crate::pick_into_app(window, cx, input.clone(), prompt.clone(), directories)
+                }
+                Some(sink) => {
+                    let receiver = cx.prompt_for_paths(PathPromptOptions {
+                        files: !directories,
+                        directories,
+                        multiple: false,
+                        prompt: Some(prompt.clone()),
+                    });
+                    let sink = Arc::clone(sink);
+                    cx.spawn(async move |cx| {
+                        if let Ok(Ok(Some(paths))) = receiver.await
+                            && let Some(path) = paths.first()
+                        {
+                            let picked: SharedString =
+                                PathBuf::from(path).to_string_lossy().to_string().into();
+                            cx.update(|cx| sink(picked, cx));
+                        }
+                    })
+                    .detach();
+                }
+            });
+
         FieldRow::new(
             Input::new(&self.input)
                 .with_size(self.size)
                 .disabled(self.readonly || self.disabled)
                 .w_full(),
         )
-        .child(
-            Button::new(self.id)
-                .with_size(self.size)
-                .outline()
-                .icon(IconName::FolderOpen)
-                // Icon only. §04 spells the label out, but a folder glyph next to a path field is
-                // unambiguous, and the word costs about 60px of the field it sits beside — which
-                // on a path is the difference between reading the filename and not.
-                .tooltip(if directories {
-                    "Choose a folder"
-                } else {
-                    "Choose a file"
-                })
-                .flex_none()
-                .disabled(self.disabled)
-                .on_click(move |_, window, cx| match &on_pick {
-                    // The picker writes into the input asynchronously and the input's own Change
-                    // event is what commits, so the common case has nothing to do here.
-                    None => {
-                        crate::pick_into_app(window, cx, input.clone(), prompt.clone(), directories)
-                    }
-                    Some(sink) => {
-                        let receiver = cx.prompt_for_paths(PathPromptOptions {
-                            files: !directories,
-                            directories,
-                            multiple: false,
-                            prompt: Some(prompt.clone()),
-                        });
-                        let sink = Arc::clone(sink);
-                        cx.spawn(async move |cx| {
-                            if let Ok(Ok(Some(paths))) = receiver.await
-                                && let Some(path) = paths.first()
-                            {
-                                let picked: SharedString =
-                                    PathBuf::from(path).to_string_lossy().to_string().into();
-                                cx.update(|cx| sink(picked, cx));
-                            }
-                        })
-                        .detach();
-                    }
-                }),
-        )
+        .child(picker)
     }
 }
