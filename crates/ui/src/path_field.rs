@@ -12,7 +12,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
     Disableable as _, IconName, Sizable as _, Size,
@@ -40,9 +39,6 @@ pub struct PathField {
     disabled: bool,
     /// Set when the picked path must go somewhere other than `input`.
     on_pick: Option<PathPickFn>,
-    /// Optional visible action label. The compact settings surface uses the icon-only default;
-    /// wider form rows can opt into the explicit `Browse…` treatment from the builder mockup.
-    button_label: Option<SharedString>,
 }
 
 impl PathField {
@@ -56,7 +52,6 @@ impl PathField {
             readonly: false,
             disabled: false,
             on_pick: None,
-            button_label: None,
         }
     }
 
@@ -90,11 +85,6 @@ impl PathField {
         self.on_pick = Some(on_pick);
         self
     }
-
-    pub fn button_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.button_label = Some(label.into());
-        self
-    }
 }
 
 impl RenderOnce for PathField {
@@ -107,10 +97,7 @@ impl RenderOnce for PathField {
         let picker = Button::new(self.id)
             .with_size(self.size)
             .outline()
-            .map(|button| match self.button_label {
-                Some(label) => button.label(label),
-                None => button.icon(IconName::FolderOpen),
-            })
+            .icon(IconName::FolderOpen)
             .tooltip(if directories {
                 "Choose a folder"
             } else {

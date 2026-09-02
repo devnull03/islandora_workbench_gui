@@ -288,14 +288,6 @@ impl ConfigBuilder {
         // A boolean is one short control, so its label centres against it rather than sitting
         // at the top of a row that is only 19px tall (§05).
         let align_center = def.shape == Shape::Boolean;
-        // §03: the hint only appears once the value has moved off the default. Showing
-        // `default: false` beside a `false` is noise on every untouched row.
-        let modified = self
-            .draft
-            .values
-            .get(&def.key)
-            .is_some_and(|value| value != &def.default);
-
         SettingRow::new(def.key.clone(), control)
             // The label in the builder is the literal YAML key, so it is set in mono; in the
             // settings window the same component labels prose and is not.
@@ -303,7 +295,6 @@ impl ConfigBuilder {
             .required(def.required)
             .type_badge(def.shape.label())
             .align_center(align_center)
-            .modified(modified)
             .when(!def.description.is_empty(), |row| {
                 row.description(def.description.clone())
             })
@@ -513,7 +504,6 @@ impl ConfigBuilder {
                 PathField::new(SharedString::from(format!("browse-{key}")), &input)
                     .prompt(prompt)
                     .directories(is_dir)
-                    .button_label("Browse…")
                     .into_any_element()
             }
             // One character, so a full-width field would be a lie about what fits. 44px is the

@@ -34,8 +34,6 @@ pub struct SettingRow {
     /// legitimate difference between the two windows.
     type_badge: Option<SharedString>,
     note: Option<InlineMessage>,
-    /// Differs from its default — draws the accent bar down the label column.
-    modified: bool,
     /// A switch or checkbox is a single short row, so the label centres against it instead of
     /// sitting at its top (§05).
     align_center: bool,
@@ -53,7 +51,6 @@ impl SettingRow {
             required: false,
             type_badge: None,
             note: None,
-            modified: false,
             align_center: false,
             control: control.into_any_element(),
             trailing: Vec::new(),
@@ -83,11 +80,6 @@ impl SettingRow {
 
     pub fn note(mut self, note: impl Into<Option<InlineMessage>>) -> Self {
         self.note = note.into();
-        self
-    }
-
-    pub fn modified(mut self, modified: bool) -> Self {
-        self.modified = modified;
         self
     }
 
@@ -132,14 +124,6 @@ impl RenderOnce for SettingRow {
                     // the control beside it, which is what the screenshots showed.
                     .overflow_hidden()
                     .items_start()
-                    // The 2px accent bar marks a setting that differs from its default; it pairs
-                    // with the per-row reset affordance rather than replacing it.
-                    .child(
-                        div()
-                            .w(px(2.))
-                            .self_stretch()
-                            .when(self.modified, |el| el.bg(colors.primary)),
-                    )
                     .child(
                         v_flex()
                             .flex_1()

@@ -304,6 +304,23 @@ fn link_saved_child(parent: &std::path::Path, child: &std::path::Path) -> Result
     Ok(())
 }
 
+fn ensure_required_settings(draft: &mut ConfigDraft) {
+    for def in catalog::catalog()
+        .iter()
+        .filter(|def| def.required && !def.locked)
+        .rev()
+    {
+        if !draft.values.contains_key(&def.key) {
+            let value = if def.default.is_null() {
+                editors::empty_value(def.shape)
+            } else {
+                def.default.clone()
+            };
+            draft.values.shift_insert(0, def.key.clone(), value);
+        }
+    }
+}
+
 impl ConfigBuilder {
     fn title_chrome_state(&self) -> BuilderTitleChromeState {
         let title: SharedString = self.display_label().into();
@@ -333,7 +350,7 @@ impl ConfigBuilder {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut notice = None;
-        let draft = match &path {
+        let mut draft = match &path {
             Some(p) => ConfigDraft::load(p).unwrap_or_else(|e| {
                 notice = Some(SharedString::from(format!(
                     "Couldn't open {}: {e}",
@@ -343,6 +360,11 @@ impl ConfigBuilder {
             }),
             None => ConfigDraft::default(),
         };
+
+        // Required settings are part of the form's structure, not optional palette choices.
+        // Insert missing ones at the start so `task` is always the first editable row, including
+        // for a new draft and for an invalid hand-written config that omitted it.
+        ensure_required_settings(&mut draft);
 
         let search = cx.new(|cx| {
             InputState::new(window, cx)
@@ -809,6 +831,7 @@ impl Render for ConfigBuilder {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let errors = self.count(Severity::Error);
         let warnings = self.count(Severity::Warn);
+        let has_secondary_tasks = self.draft.values.contains_key("secondary_tasks");
 
         v_flex()
             .size_full()
@@ -835,7 +858,7 @@ impl Render for ConfigBuilder {
                             .child(self.render_locked_band(cx))
                             .child(self.render_search(window, cx))
                             .child(v_flex().w_full().children(self.render_settings(window, cx)))
-                            .child(self.render_chain(window, cx)),
+                            .children(has_secondary_tasks.then(|| self.render_chain(window, cx))),
                     )
                     .children(
                         self.chrome
@@ -1121,7 +1144,10 @@ impl ConfigBuilder {
 mod tests {
     // Not `use super::*`: this module glob-imports `gpui`, whose own `test` macro would
     // shadow the one this needs.
-    use super::{BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, INTEGER_PATTERN};
+    use super::{
+        BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
+        INTEGER_PATTERN, ensure_required_settings,
+    };
 
     /// The pattern is what stands between a typo and a YAML integer field holding a word.
     /// Empty has to pass — §04 says an empty numeric field means "use the default", not zero —
@@ -1166,5 +1192,20 @@ mod tests {
         assert!(chrome.yaml_visible());
         chrome.transition(BuilderChromeEvent::ToggleYaml);
         assert!(!chrome.yaml_visible());
+    }
+
+    #[test]
+    fn required_settings_are_present_without_using_the_palette() {
+        let mut draft = ConfigDraft::from_yaml("rollback_dir: ./rollback\n").unwrap();
+        ensure_required_settings(&mut draft);
+
+        assert_eq!(
+            draft.values.first().map(|(key, _)| key.as_str()),
+            Some("task")
+        );
+        assert_eq!(
+            draft.values.get("task").and_then(|value| value.as_str()),
+            Some("")
+        );
     }
 }

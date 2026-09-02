@@ -73,6 +73,7 @@ pub fn app_tag() -> Tag {
 pub fn status_bar_button(id: impl Into<ElementId>) -> Button {
     Button::new(id)
         .with_size(Size::Small)
+        .text_xs()
         .ghost()
         .compact()
         .cursor_pointer()
