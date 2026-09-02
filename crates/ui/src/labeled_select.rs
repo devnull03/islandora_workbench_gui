@@ -1,12 +1,6 @@
 use gpui::*;
-use gpui_component::{
-    ActiveTheme, Sizable,
-    label::Label,
-    select::{Select, SelectState},
-    v_flex,
-};
+use gpui_component::{ActiveTheme, label::Label, select::SelectState, v_flex};
 
-use crate::APP_CONTROL_SIZE;
 use crate::DetailSelectItem;
 
 #[derive(IntoElement)]
@@ -56,10 +50,9 @@ impl RenderOnce for LabeledSelect {
             .gap_1()
             .child(Label::new(self.label).text_sm())
             .child(
-                Select::new(&self.select)
+                crate::app_select(&self.select)
                     .placeholder(self.placeholder)
                     .disabled(self.disabled)
-                    .with_size(APP_CONTROL_SIZE)
                     .w_full(),
             )
             .child(

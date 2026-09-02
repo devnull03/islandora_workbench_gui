@@ -29,12 +29,9 @@ pub fn task_config_items(configs: &[TaskConfig]) -> Vec<DetailSelectItem> {
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or(&path);
-            DetailSelectItem {
-                label: config.label.clone(),
-                subtitle: file_name.to_string().into(),
-                value: config.file_path.clone(),
-                divider_above: index > 0,
-            }
+            DetailSelectItem::new(config.file_path.clone(), config.label.clone())
+                .subtitle(file_name.to_string())
+                .divider_above(index > 0)
         })
         .collect()
 }
@@ -44,29 +41,21 @@ pub fn server_config_items(configs: &[ServerConfig]) -> Vec<DetailSelectItem> {
     configs
         .iter()
         .enumerate()
-        .map(|(index, config)| DetailSelectItem {
-            label: config.label.clone(),
-            subtitle: config.server_url.clone(),
-            value: config.server_url.clone(),
-            divider_above: index > 0,
+        .map(|(index, config)| {
+            DetailSelectItem::new(config.server_url.clone(), config.label.clone())
+                .subtitle(config.server_url.clone())
+                .divider_above(index > 0)
         })
         .collect()
 }
 
 pub fn source_items() -> Vec<DetailSelectItem> {
     vec![
-        DetailSelectItem {
-            label: "Google Sheet → CSV".into(),
-            subtitle: "Fetch a published sheet".into(),
-            value: SOURCE_SHEET.into(),
-            divider_above: false,
-        },
-        DetailSelectItem {
-            label: "CSV file".into(),
-            subtitle: "A CSV already on this machine".into(),
-            value: SOURCE_CSV.into(),
-            divider_above: true,
-        },
+        DetailSelectItem::new(SOURCE_SHEET, "Google Sheet → CSV")
+            .subtitle("Fetch a published sheet"),
+        DetailSelectItem::new(SOURCE_CSV, "CSV file")
+            .subtitle("A CSV already on this machine")
+            .divider_above(true),
     ]
 }
 
@@ -86,12 +75,10 @@ pub fn scripts_dir(cx: &App) -> Option<PathBuf> {
 /// A script declares nothing — being a `.py` in that folder is the whole registration. Sorted by
 /// file name so the list does not reshuffle between reads of the directory.
 pub fn processor_items(cx: &App) -> Vec<DetailSelectItem> {
-    let mut items = vec![DetailSelectItem {
-        label: "Workbench preprocessor".into(),
-        subtitle: "Built-in Rust importer".into(),
-        value: PROCESSOR_BUILTIN.into(),
-        divider_above: false,
-    }];
+    let mut items = vec![
+        DetailSelectItem::new(PROCESSOR_BUILTIN, "Workbench preprocessor")
+            .subtitle("Built-in Rust importer"),
+    ];
 
     let mut scripts: Vec<PathBuf> = scripts_dir(cx)
         .and_then(|dir| std::fs::read_dir(dir).ok())
@@ -104,24 +91,23 @@ pub fn processor_items(cx: &App) -> Vec<DetailSelectItem> {
 
     let mut first_script = true;
     for script in scripts {
-        items.push(DetailSelectItem {
-            label: script
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default()
-                .into(),
-            subtitle: "Preprocess script".into(),
-            value: script.to_string_lossy().into_owned().into(),
-            divider_above: std::mem::take(&mut first_script),
-        });
+        let file_name = script
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        items.push(
+            // A filename, not prose — mono, like every other literal in a menu.
+            DetailSelectItem::code(script.to_string_lossy().into_owned(), file_name)
+                .subtitle("Preprocess script")
+                .divider_above(std::mem::take(&mut first_script)),
+        );
     }
 
-    items.push(DetailSelectItem {
-        label: "None".into(),
-        subtitle: "Use the source rows unchanged".into(),
-        value: PROCESSOR_NONE.into(),
-        divider_above: true,
-    });
+    items.push(
+        DetailSelectItem::new(PROCESSOR_NONE, "None")
+            .subtitle("Use the source rows unchanged")
+            .divider_above(true),
+    );
     items
 }
 

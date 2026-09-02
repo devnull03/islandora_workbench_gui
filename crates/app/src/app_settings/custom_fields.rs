@@ -21,7 +21,7 @@ use gpui_component::{
     h_flex,
     input::{Input, InputState},
     label::Label,
-    select::{Select, SelectState},
+    select::SelectState,
     setting::SettingItem,
     v_flex,
 };
@@ -180,11 +180,10 @@ fn config_row(
                 let items: Vec<DetailSelectItem> = TASK_OPTIONS
                     .iter()
                     .enumerate()
-                    .map(|(i, (value, label))| DetailSelectItem {
-                        label: (*value).into(),
-                        subtitle: (*label).into(),
-                        value: (*value).into(),
-                        divider_above: i > 0,
+                    .map(|(i, (value, label))| {
+                        DetailSelectItem::code(*value, *value)
+                            .subtitle(*label)
+                            .divider_above(i > 0)
                     })
                     .collect();
                 let mut state = SelectState::new(items, None, window, cx);
@@ -209,12 +208,7 @@ fn config_row(
 
     row_shell()
         .child(Input::new(&label).with_size(ui::APP_CONTROL_SIZE).w_full())
-        .child(
-            Select::new(&task)
-                .placeholder("Task")
-                .with_size(ui::APP_CONTROL_SIZE)
-                .w_full(),
-        )
+        .child(ui::app_select(&task).placeholder("Task").w_full())
         .child(
             ui::PathField::new(SharedString::from(format!("cfg-browse-{id}")), &path)
                 .prompt("Select config file"),

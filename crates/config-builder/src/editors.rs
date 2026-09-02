@@ -13,7 +13,6 @@ use gpui_component::{
     ActiveTheme, IconName, Sizable, StyledExt, h_flex,
     input::{Input, NumberInput},
     label::Label,
-    select::Select,
     switch::Switch,
     v_flex,
 };
@@ -425,24 +424,14 @@ impl ConfigBuilder {
                 let nullable = def.shape == Shape::NullableEnum;
                 let mut items: Vec<DetailSelectItem> = Vec::new();
                 if nullable {
-                    items.push(DetailSelectItem {
-                        label: "none".into(),
-                        subtitle: SharedString::default(),
-                        value: SharedString::default(),
-                        divider_above: false,
-                    });
+                    // §05: `none` is a real row, and selecting it omits the key from the
+                    // YAML. Mono like the values it sits above, because it stands for one.
+                    items.push(DetailSelectItem::code("", "none").subtitle("leave this unset"));
                 }
-                items.extend(
-                    def.choices
-                        .iter()
-                        .enumerate()
-                        .map(|(i, c)| DetailSelectItem {
-                            label: c.label.clone().into(),
-                            subtitle: SharedString::default(),
-                            value: c.value.clone().into(),
-                            divider_above: nullable && i == 0,
-                        }),
-                );
+                items.extend(def.choices.iter().enumerate().map(|(i, c)| {
+                    DetailSelectItem::from_choice(c.value.clone(), &c.label)
+                        .divider_above(nullable && i == 0)
+                }));
                 let selected = value.as_str().map(|s| SharedString::from(s.to_string()));
                 let state = self.select(
                     id.clone(),
@@ -462,12 +451,7 @@ impl ConfigBuilder {
                         def.choices.iter().map(|c| c.label.clone()).collect();
                     return v_flex()
                         .gap(GAP_XS)
-                        .child(
-                            Select::new(&state)
-                                .placeholder("Choose…")
-                                .with_size(APP_CONTROL_SIZE)
-                                .w_full(),
-                        )
+                        .child(ui::app_select(&state).placeholder("Choose…").w_full())
                         .child(
                             Label::new(format!("Choices: not set · {}", choices.join(" · ")))
                                 .text_xs()
@@ -479,9 +463,8 @@ impl ConfigBuilder {
                 // Past four options a strip is wider than the dropdown it replaced, so the
                 // dropdown wins — `task` with its twelve values included.
                 if !Segmented::fits(items.len()) {
-                    return Select::new(&state)
+                    return ui::app_select(&state)
                         .placeholder("Choose…")
-                        .with_size(APP_CONTROL_SIZE)
                         .w_full()
                         .into_any_element();
                 }
@@ -531,10 +514,7 @@ impl ConfigBuilder {
 
             Shape::String | Shape::Url => {
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
-                Input::new(&input)
-                    .with_size(APP_CONTROL_SIZE)
-                    .w_full()
-                    .into_any_element()
+                Input::new(&input).w_full().into_any_element()
             }
 
             Shape::TemplateString => {

@@ -43,7 +43,7 @@ pub use path_field::{PathField, PathPickFn};
 pub use path_picker::{pick_into, pick_into_app};
 pub use row_editor::{RowActions, RowEditor};
 pub use segmented::{MAX_SEGMENTS, Segmented};
-pub use select_items::DetailSelectItem;
+pub use select_items::{DetailSelectItem, app_select};
 pub use setting_row::SettingRow;
 pub use status_bar_button::StatusBarButton;
 pub use step_section::StepSection;

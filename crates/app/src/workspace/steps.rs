@@ -9,10 +9,10 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Sizable, button::ButtonVariants, checkbox::Checkbox,
-    h_flex, input::Input, label::Label, select::Select,
+    h_flex, input::Input, label::Label,
 };
 use settings::AppSettings;
-use ui::{APP_CONTROL_SIZE, Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
+use ui::{Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
@@ -28,13 +28,7 @@ impl Workspace {
         let state = self.source_field(cx).clone();
 
         LabeledField::new(if is_csv { "Source CSV" } else { "Sheet URL" }).child(
-            FieldRow::new(
-                Input::new(&state)
-                    .with_size(APP_CONTROL_SIZE)
-                    .w_full()
-                    .disabled(!idle),
-            )
-            .when(is_csv, |row| {
+            FieldRow::new(Input::new(&state).w_full().disabled(!idle)).when(is_csv, |row| {
                 row.child(
                     app_button("browse-source-csv")
                         .icon(IconName::FolderOpen)
@@ -66,8 +60,7 @@ impl Workspace {
         StepSection::new("1", "Input source")
             .note("optional step")
             .child(
-                Select::new(&self.input_source_select)
-                    .with_size(APP_CONTROL_SIZE)
+                ui::app_select(&self.input_source_select)
                     .w_full()
                     .disabled(!idle),
             )
@@ -92,8 +85,7 @@ impl Workspace {
                                  outputs the new metadata CSV path.",
                             )
                             .child(
-                                Select::new(&self.processor_select)
-                                    .with_size(APP_CONTROL_SIZE)
+                                ui::app_select(&self.processor_select)
                                     .w_full()
                                     .disabled(!idle),
                             ),
@@ -165,9 +157,8 @@ impl Workspace {
         StepSection::new("2", "Config")
             .child(
                 FieldRow::new(
-                    Select::new(&self.saved_config_select)
+                    ui::app_select(&self.saved_config_select)
                         .placeholder("Select saved config…")
-                        .with_size(APP_CONTROL_SIZE)
                         .disabled(!idle)
                         .w_full(),
                 )
@@ -216,9 +207,8 @@ impl Workspace {
         StepSection::new("3", "Server")
             .child(
                 FieldRow::new(
-                    Select::new(&self.server_select)
+                    ui::app_select(&self.server_select)
                         .placeholder("Select server…")
-                        .with_size(APP_CONTROL_SIZE)
                         .disabled(!idle)
                         .w_full(),
                 )
