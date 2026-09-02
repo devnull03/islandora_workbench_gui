@@ -51,6 +51,7 @@ impl RenderOnce for StepSection {
 
         v_flex()
             .w_full()
+            .min_w(px(0.))
             .flex_shrink_0()
             .gap(GAP_LG)
             .child(

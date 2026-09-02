@@ -29,7 +29,7 @@ use ui::tokens::{
     CHAR_FIELD_W, GAP_MD, GAP_XS, KEY_COL_W, LIST_CELL_W, NUMBER_FIELD_W, ROW_ACTION_W,
 };
 use ui::{
-    APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, FieldRow, InlineMessage,
+    APP_CONTROL_SIZE, Card, CardTone, ChipList, DetailSelectItem, InlineMessage, PathField,
     RowActions, RowEditor, Segmented, SettingRow, add_row_button, app_button, ghost_button,
 };
 
@@ -476,22 +476,26 @@ impl ConfigBuilder {
                         .into_any_element();
                 }
 
-                // An enum reads better as every option at once than as a dropdown hiding three
-                // of four. The select state still exists and is still what `read_widgets` reads
-                // back — the segments write into it rather than owning a rival answer, and the
-                // overflow cell is that same select, so there is never a second copy.
-                let (_, hidden) = Segmented::split(items.len());
+                // Past four options a strip is wider than the dropdown it replaced, so the
+                // dropdown wins — `task` with its twelve values included.
+                if !Segmented::fits(items.len()) {
+                    return Select::new(&state)
+                        .placeholder("Choose…")
+                        .with_size(APP_CONTROL_SIZE)
+                        .w_full()
+                        .into_any_element();
+                }
+
+                // A short enum reads better as every option at once than as a dropdown hiding
+                // three of four. The select state still exists and is still what `read_widgets`
+                // reads back — the segments write into it rather than owning a rival answer.
+                //
+                // Segments show the bare YAML value, never the prose label: `replace` fits a
+                // cell, `replace - Replace the field values` does not, and the row is a view of
+                // a file that says `replace`.
                 let write = state.clone();
-                Segmented::new(id, items.iter().map(|i| (i.value.clone(), i.label.clone())))
+                Segmented::new(id, items.iter().map(|i| (i.value.clone(), i.value.clone())))
                     .selected(selected)
-                    .when(hidden > 0, |strip| {
-                        strip.overflow(
-                            Select::new(&state)
-                                .placeholder(format!("+{hidden}"))
-                                .with_size(APP_CONTROL_SIZE)
-                                .appearance(false),
-                        )
-                    })
                     .on_select(move |value, window, cx| {
                         let value = value.clone();
                         write.update(cx, |state, cx| {
@@ -509,22 +513,11 @@ impl ConfigBuilder {
                     format!("Select file for {key}").into()
                 };
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
-                let browse_input = input.clone();
-                FieldRow::new(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full())
-                    .child(
-                        app_button(SharedString::from(format!("browse-{key}")))
-                            .outline()
-                            .icon(IconName::FolderOpen)
-                            .label("Browse…")
-                            // The picker writes into the input asynchronously and the input's
-                            // own Change event is what commits, so there is nothing to do here.
-                            .on_click(cx.listener(move |_: &mut Self, _, window, cx| {
-                                ui::pick_into(window, cx, &browse_input, prompt.clone(), is_dir);
-                            })),
-                    )
+                PathField::new(SharedString::from(format!("browse-{key}")), &input)
+                    .prompt(prompt)
+                    .directories(is_dir)
                     .into_any_element()
             }
-
             // One character, so a full-width field would be a lie about what fits. 44px is the
             // design language`s char field: wide enough to see the glyph, narrow enough that
             // nobody types a word into it.

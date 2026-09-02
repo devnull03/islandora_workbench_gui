@@ -206,21 +206,18 @@ fn config_row(
     let (l, t, p) = (label.clone(), task.clone(), path.clone());
     let close = open.clone();
     let cancel = open.clone();
-    let browse = path.clone();
 
     row_shell()
-        .child(Input::new(&label).small().w_full())
-        .child(Select::new(&task).placeholder("Task").w_full())
+        .child(Input::new(&label).with_size(ui::APP_CONTROL_SIZE).w_full())
         .child(
-            ui::FieldRow::new(Input::new(&path).small().w_full()).child(
-                Button::new(SharedString::from(format!("cfg-browse-{id}")))
-                    .icon(IconName::FolderOpen)
-                    .outline()
-                    .with_size(ui::APP_CONTROL_SIZE)
-                    .on_click(move |_, window, cx| {
-                        ui::pick_into_app(window, cx, browse.clone(), "Select config file", false)
-                    }),
-            ),
+            Select::new(&task)
+                .placeholder("Task")
+                .with_size(ui::APP_CONTROL_SIZE)
+                .w_full(),
+        )
+        .child(
+            ui::PathField::new(SharedString::from(format!("cfg-browse-{id}")), &path)
+                .prompt("Select config file"),
         )
         .child(
             h_flex()
@@ -442,28 +439,14 @@ fn server_row(
     let (l, u, c, cf) = (label.clone(), url.clone(), creds.clone(), confirm.clone());
     let close = open.clone();
     let cancel = open.clone();
-    let browse = creds.clone();
     let confirm_now = *confirm.read(cx);
 
     row_shell()
-        .child(Input::new(&label).small().w_full())
-        .child(Input::new(&url).small().w_full())
+        .child(Input::new(&label).with_size(ui::APP_CONTROL_SIZE).w_full())
+        .child(Input::new(&url).with_size(ui::APP_CONTROL_SIZE).w_full())
         .child(
-            ui::FieldRow::new(Input::new(&creds).small().w_full()).child(
-                Button::new(SharedString::from(format!("srv-browse-{id}")))
-                    .icon(IconName::FolderOpen)
-                    .outline()
-                    .with_size(ui::APP_CONTROL_SIZE)
-                    .on_click(move |_, window, cx| {
-                        ui::pick_into_app(
-                            window,
-                            cx,
-                            browse.clone(),
-                            "Select credentials file",
-                            false,
-                        )
-                    }),
-            ),
+            ui::PathField::new(SharedString::from(format!("srv-browse-{id}")), &creds)
+                .prompt("Select credentials file"),
         )
         .child(
             Checkbox::new(SharedString::from(format!("srv-confirm-box-{id}")))

@@ -37,6 +37,9 @@ impl RenderOnce for FieldRow {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         h_flex()
             .w_full()
+            // `w_full` alone loses to a long child: a flex item's basis is its content until a
+            // zero minimum says it may shrink. Without this one long path widens the row.
+            .min_w(px(0.))
             .items_center()
             .gap(GAP_MD)
             .child(div().flex_1().min_w(px(0.)).child(self.lead))

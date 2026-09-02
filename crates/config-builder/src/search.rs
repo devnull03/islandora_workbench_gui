@@ -175,6 +175,12 @@ impl ConfigBuilder {
     }
 
     /// The results panel: groups in the order their best match ranked, each under a header band.
+    ///
+    /// The height chain is load-bearing and was wrong twice. `overflow_y_scrollbar` moves the
+    /// caller's size refinements onto a `size_full` wrapper, so a `max_h` written directly on the
+    /// scrolling element resolves against an auto-height ancestor and clamps nothing. The panel
+    /// therefore caps its own height, and the scroll area takes a definite one from flex —
+    /// `flex_1` plus `min_h(0)`, the vertical twin of the zero minimum every row here needs.
     fn render_results(
         &self,
         query: &str,
@@ -199,85 +205,102 @@ impl ConfigBuilder {
             })
             .collect();
 
-        div()
-            .absolute()
-            .top_full()
-            .left_0()
-            // Exactly as wide as the trigger. This is the fix for a results list that used to
-            // widen its own column: nothing inside the panel gets a vote on the width.
-            .w_full()
-            .mt(GAP_SM)
-            .rounded(cx.theme().radius_lg)
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.popover)
-            .overflow_hidden()
-            .child(
-                v_flex()
-                    .w_full()
-                    .max_h(PICKER_MAX_H)
-                    .overflow_y_scrollbar()
-                    .when(sections.is_empty(), |this| {
-                        this.child(
+        // `deferred` is what makes this a popover instead of a rectangle the rows draw over.
+        // GPUI paints in tree order and absolute positioning does not change that, so the
+        // settings list below — later in the tree — was painting straight through the panel.
+        // Deferring moves only the paint; the layout stays exactly where it is.
+        deferred(
+            div()
+                .absolute()
+                .top_full()
+                .left_0()
+                // Exactly as wide as the trigger. This is the fix for a results list that used to
+                // widen its own column: nothing inside the panel gets a vote on the width.
+                .w_full()
+                .mt(GAP_SM)
+                .child(
+                    v_flex()
+                        .w_full()
+                        .max_h(PICKER_MAX_H)
+                        .rounded(cx.theme().radius_lg)
+                        .border_1()
+                        .border_color(colors.border)
+                        .bg(colors.popover)
+                        .overflow_hidden()
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .flex_1()
+                                // The vertical zero minimum. Without it this flex item's basis is
+                                // its content and it simply grows past the cap above.
+                                .min_h(px(0.))
+                                .overflow_y_scrollbar()
+                                .when(sections.is_empty(), |this| {
+                                    this.child(
+                                        h_flex()
+                                            .w_full()
+                                            .h(PICKER_TRIGGER_H)
+                                            .px(GAP_MD)
+                                            .items_center()
+                                            .child(
+                                                Label::new(format!("No setting matches {query}"))
+                                                    .text_xs()
+                                                    .text_color(muted),
+                                            ),
+                                    )
+                                })
+                                .children(sections.into_iter().map(|(group, count, rows)| {
+                                    v_flex()
+                                        .w_full()
+                                        .child(
+                                            h_flex()
+                                                .w_full()
+                                                .px(GAP_MD)
+                                                .py(GAP_XS)
+                                                .gap(GAP_SM)
+                                                .items_center()
+                                                .bg(colors.table_head)
+                                                .border_b_1()
+                                                .border_color(colors.table_row_border)
+                                                .child(
+                                                    Label::new(group.to_uppercase())
+                                                        .text_xs()
+                                                        .font_semibold()
+                                                        .text_color(colors.table_head_foreground),
+                                                )
+                                                .child(
+                                                    Label::new(count.to_string())
+                                                        .text_xs()
+                                                        .text_color(muted),
+                                                ),
+                                        )
+                                        .children(rows)
+                                })),
+                        )
+                        .child(
                             h_flex()
                                 .w_full()
-                                .h(PICKER_TRIGGER_H)
+                                .flex_none()
                                 .px(GAP_MD)
+                                .py(GAP_XS)
+                                .gap(GAP_MD)
                                 .items_center()
+                                .bg(colors.table_head)
+                                .border_t_1()
+                                .border_color(colors.table_row_border)
                                 .child(
-                                    Label::new(format!("No setting matches {query}"))
+                                    Label::new("Click a setting to add it")
+                                        .text_xs()
+                                        .text_color(muted),
+                                )
+                                .child(
+                                    Label::new("clear the box to close")
                                         .text_xs()
                                         .text_color(muted),
                                 ),
-                        )
-                    })
-                    .children(sections.into_iter().map(|(group, count, rows)| {
-                        v_flex()
-                            .w_full()
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .px(GAP_MD)
-                                    .py(GAP_XS)
-                                    .gap(GAP_SM)
-                                    .items_center()
-                                    .bg(colors.table_head)
-                                    .border_b_1()
-                                    .border_color(colors.table_row_border)
-                                    .child(
-                                        Label::new(group.to_uppercase())
-                                            .text_xs()
-                                            .font_semibold()
-                                            .text_color(colors.table_head_foreground),
-                                    )
-                                    .child(
-                                        Label::new(count.to_string()).text_xs().text_color(muted),
-                                    ),
-                            )
-                            .children(rows)
-                    })),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .px(GAP_MD)
-                    .py(GAP_XS)
-                    .gap(GAP_MD)
-                    .items_center()
-                    .bg(colors.table_head)
-                    .border_t_1()
-                    .border_color(colors.table_row_border)
-                    .child(
-                        Label::new("Click a setting to add it")
-                            .text_xs()
-                            .text_color(muted),
-                    )
-                    .child(
-                        Label::new("clear the box to close")
-                            .text_xs()
-                            .text_color(muted),
-                    ),
-            )
+                        ),
+                ),
+        )
     }
 
     fn render_result(&self, def: &'static SettingDef, cx: &mut Context<Self>) -> impl IntoElement {

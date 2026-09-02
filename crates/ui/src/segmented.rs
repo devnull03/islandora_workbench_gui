@@ -1,10 +1,15 @@
 //! A short enum as one strip of joined cells rather than a dropdown.
 //!
 //! Component Spec §05: one border around the group, cells divided by a 1px rule, the selected
-//! cell filled with `primary`. Up to [`MAX_SEGMENTS`] options inline; past that the first
-//! [`VISIBLE_WITH_OVERFLOW`] show and the rest go behind a `+N` cell, so the strip's width stops
-//! growing with the schema. The win over a dropdown is one click instead of two, and every legal
-//! value visible without opening anything.
+//! cell filled with `primary`. The win over a dropdown is one click instead of two, and every
+//! legal value visible without opening anything.
+//!
+//! Up to [`MAX_SEGMENTS`] options only. §05 also describes a `+N` overflow cell for five to
+//! seven options, which is **not** built: the cell has to be a dropdown trigger showing `+N`,
+//! `Select` has no custom-trigger hook, and a `Select` dropped into the strip renders its own
+//! full-width trigger showing the selected label — which is how `task` ended up as a strip
+//! wider than its column with the selected value in it twice. §05's primary rule covers the
+//! case anyway: past four options, use a plain dropdown.
 //!
 //! Stateless on purpose: the selected value is passed in and the click is a callback, so this
 //! adds nothing to whatever already owns the value. A control with its own state entity would be
@@ -16,11 +21,9 @@ use gpui_component::{ActiveTheme, h_flex, label::Label};
 
 use crate::tokens::{CONTROL_H, GAP_MD};
 
-/// Options that fit inline. Past this the strip is wider than the dropdown it replaced.
+/// Options that fit inline. Past this the strip is wider than the dropdown it replaced, so the
+/// caller should render a dropdown instead — see [`Segmented::fits`].
 pub const MAX_SEGMENTS: usize = 4;
-
-/// How many stay visible once there is an overflow cell to make room for.
-const VISIBLE_WITH_OVERFLOW: usize = 3;
 
 type SelectFn = Box<dyn Fn(&SharedString, &mut Window, &mut App) + 'static>;
 
@@ -29,10 +32,6 @@ pub struct Segmented {
     id: SharedString,
     options: Vec<(SharedString, SharedString)>,
     selected: Option<SharedString>,
-    /// The last cell, when the options did not all fit. Supplied whole by the caller: it is the
-    /// same dropdown the caller would otherwise have rendered on its own, and only the caller
-    /// knows what to label it. Use [`Segmented::split`] to find out whether one is needed.
-    overflow: Option<AnyElement>,
     on_select: Option<SelectFn>,
 }
 
@@ -46,19 +45,12 @@ impl Segmented {
             id: id.into(),
             options: options.into_iter().collect(),
             selected: None,
-            overflow: None,
             on_select: None,
         }
     }
 
     pub fn selected(mut self, selected: Option<SharedString>) -> Self {
         self.selected = selected;
-        self
-    }
-
-    /// The trailing cell for the options that did not fit — typically a `+N` dropdown.
-    pub fn overflow(mut self, overflow: impl IntoElement) -> Self {
-        self.overflow = Some(overflow.into_any_element());
         self
     }
 
@@ -70,14 +62,10 @@ impl Segmented {
         self
     }
 
-    /// How many cells this will draw, and how many are left over. Public so the caller can decide
-    /// whether an overflow control is needed at all before building one.
-    pub fn split(count: usize) -> (usize, usize) {
-        if count <= MAX_SEGMENTS {
-            (count, 0)
-        } else {
-            (VISIBLE_WITH_OVERFLOW, count - VISIBLE_WITH_OVERFLOW)
-        }
+    /// Whether this many options belong in a strip at all. The caller renders a dropdown when
+    /// they do not, so the decision lives here rather than being spelled out per call site.
+    pub fn fits(count: usize) -> bool {
+        count <= MAX_SEGMENTS
     }
 }
 
@@ -87,9 +75,7 @@ impl RenderOnce for Segmented {
         let on_select = self.on_select.map(std::rc::Rc::new);
         let selected = self.selected;
         let id = self.id;
-        let (visible, _hidden) = Self::split(self.options.len());
-        let cells: Vec<(SharedString, SharedString)> =
-            self.options.into_iter().take(visible).collect();
+        let cells: Vec<(SharedString, SharedString)> = self.options;
 
         h_flex()
             .h(CONTROL_H)
@@ -135,17 +121,5 @@ impl RenderOnce for Segmented {
                             })
                     }),
             )
-            .when_some(self.overflow, |strip, overflow| {
-                strip.child(
-                    h_flex()
-                        .h_full()
-                        .px(GAP_MD)
-                        .items_center()
-                        .border_l_1()
-                        .border_color(colors.border)
-                        .bg(colors.table_head)
-                        .child(overflow),
-                )
-            })
     }
 }

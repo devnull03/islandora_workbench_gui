@@ -40,6 +40,7 @@ impl RenderOnce for LabeledField {
         let muted = cx.theme().muted_foreground;
         v_flex()
             .w_full()
+            .min_w(px(0.))
             .gap_1()
             .child(Label::new(self.label).text_sm())
             .children(self.children)

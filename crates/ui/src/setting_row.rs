@@ -127,6 +127,10 @@ impl RenderOnce for SettingRow {
                 h_flex()
                     .w(LABEL_COL_W)
                     .flex_none()
+                    // §00: "Long keys wrap to two lines; the column does not grow." Without
+                    // the clip a key like `rollback_file_include_node_id` runs straight over
+                    // the control beside it, which is what the screenshots showed.
+                    .overflow_hidden()
                     .items_start()
                     // The 2px accent bar marks a setting that differs from its default; it pairs
                     // with the per-row reset affordance rather than replacing it.
@@ -144,11 +148,14 @@ impl RenderOnce for SettingRow {
                             .child(
                                 h_flex()
                                     .w_full()
+                                    .min_w(px(0.))
                                     .gap(GAP_MD)
+                                    .flex_wrap()
                                     .items_baseline()
                                     .child(
                                         Label::new(self.label)
                                             .text_sm()
+                                            .max_w_full()
                                             .when_some(self.mono_label.then_some(mono), |el, f| {
                                                 el.font_family(f)
                                             }),
@@ -163,7 +170,12 @@ impl RenderOnce for SettingRow {
                                     }),
                             )
                             .when_some(self.description, |el, description| {
-                                el.child(Label::new(description).text_xs().text_color(muted))
+                                el.child(
+                                    Label::new(description)
+                                        .text_xs()
+                                        .max_w_full()
+                                        .text_color(muted),
+                                )
                             }),
                     ),
             )
@@ -177,7 +189,16 @@ impl RenderOnce for SettingRow {
                             .w_full()
                             .gap(GAP_MD)
                             .items_center()
-                            .child(div().flex_1().min_w(px(0.)).child(self.control))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    // A segmented strip or a wide input would otherwise set
+                                    // this column's basis and push the trailing actions off
+                                    // the row.
+                                    .overflow_hidden()
+                                    .child(self.control),
+                            )
                             .children(self.trailing),
                     )
                     .children(self.note),

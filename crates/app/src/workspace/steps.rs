@@ -78,27 +78,11 @@ impl Workspace {
                     .child(self.render_source_field(cx))
                     .child(
                         LabeledField::new("Ingest dir").child(
-                            FieldRow::new(
-                                Input::new(&self.ingest_files_dir)
-                                    .with_size(APP_CONTROL_SIZE)
-                                    .disabled(true)
-                                    .w_full(),
-                            )
-                            .child(
-                                app_button("browse-ingest-dir")
-                                    .icon(IconName::FolderOpen)
-                                    .outline()
-                                    .disabled(!idle)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        ui::pick_into(
-                                            window,
-                                            cx,
-                                            &this.ingest_files_dir,
-                                            "Select directory for ingest files",
-                                            true,
-                                        );
-                                    })),
-                            ),
+                            ui::PathField::new("browse-ingest-dir", &self.ingest_files_dir)
+                                .prompt("Select directory for ingest files")
+                                .directories(true)
+                                .readonly(true)
+                                .disabled(!idle),
                         ),
                     )
                     .child(

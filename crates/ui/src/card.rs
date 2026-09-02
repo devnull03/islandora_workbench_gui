@@ -82,6 +82,7 @@ impl RenderOnce for Card {
 
         v_flex()
             .w_full()
+            .min_w(px(0.))
             .gap(self.gap)
             .p(self.padding)
             .rounded(cx.theme().radius)

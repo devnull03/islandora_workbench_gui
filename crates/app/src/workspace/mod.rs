@@ -475,9 +475,14 @@ impl Render for Workspace {
         // pushing the status bar off-screen.
         div()
             .size_full()
+            // Horizontal overflow is never wanted here: the steps must fit the window, and a
+            // sheet URL or an absolute path is longer than any window. Without the clip the
+            // controls simply run off the right edge.
+            .overflow_x_hidden()
             .child(
                 v_flex()
                     .w_full()
+                    .min_w(px(0.))
                     .min_h(relative(1.))
                     .p_4()
                     .gap_4()

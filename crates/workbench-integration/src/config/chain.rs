@@ -87,6 +87,22 @@ pub fn link_error(owner: &ConfigDraft, candidate: &Path) -> Option<String> {
     None
 }
 
+/// The file a chain entry names, if it can be found.
+///
+/// Exactly two rules, in order: the path as written, then the path with a YAML extension. That
+/// covers the one spelling people actually use and stops well short of searching the disk —
+/// a chain entry that resolves to a file the user did not name is worse than one that fails.
+fn discover(path: &Path) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    ["yml", "yaml"]
+        .into_iter()
+        .map(|extension| path.with_file_name(format!("{name}.{extension}")))
+        .find(|candidate| candidate.is_file())
+}
+
 fn load_node(
     path: PathBuf,
     ancestry: &[PathBuf],
@@ -108,9 +124,14 @@ fn load_node(
             "This config is already linked elsewhere in the chain.",
         );
     }
-    if !path.is_file() {
-        return broken(path, label, "This config was moved or deleted.");
-    }
+    // Workbench resolves `secondary_tasks` leniently, and people write the entry the way they
+    // think of the file — `create-items.config` for `create-items.config.yml`. Reporting that
+    // as moved or deleted when it is sitting right there, spelled almost the same, sends
+    // someone hunting for a file that never went anywhere.
+    let path = match discover(&path) {
+        Some(found) => found,
+        None => return broken(path, label, "This config was moved or deleted."),
+    };
 
     let draft = match ConfigDraft::load(&path) {
         Ok(draft) => draft,

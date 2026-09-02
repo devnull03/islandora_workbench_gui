@@ -44,7 +44,7 @@ use workbench_integration::config::{
 };
 
 use ui::AppFont as _;
-use ui::tokens::{GAP_2XL, GAP_LG, GAP_MD, GAP_SM, GAP_XL, GAP_XS, MIN_WINDOW_W, PAD_PAGE};
+use ui::tokens::{GAP_2XL, GAP_MD, GAP_SM, GAP_XL, GAP_XS, MIN_WINDOW_W, PAD_PAGE, TITLE_BAR_H};
 use ui::{
     APP_CONTROL_SIZE, DetailSelectItem, LockedBand, ProblemSummary, app_button, ghost_button,
 };
@@ -777,8 +777,11 @@ impl ConfigBuilder {
     ) -> impl IntoElement {
         h_flex()
             .w_full()
+            // The footer is the builder status bar, and §02 gives it the title bar height so the
+            // window reads as one frame rather than as a form with a tray bolted underneath.
+            .h(TITLE_BAR_H)
+            .flex_none()
             .px(GAP_XL)
-            .py(GAP_LG)
             .gap(GAP_MD)
             .items_center()
             .border_t_1()

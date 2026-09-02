@@ -50,14 +50,14 @@ impl ConfigBuilder {
         let problems: Vec<SharedString> = lines
             .iter()
             .filter_map(|(line, _, severity)| {
-                severity.map(|severity| {
-                    let label = match severity {
-                        Severity::Error => "error",
-                        Severity::Warn => "warning",
-                        Severity::Ok => "ok",
-                    };
-                    format!("line {line}: {label}").into()
-                })
+                // Only the two levels worth acting on. "line 4: ok" is a chip that costs a glance
+                // and tells you the thing you already assumed.
+                let label = match (*severity)? {
+                    Severity::Error => "error",
+                    Severity::Warn => "warning",
+                    Severity::Ok => return None,
+                };
+                Some(format!("line {line}: {label}").into())
             })
             .collect();
 

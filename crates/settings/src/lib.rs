@@ -29,7 +29,7 @@ use gpui_component::{
 use serde::{Deserialize, Serialize};
 
 use ui::AppFont as _;
-use ui::PathPicker;
+use ui::PathField;
 
 // --- Setting Field Enum ---
 
@@ -143,14 +143,14 @@ impl From<Setting> for SettingItem {
                 label,
                 description,
                 prompt,
-            } => build_path_picker(key, label, description, prompt, true, false),
+            } => build_path_picker(key, label, description, prompt, false),
 
             Setting::DirPicker {
                 key,
                 label,
                 description,
                 prompt,
-            } => build_path_picker(key, label, description, prompt, false, true),
+            } => build_path_picker(key, label, description, prompt, true),
         }
     }
 }
@@ -160,7 +160,8 @@ fn build_path_picker(
     label: &'static str,
     description: &'static str,
     prompt: &'static str,
-    files: bool,
+    // A picker is for files or for folders; `files` was always the negation of this, so it is
+    // one parameter, not two.
     directories: bool,
 ) -> SettingItem {
     let prompt: SharedString = prompt.into();
@@ -191,22 +192,23 @@ fn build_path_picker(
                     state.set_value(want.to_string(), window, cx);
                 }
             });
-            PathPicker {
-                layout: options.layout(),
-                field_size: options.size(),
-                button_size: Some(options.size()),
-                button_id: SharedString::from(format!("browse-{}", key)),
-                files,
-                directories,
-                prompt: prompt.clone(),
-                input,
-                on_pick: Arc::new(move |val, cx| {
+            PathField::new(SharedString::from(format!("browse-{}", key)), &input)
+                .size(options.size())
+                .directories(directories)
+                .prompt(prompt.clone())
+                .readonly(true)
+                .on_pick(Arc::new(move |val, cx| {
                     AppSettings::set_text(key, val, cx);
-                }),
-            }
+                }))
         }),
     )
     .description(description)
+    // Vertical, and not by preference. The upstream horizontal row gives the label column
+    // `flex_1` and the field column no width at all, so a field that asks for `w_full` resolves
+    // against an indefinite parent and sizes to its content — which for a path is the whole
+    // string, running off the right edge of the window. Stacked, the field has a definite width
+    // to be full of.
+    .layout(Axis::Vertical)
 }
 
 // --- Setting Value ---
@@ -382,19 +384,15 @@ pub fn picker_with_path_button(
             h_flex()
                 .gap_2()
                 .w_full()
-                .child(PathPicker {
-                    layout: options.layout(),
-                    field_size: options.size(),
-                    button_size: Some(options.size()),
-                    button_id: SharedString::from(format!("browse-{}", key)),
-                    files: true,
-                    directories: false,
-                    prompt: prompt.clone(),
-                    input: input.clone(),
-                    on_pick: std::sync::Arc::new(move |val, cx| {
-                        AppSettings::set_text(on_pick_key, val, cx);
-                    }),
-                })
+                .child(
+                    PathField::new(SharedString::from(format!("browse-{}", key)), &input)
+                        .size(options.size())
+                        .prompt(prompt.clone())
+                        .readonly(true)
+                        .on_pick(std::sync::Arc::new(move |val, cx| {
+                            AppSettings::set_text(on_pick_key, val, cx);
+                        })),
+                )
                 .child(
                     Button::new(SharedString::from(format!("get-from-path-{}", key)))
                         .outline()
