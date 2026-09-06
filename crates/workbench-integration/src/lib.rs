@@ -61,12 +61,26 @@ pub struct WbInfo {
 }
 
 impl WbInfo {
-    /// `uv_path` is the caller-resolved uv executable (settings → installer registry). When `None`
-    /// we fall back to discovering `uv` on `PATH`, preserving the previous behaviour.
-    pub fn new(workbench_path: PathBuf, use_uv: bool, uv_path: Option<PathBuf>) -> Self {
+    /// Explicit interpreter paths come from Settings (or the installer for uv). When absent, fall
+    /// back to `PATH`; desktop apps often inherit a smaller `PATH` than an interactive shell, so
+    /// a configured path must always win.
+    pub fn new(
+        workbench_path: PathBuf,
+        python_path: Option<PathBuf>,
+        use_uv: bool,
+        uv_path: Option<PathBuf>,
+    ) -> Self {
         Self {
             install_path: workbench_path,
-            python_path: which("python").ok(),
+            python_path: python_path.or_else(|| {
+                which("python").ok().or_else(|| {
+                    if cfg!(windows) {
+                        None
+                    } else {
+                        which("python3").ok()
+                    }
+                })
+            }),
             uv_path: uv_path.or_else(|| which("uv").ok()),
             use_uv,
         }
@@ -135,4 +149,23 @@ pub fn run_ingest_streaming(
             .join(" "),
     );
     spawn_command_streaming(cmd).map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_python_path_wins_over_path_discovery() {
+        let configured = PathBuf::from("/configured/python");
+        let info = WbInfo::new(
+            PathBuf::from("/workbench"),
+            Some(configured.clone()),
+            false,
+            None,
+        );
+
+        assert_eq!(info.python_path.as_deref(), Some(configured.as_path()));
+        assert_eq!(info.python_command().get_program(), configured.as_os_str());
+    }
 }

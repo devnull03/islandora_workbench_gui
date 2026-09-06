@@ -1,8 +1,8 @@
 name: CI
 
 # Runs on every push to `dev` and on PRs targeting `dev` or `main`.
-# gpui needs heavy Linux system libraries to even compile, and the only
-# supported targets here are Windows + macOS, so CI runs on those two.
+# Windows and macOS use their hosted toolchains; Linux uses the repository's locked Nix shell so
+# GPUI's Wayland/X11/Vulkan dependencies match the supported NixOS development environment.
 on:
   push:
     branches: [dev]
@@ -52,3 +52,20 @@ jobs:
       # target, so building again was a second full build per run for no extra signal.
       - name: Test
         run: cargo test --workspace
+
+  check-linux:
+    name: check (linux/nix)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: Format check
+        run: nix develop --command cargo fmt --all --check
+
+      - name: Clippy
+        run: nix develop --command cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: nix develop --command cargo test --workspace

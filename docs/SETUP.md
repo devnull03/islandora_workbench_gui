@@ -17,8 +17,8 @@ release, since a release depends on several pieces being configured ahead of tim
 > `main` and land them back on `main` directly.
 
 Workspace crates (versions are inherited from `[workspace.package].version`):
-`crates/app` (binary `app`), `crates/settings`, `crates/workbench-integration`,
-`crates/window-wrapper`.
+`crates/app` (binary `app`), `crates/config-builder`, `crates/settings`, `crates/ui`,
+`crates/workbench-integration`, and `crates/window-wrapper`.
 
 ---
 
@@ -27,8 +27,15 @@ Workspace crates (versions are inherited from `[workspace.package].version`):
 **App (on `main`):**
 - Rust **stable** toolchain — `rust-toolchain.toml` pins the channel and pulls in
   `rustfmt` + `clippy`. Run `rustup update stable` periodically to match CI.
-- The app only targets **Windows + macOS** (gpui needs heavy system libs on Linux),
-  so build/test there.
+- Windows, macOS, and Linux are supported by the source tree. On NixOS, enter the checked-in
+  development shell first; it supplies Rust, Python, and GPUI's Wayland/X11/Vulkan libraries:
+  ```sh
+  nix develop
+  cargo run
+  ```
+  Other Linux distributions need the equivalent compiler, `pkg-config`, CMake, Python 3,
+  fontconfig/freetype, Wayland/X11/xkbcommon, Vulkan, OpenGL, ALSA, GLib, OpenSSL, SQLite, zlib,
+  and zstd development packages. Linux release packaging is not built yet.
 - **Runtime dependency:** the app drives the external
   [Islandora Workbench](https://github.com/mjordan/islandora_workbench) Python tool.
   End users need `python` + `uv` and that tool installed separately — it is **not**
@@ -77,8 +84,9 @@ Four workflows, two on `main`, one on `site`, and CI on `dev`/PRs.
 
 ### `ci.yml` — quality gate (on `main`)
 - **Triggers:** push to `dev`; PRs targeting `dev` or `main`.
-- **Does:** on Windows + macOS, runs `cargo fmt --check`, `cargo clippy … -D warnings`,
-  `cargo test`, `cargo build`. Cancels superseded runs to save minutes.
+- **Does:** on Windows + macOS, and in the locked Nix environment on Linux, runs
+  `cargo fmt --check`, `cargo clippy … -D warnings`, and `cargo test`. Cancels superseded runs
+  to save minutes.
 - **Heads-up:** it does **not** run on direct pushes to `main`. With the
   feature-branch-straight-to-`main` flow, run `cargo fmt`/`clippy`/`test` locally
   first, or open a PR (which does trigger it). To gate direct pushes, add

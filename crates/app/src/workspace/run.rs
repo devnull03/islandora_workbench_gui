@@ -54,7 +54,12 @@ pub(super) fn workbench_info(cx: &App) -> anyhow::Result<WbInfo> {
         .get("use_uv")
         .map(|v| v.bool())
         .unwrap_or(false);
-    Ok(WbInfo::new(wb_dir, use_uv, path("uv_path")))
+    Ok(WbInfo::new(
+        wb_dir,
+        path("python_path"),
+        use_uv,
+        path("uv_path"),
+    ))
 }
 
 impl Workspace {

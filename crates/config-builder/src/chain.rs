@@ -17,6 +17,12 @@ use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
 use super::{BuilderChromeEvent, ConfigBuilder, open_config_builder_in_chain};
 
+struct NodePosition {
+    parent: Option<PathBuf>,
+    ancestors: Vec<PathBuf>,
+    depth: usize,
+}
+
 impl ConfigBuilder {
     pub(super) fn render_chain(
         &mut self,
@@ -42,9 +48,11 @@ impl ConfigBuilder {
             self.render_node(
                 node,
                 format!("{}", index + 1),
-                self.draft.path.clone(),
-                current_ancestry.clone(),
-                0,
+                NodePosition {
+                    parent: self.draft.path.clone(),
+                    ancestors: current_ancestry.clone(),
+                    depth: 0,
+                },
                 &mut rows,
                 cx,
             );
@@ -200,12 +208,15 @@ impl ConfigBuilder {
         &self,
         node: &SecondaryConfigNode,
         numbering: String,
-        parent: Option<PathBuf>,
-        ancestors: Vec<PathBuf>,
-        depth: usize,
+        position: NodePosition,
         rows: &mut Vec<AnyElement>,
         cx: &mut Context<Self>,
     ) {
+        let NodePosition {
+            parent,
+            ancestors,
+            depth,
+        } = position;
         let path = node.path.clone();
         let open = !self.collapsed_chain.contains(&path);
         let has_children = !node.children.is_empty();
@@ -360,9 +371,11 @@ impl ConfigBuilder {
                 self.render_node(
                     child,
                     format!("{numbering}.{}", index + 1),
-                    Some(node.path.clone()),
-                    child_ancestors,
-                    depth + 1,
+                    NodePosition {
+                        parent: Some(node.path.clone()),
+                        ancestors: child_ancestors,
+                        depth: depth + 1,
+                    },
                     rows,
                     cx,
                 );

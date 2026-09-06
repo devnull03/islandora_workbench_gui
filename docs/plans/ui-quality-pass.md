@@ -77,13 +77,13 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   polish remains.
 - [x] Show the flattened depth-first run order that Workbench will execute.
 - [ ] Reject self-links, duplicate ancestors, and indirect cycles at the link point. Show the
-  error beside the attempted parent; never wait until save to reveal it.
+  error beside the attempted parent; never wait until save to reveal it. Rejection is implemented
+  at selection time; moving its current title-bar error into the attempted parent row remains.
 - [ ] Broken/moved files remain visible with relink/remove actions. Unlink never deletes a file.
 - [x] **Create a new one** creates a child draft with parent context and links it only after its
   first successful save. Cancelling or closing leaves no phantom link.
-- [ ] Child builders show breadcrumb, depth, inherited runtime fields, and **Up to parent**. A
-  compact parent breadcrumb is now shown; depth/inheritance navigation remains.
-- [ ] Add graph tests for depth-first order, relative path resolution, missing files, direct and
+- [x] Child builders show breadcrumb, depth, inherited runtime fields, and **Up to parent**.
+- [x] Add graph tests for depth-first order, relative path resolution, missing files, direct and
   indirect cycles, and diamond/duplicate references.
 
 ### 5. Accent and theme fidelity
@@ -105,7 +105,9 @@ items with `[x]`; do not combine the recursive-chain work with cosmetic changes.
   result.
 - [ ] Check the minimum supported window size and a typical main-window size for clipped labels,
   unequal adjacent control heights, overflow, and unreachable actions.
-- [ ] Run `cargo fmt --all`, `cargo check --workspace`, and `cargo test --workspace`.
+- [x] Run `cargo fmt --all`, `cargo check --workspace`, and `cargo test --workspace`. Verified in
+  the checked-in NixOS/Wayland development shell on 5 September 2026; strict workspace Clippy and
+  a live GPUI/Vulkan startup smoke test passed as well.
 - [ ] Only after this list is complete resume [Stage 4](stage-4-docking.md).
 
 ## Implementation constraints

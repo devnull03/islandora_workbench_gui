@@ -108,7 +108,8 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
 ///
 /// Windows: tries Windows Terminal (`wt`) first, falls back to `cmd.exe`.
 /// macOS: checks `$TERM_PROGRAM` for iTerm2, falls back to Terminal.app.
-/// Linux: opens the desktop's `x-terminal-emulator` and starts in `cwd`.
+/// Linux: asks `xdg-terminal` for the desktop's preferred terminal, with fallbacks for older
+/// desktops that do not implement that command yet.
 pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
     if !cwd.is_dir() {
         return Err(std::io::Error::new(
@@ -175,20 +176,58 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        let mut terminal = Command::new("x-terminal-emulator");
-        terminal.current_dir(cwd);
-        if !command.trim().is_empty() {
-            terminal.args([
-                "-e",
-                "sh",
-                "-lc",
-                &format!("{command}; exec \"${{SHELL:-sh}}\""),
-            ]);
-        }
-        terminal.spawn()?;
+        spawn_linux_terminal(cwd, command)?;
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn spawn_linux_terminal(cwd: &Path, command: &str) -> std::io::Result<()> {
+    let script = format!("{command}; exec \"${{SHELL:-sh}}\"");
+    let mut last_not_found = None;
+
+    // xdg-terminal is part of current xdg-utils and honours the user's desktop preference. The
+    // second entry is Debian's long-standing alternative; the rest keep the action useful on
+    // desktops whose xdg-utils predates xdg-terminal.
+    for program in [
+        "xdg-terminal",
+        "x-terminal-emulator",
+        "ghostty",
+        "foot",
+        "kitty",
+        "alacritty",
+        "wezterm",
+        "konsole",
+        "gnome-terminal",
+        "xfce4-terminal",
+        "xterm",
+    ] {
+        let mut terminal = Command::new(program);
+        terminal.current_dir(cwd);
+        if !command.trim().is_empty() {
+            if program == "xdg-terminal" {
+                terminal.args(["sh", "-lc", &script]);
+            } else {
+                terminal.args(["-e", "sh", "-lc", &script]);
+            }
+        }
+
+        match terminal.spawn() {
+            Ok(_) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                last_not_found = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_not_found.unwrap_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no supported terminal launcher found",
+        )
+    }))
 }
 
 #[cfg(target_os = "macos")]
