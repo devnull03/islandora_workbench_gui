@@ -1114,7 +1114,9 @@ fn locked_source(key: &str) -> &'static str {
     match key {
         "host" => "Ingest server",
         "credentials_file_path" => "App settings",
-        "input_csv" => "Processed sheet",
+        // Plan Q2: the CSV step 1 produced, when it ran this session; otherwise the file's
+        // own `input_csv` stands.
+        "input_csv" => "Processed CSV, or this file's value",
         _ => "The app",
     }
 }

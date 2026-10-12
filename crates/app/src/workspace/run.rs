@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use gpui::*;
 use workbench_integration::{
-    WbInfo, config::WorkbenchConfigHandler, provision_workbench, run_ingest_streaming,
+    WbInfo,
+    config::{RunOverrides, WorkbenchConfigHandler},
+    provision_workbench, run_ingest_streaming,
 };
 
 use settings::AppSettings;
@@ -156,11 +158,12 @@ impl Workspace {
             }
         };
 
-        if let Err(e) = config_handler.update_config_fields(
-            &server_url,
-            credentials_file,
-            &wb_info.install_path,
-        ) {
+        let overrides = RunOverrides {
+            host: &server_url,
+            credentials_file_path: &credentials_file,
+            input_csv: self.processed_csv.as_deref(),
+        };
+        if let Err(e) = config_handler.update_config_fields(&overrides, &wb_info.install_path) {
             self.append_log(&format!("[ERROR] Failed to update config: {e}"), window, cx);
             self.op = Operation::None;
             WindowLock::set(false, cx);

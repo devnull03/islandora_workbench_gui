@@ -139,3 +139,9 @@ Sheets-specific except the name.
 
 **Deliberately not built:** the profile switcher above step 1 (Stage 5 owns it, and it stays
 hidden until a second profile exists anyway).
+
+**The processed path now reaches Workbench (October 2026, plan 1.2).** Until then nothing wrote
+`input_csv`, and "Open processed" assumed `{workbench}/input_data/metadata.csv` whatever the
+processor reported. The workspace keeps the reported path for the session, supplies it to the
+root config as `input_csv` at Check/Run, and forgets it when the source or processor changes.
+See stage 1's Phase 1 notes for the full rule.

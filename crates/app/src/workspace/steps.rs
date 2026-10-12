@@ -16,7 +16,7 @@ use ui::{Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
 use super::{Operation, WorkflowStage, Workspace};
-use crate::helpers::{reveal_in_folder, workbench_input_data_dir};
+use crate::helpers::reveal_in_folder;
 use config_builder::open_config_builder;
 
 impl Workspace {
@@ -54,7 +54,7 @@ impl Workspace {
         let idle = self.is_idle();
         let loading = self.op == Operation::Preprocessing;
         let process_disabled = !idle || !self.process_ready(cx);
-        let processed = idle && self.stage >= WorkflowStage::SourceProcessed;
+        let processed = idle && self.processed_csv.is_some();
         let muted = cx.theme().colors.muted_foreground;
 
         StepSection::new("1", "Input source")
@@ -110,11 +110,12 @@ impl Workspace {
                                     .outline()
                                     .label("Open processed")
                                     .disabled(!processed)
-                                    .on_click(cx.listener(|_, _, window, cx| {
-                                        let Some(dir) = workbench_input_data_dir(cx) else {
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        // The path the processor reported, not an assumed
+                                        // `metadata.csv` — a script may write elsewhere.
+                                        let Some(metadata_csv) = this.processed_csv.clone() else {
                                             return;
                                         };
-                                        let metadata_csv = dir.join("metadata.csv");
                                         if !metadata_csv.is_file() {
                                             return;
                                         }

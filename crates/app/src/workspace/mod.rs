@@ -55,6 +55,11 @@ enum WorkflowStage {
 pub struct Workspace {
     op: Operation,
     stage: WorkflowStage,
+    /// The CSV step 1 produced this session — the script's reported path, not an assumed
+    /// `metadata.csv`. Supplied to the root config as `input_csv` at Check/Run (plan Q2), and
+    /// what "Open processed" reveals. Cleared when the source or processor changes, because
+    /// the file no longer reflects them; changing the config or server does not clear it.
+    processed_csv: Option<PathBuf>,
     /// The log lives in the bottom dock now, not in this view — this handle is only how run
     /// output reaches it. Owned by `main` and handed to both, so the panel and the writer are
     /// the same log.
@@ -148,6 +153,7 @@ impl Workspace {
                 ) {
                     if matches!(event, InputEvent::Change) {
                         this.reset_validation();
+                        this.forget_processed();
                         let val = this.gdrive_link.read(cx).value();
                         AppSettings::set_text("gdrive_link", val, cx);
                     }
@@ -162,6 +168,7 @@ impl Workspace {
             cx.subscribe(&source_csv, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.reset_validation();
+                    this.forget_processed();
                     let val = this.source_csv.read(cx).value();
                     AppSettings::set_text("source_csv", val, cx);
                     cx.notify();
@@ -184,6 +191,7 @@ impl Workspace {
                 let SelectEvent::Confirm(value) = event;
                 AppSettings::set_text("input_source", value.clone().unwrap_or_default(), cx);
                 this.reset_validation();
+                this.forget_processed();
                 cx.notify();
             },
         ));
@@ -193,6 +201,7 @@ impl Workspace {
                 let SelectEvent::Confirm(value) = event;
                 AppSettings::set_text("preprocessor", value.clone().unwrap_or_default(), cx);
                 this.reset_validation();
+                this.forget_processed();
                 cx.notify();
             },
         ));
@@ -218,6 +227,7 @@ impl Workspace {
         Self {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
+            processed_csv: None,
             log_viewer,
             focus_handle: cx.focus_handle(),
             gdrive_link,
@@ -272,6 +282,13 @@ impl Workspace {
             return;
         }
         self.stage = WorkflowStage::Unfilled;
+    }
+
+    /// The source or processor changed, so the processed CSV is stale.
+    fn forget_processed(&mut self) {
+        if self.op == Operation::None {
+            self.processed_csv = None;
+        }
     }
 
     /// Processing needs the current source's field filled, a saved server (for the language
@@ -441,6 +458,7 @@ impl Workspace {
                             for line in preprocess_success_messages(res) {
                                 this.append_log(&line, window, cx);
                             }
+                            this.processed_csv = Some(res.metadata_csv.clone());
                             this.stage = WorkflowStage::SourceProcessed;
                         }
                         Err(e) => {

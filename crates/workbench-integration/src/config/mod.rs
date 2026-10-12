@@ -10,4 +10,4 @@ mod runtime;
 pub(crate) mod test_support;
 
 pub use draft::{APP_SUPPLIED, ConfigDraft};
-pub use runtime::{Pending, Ready, WorkbenchConfigHandler};
+pub use runtime::{Pending, Ready, RunOverrides, WorkbenchConfigHandler};

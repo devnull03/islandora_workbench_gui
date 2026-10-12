@@ -64,25 +64,63 @@ impl WorkbenchConfigHandler<Pending> {
     }
 }
 
+/// What the app supplies to a config at run time — the three keys in [`super::APP_SUPPLIED`].
+#[derive(Debug, Clone, Copy)]
+pub struct RunOverrides<'a> {
+    /// The server picked in step 3.
+    pub host: &'a str,
+    /// That server's credentials file, from Settings.
+    pub credentials_file_path: &'a Path,
+    /// The CSV step 1 produced in this session, if it ran. Written into the **root** config
+    /// only: a secondary config runs against its own `input_csv` (typically a different sheet,
+    /// such as pages or media), so overwriting it with the root's would be wrong.
+    pub input_csv: Option<&'a Path>,
+}
+
 impl WorkbenchConfigHandler<Ready> {
-    /// Updates the host and credentials in the config file, preserving all other fields.
-    /// Recursively applies the same update to any secondary tasks. Relative secondary task
-    /// paths are resolved against `workbench_dir` (the workbench install directory), which
-    /// is the same base workbench itself uses when it resolves them at runtime.
+    /// Write the run-time overrides into this config and, recursively, host and credentials
+    /// into every secondary config, preserving all other fields.
+    ///
+    /// `input_csv` follows the rule settled for plan question Q2: the app's processed CSV wins
+    /// when this session has one; otherwise the file's own `input_csv` stands; when neither
+    /// exists this refuses *before writing anything*, rather than letting Workbench fall back
+    /// to a default CSV the user never chose.
+    ///
+    /// Relative secondary task paths are resolved against `workbench_dir` (the workbench
+    /// install directory), which is the same base workbench itself uses when it resolves them
+    /// at runtime.
     pub fn update_config_fields(
         &mut self,
-        host: &str,
-        credentials_file_path: PathBuf,
+        overrides: &RunOverrides<'_>,
+        workbench_dir: &Path,
+    ) -> anyhow::Result<()> {
+        if overrides.input_csv.is_none() && self.state.config.input_csv.is_none() {
+            anyhow::bail!(
+                "No input CSV: process a source in step 1, or set input_csv in {}.",
+                self.state.file_path.display()
+            );
+        }
+        if let Some(csv) = overrides.input_csv {
+            self.state.config.input_csv = Some(csv.to_path_buf());
+        }
+        self.apply_server(overrides, workbench_dir)
+    }
+
+    /// Host and credentials only — the part every config in a chain shares.
+    fn apply_server(
+        &mut self,
+        overrides: &RunOverrides<'_>,
         workbench_dir: &Path,
     ) -> anyhow::Result<()> {
         log::debug!(
             "[config] updating {:?}  host={:?}",
             self.state.file_path,
-            host
+            overrides.host
         );
 
-        self.state.config.host = Some(host.to_string());
-        self.state.config.credentials_file_path = Some(credentials_file_path.clone());
+        self.state.config.host = Some(overrides.host.to_string());
+        self.state.config.credentials_file_path =
+            Some(overrides.credentials_file_path.to_path_buf());
 
         let yaml = serde_yaml::to_string(&self.state.config)?;
         std::fs::write(&self.state.file_path, yaml)?;
@@ -101,11 +139,16 @@ impl WorkbenchConfigHandler<Ready> {
                 );
 
                 let mut handler = WorkbenchConfigHandler::new(resolved).load()?;
-                handler.update_config_fields(host, credentials_file_path.clone(), workbench_dir)?;
+                handler.apply_server(overrides, workbench_dir)?;
             }
         }
 
         Ok(())
+    }
+
+    /// The CSV this config will read, if it names one.
+    pub fn input_csv(&self) -> Option<&Path> {
+        self.state.config.input_csv.as_deref()
     }
 
     /// Returns the currently loaded host, if the file has one.
@@ -139,8 +182,11 @@ mod tests {
         assert_eq!(handler.host(), None);
         handler
             .update_config_fields(
-                "https://islandora.dev",
-                PathBuf::from("/creds.yml"),
+                &RunOverrides {
+                    host: "https://islandora.dev",
+                    credentials_file_path: Path::new("/creds.yml"),
+                    input_csv: Some(Path::new("/wb/input_data/metadata.csv")),
+                },
                 &tree.root,
             )
             .unwrap();
@@ -151,7 +197,65 @@ mod tests {
         assert_eq!(reloaded["credentials_file_path"].as_str(), Some("/creds.yml"));
         assert_eq!(reloaded["task"].as_str(), Some("create"));
         // Nothing the app did not supply appears out of nowhere.
-        assert!(!reloaded.contains_key("input_csv"));
         assert!(!reloaded.contains_key("secondary_tasks"));
+    }
+
+    /// Q2: the processed CSV goes into the root config only — a child keeps its own sheet.
+    #[test]
+    fn processed_csv_goes_to_the_root_and_not_to_children() {
+        let tree = TempTree::new();
+        let workbench = tree.root.join("workbench");
+        std::fs::create_dir_all(&workbench).unwrap();
+        let child = tree.write("configs/pages.yml", "task: create\ninput_csv: pages.csv\n");
+        let root = tree.write(
+            "configs/root.yml",
+            &format!("task: create\nsecondary_tasks: [{}]\n", child.display()),
+        );
+        let processed = workbench.join("input_data/metadata.csv");
+
+        WorkbenchConfigHandler::new(root.clone())
+            .load()
+            .unwrap()
+            .update_config_fields(
+                &RunOverrides {
+                    host: "https://islandora.dev",
+                    credentials_file_path: Path::new("/creds.yml"),
+                    input_csv: Some(&processed),
+                },
+                &workbench,
+            )
+            .unwrap();
+
+        let root = WorkbenchConfigHandler::new(root).load().unwrap();
+        assert_eq!(root.input_csv(), Some(processed.as_path()));
+        let child = WorkbenchConfigHandler::new(child).load().unwrap();
+        assert_eq!(child.input_csv(), Some(Path::new("pages.csv")));
+        assert_eq!(child.host(), Some("https://islandora.dev"));
+    }
+
+    /// With no processed CSV the file's own `input_csv` stands; with neither, nothing is written
+    /// and the error says what to do.
+    #[test]
+    fn input_csv_falls_back_to_the_file_and_refuses_when_neither_has_one() {
+        let tree = TempTree::new();
+        let overrides = RunOverrides {
+            host: "https://islandora.dev",
+            credentials_file_path: Path::new("/creds.yml"),
+            input_csv: None,
+        };
+
+        let own = tree.write("own.yml", "task: create\ninput_csv: mine.csv\n");
+        let mut handler = WorkbenchConfigHandler::new(own.clone()).load().unwrap();
+        handler.update_config_fields(&overrides, &tree.root).unwrap();
+        let reloaded = WorkbenchConfigHandler::new(own).load().unwrap();
+        assert_eq!(reloaded.input_csv(), Some(Path::new("mine.csv")));
+
+        let bare = tree.write("bare.yml", "task: create\n");
+        let mut handler = WorkbenchConfigHandler::new(bare.clone()).load().unwrap();
+        let error = handler
+            .update_config_fields(&overrides, &tree.root)
+            .unwrap_err();
+        assert!(error.to_string().contains("No input CSV"));
+        assert_eq!(std::fs::read_to_string(bare).unwrap(), "task: create\n");
     }
 }

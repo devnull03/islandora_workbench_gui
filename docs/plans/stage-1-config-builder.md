@@ -260,3 +260,14 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   `input_csv`; all three are `Option` and are not written back when absent, nor is
   `secondary_tasks: null`. A builder config (`task: create` and nothing app-supplied) loads and
   gains host and credentials from `update_config_fields`.
+- [x] **1.2 (P0-2, Q2 default)** The app now supplies `input_csv`. `Workspace.processed_csv` holds
+  the path the processor *reported* (a script may write somewhere other than
+  `input_data/metadata.csv`); it is cleared when the source or processor changes. At Check/Run
+  `update_config_fields(&RunOverrides { host, credentials_file_path, input_csv }, workbench_dir)`
+  writes it into the **root** config only — secondary configs keep their own CSV. With no
+  processed CSV the file's own `input_csv` stands; with neither, Check/Run refuses before
+  writing anything ("No input CSV: process a source in step 1, or set input_csv in …").
+  "Open processed" reveals the stored path. Note: upstream Workbench defaults `input_csv` to
+  `metadata.csv` inside `input_dir` (`input_data`), which happens to be where the built-in
+  processor writes — so the old behaviour often worked by coincidence, and stops working as
+  soon as a script or a custom `input_dir` is involved.
