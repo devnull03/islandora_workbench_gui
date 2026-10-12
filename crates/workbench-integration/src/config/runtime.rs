@@ -13,11 +13,22 @@ pub struct Ready {
     pub config: WorkbenchConfigFile,
 }
 
+/// The parts of a Workbench config the app reads or writes at run time; everything else rides
+/// along in `other`.
+///
+/// `host`, `credentials_file_path` and `input_csv` are optional because the builder never writes
+/// them (they are app-supplied, see [`super::APP_SUPPLIED`]): a config authored there has none of
+/// the three until [`WorkbenchConfigHandler::update_config_fields`] supplies them. Absent stays
+/// absent on the way out — an empty `host: ''` would be worse than no key at all.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkbenchConfigFile {
-    host: String,
-    credentials_file_path: PathBuf,
-    input_csv: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    credentials_file_path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    input_csv: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     secondary_tasks: Option<Vec<PathBuf>>,
 
     #[serde(flatten)]
@@ -70,8 +81,8 @@ impl WorkbenchConfigHandler<Ready> {
             host
         );
 
-        self.state.config.host = host.to_string();
-        self.state.config.credentials_file_path = credentials_file_path.clone();
+        self.state.config.host = Some(host.to_string());
+        self.state.config.credentials_file_path = Some(credentials_file_path.clone());
 
         let yaml = serde_yaml::to_string(&self.state.config)?;
         std::fs::write(&self.state.file_path, yaml)?;
@@ -97,17 +108,50 @@ impl WorkbenchConfigHandler<Ready> {
         Ok(())
     }
 
-    /// Returns the currently loaded host.
-    pub fn host(&self) -> &str {
-        &self.state.config.host
+    /// Returns the currently loaded host, if the file has one.
+    pub fn host(&self) -> Option<&str> {
+        self.state.config.host.as_deref()
     }
 
-    /// Returns the currently loaded credentials file path.
-    pub fn credentials_file_path(&self) -> &std::path::Path {
-        &self.state.config.credentials_file_path
+    /// Returns the currently loaded credentials file path, if the file has one.
+    pub fn credentials_file_path(&self) -> Option<&Path> {
+        self.state.config.credentials_file_path.as_deref()
     }
 
-    pub fn path(&self) -> &std::path::Path {
+    pub fn path(&self) -> &Path {
         &self.state.file_path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::test_support::TempTree;
+
+    /// A config the builder wrote has none of the app-supplied keys. It has to load, and the
+    /// run-time rewrite has to add them — `missing field \`host\`` was the bug.
+    #[test]
+    fn builder_config_without_app_supplied_keys_loads_and_gains_them() {
+        let tree = TempTree::new();
+        let path = tree.write("builder.yml", "task: create\nrollback_dir: ./rollback\n");
+
+        let mut handler = WorkbenchConfigHandler::new(path.clone()).load().unwrap();
+        assert_eq!(handler.host(), None);
+        handler
+            .update_config_fields(
+                "https://islandora.dev",
+                PathBuf::from("/creds.yml"),
+                &tree.root,
+            )
+            .unwrap();
+
+        let written = std::fs::read_to_string(&path).unwrap();
+        let reloaded: IndexMap<String, Value> = serde_yaml::from_str(&written).unwrap();
+        assert_eq!(reloaded["host"].as_str(), Some("https://islandora.dev"));
+        assert_eq!(reloaded["credentials_file_path"].as_str(), Some("/creds.yml"));
+        assert_eq!(reloaded["task"].as_str(), Some("create"));
+        // Nothing the app did not supply appears out of nowhere.
+        assert!(!reloaded.contains_key("input_csv"));
+        assert!(!reloaded.contains_key("secondary_tasks"));
     }
 }

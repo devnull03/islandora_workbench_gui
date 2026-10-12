@@ -248,3 +248,15 @@ The separate Add setting toggle, tall runtime-supplied card, non-selectable YAML
 window height, inconsistent control density, and pointer-only palette are tracked in
 [the UI quality pass](ui-quality-pass.md). Recursive chaining moved forward from Stage 6 into the
 same pre-docking pass because it changes the builder's structure and child-window plumbing.
+
+## Phase 1 — a builder-authored config must run (October 2026)
+
+The audit in `tmp/IMPLEMENTATION-PLAN.md` (§3.1, P0-1…P0-11) found that a config made in the
+builder could not be checked or run. Tasks 1.1–1.10 of that plan fix it, one commit each, each
+with a unit test. Exit gate: build a config from scratch, link a child, pick a server, press
+**Check**, and Workbench parses it.
+
+- [x] **1.1 (P0-1)** `WorkbenchConfigFile` no longer requires `host`, `credentials_file_path` or
+  `input_csv`; all three are `Option` and are not written back when absent, nor is
+  `secondary_tasks: null`. A builder config (`task: create` and nothing app-supplied) loads and
+  gains host and credentials from `update_config_fields`.

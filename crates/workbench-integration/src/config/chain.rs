@@ -222,37 +222,7 @@ fn same_path(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct TempTree {
-        root: PathBuf,
-    }
-
-    impl TempTree {
-        fn new() -> Self {
-            let root = std::env::temp_dir().join(format!(
-                "islandora-workbench-chain-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            ));
-            std::fs::create_dir_all(&root).unwrap();
-            Self { root }
-        }
-
-        fn write(&self, name: &str, body: &str) -> PathBuf {
-            let path = self.root.join(name);
-            std::fs::write(&path, body).unwrap();
-            path
-        }
-    }
-
-    impl Drop for TempTree {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.root);
-        }
-    }
+    use crate::config::test_support::TempTree;
 
     #[test]
     fn nested_graph_flattens_depth_first() {
