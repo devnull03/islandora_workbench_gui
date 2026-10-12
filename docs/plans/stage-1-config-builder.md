@@ -271,3 +271,15 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   `metadata.csv` inside `input_dir` (`input_data`), which happens to be where the built-in
   processor writes — so the old behaviour often worked by coincidence, and stops working as
   soon as a script or a custom `input_dir` is involved.
+- [x] **1.3 (P0-3, Q3/Q8 defaults)** The run-time update no longer re-serializes the user's file.
+  `config::patch::set_top_level_scalars` replaces (or appends) only the `host`,
+  `credentials_file_path` and `input_csv` lines; every other byte — comments, quoting, order,
+  CRLF — is untouched, and an unchanged file is not rewritten at all. The result is re-parsed
+  and must equal "original plus exactly these keys"; a document the patcher declines (flow
+  mapping, several documents) or misreads falls back to re-serializing, with a log warning.
+  Patched values are quoted for **YAML 1.1** as well as 1.2: Workbench reads configs with
+  PyYAML, where a bare `yes`, `on` or `1:20` is not a string. Q3 stays "keep editing in place";
+  running from a generated copy is still the long-term option. For the builder (Q8), the
+  minimum option: `ConfigDraft.source_has_comments` records that a loaded file has comments so
+  the builder can ask before its first save drops them (the prompt lands with the confirm
+  dialog in 1.7).

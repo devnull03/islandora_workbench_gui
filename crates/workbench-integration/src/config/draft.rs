@@ -17,6 +17,10 @@ pub struct ConfigDraft {
     pub label: String,
     /// Settings the user has added, in the order they were added.
     pub values: IndexMap<String, Value>,
+    /// The file this was loaded from had comments. [`Self::save`] re-serializes, which drops
+    /// them, so the builder asks before the first save of such a file (plan Q8, minimum
+    /// option: warn rather than round-trip comments).
+    pub source_has_comments: bool,
 }
 
 /// Written by the app at run time, so the builder never edits them (mockup `1a`'s locked band).
@@ -26,6 +30,7 @@ impl ConfigDraft {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)?;
         let mut draft = Self::from_yaml(&text)?;
+        draft.source_has_comments = super::has_comments(&text);
         draft.label = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -40,6 +45,7 @@ impl ConfigDraft {
             path: None,
             label: String::new(),
             values,
+            source_has_comments: false,
         })
     }
 
@@ -58,6 +64,13 @@ impl ConfigDraft {
         }
         std::fs::write(path, self.to_yaml())?;
         Ok(())
+    }
+
+    /// Record that the file on disk is now this draft's own output, so there are no comments
+    /// left to lose.
+    pub fn mark_saved(&mut self, path: &Path) {
+        self.path = Some(path.to_path_buf());
+        self.source_has_comments = false;
     }
 
     /// `true` when the key is one the app writes at run time, so the builder must not offer it.
@@ -107,5 +120,29 @@ impl ConfigDraft {
                 _ => p,
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::test_support::TempTree;
+
+    /// Q8: the builder needs to know a save will drop comments, and stop warning once it has
+    /// written the file itself.
+    #[test]
+    fn loading_a_commented_file_is_remembered_until_saved() {
+        let tree = TempTree::new();
+        let commented = tree.write("hand.yml", "# by hand\ntask: create\n");
+        let plain = tree.write("plain.yml", "task: create\n");
+
+        let mut draft = ConfigDraft::load(&commented).unwrap();
+        assert!(draft.source_has_comments);
+        assert!(!ConfigDraft::load(&plain).unwrap().source_has_comments);
+
+        draft.save(&commented).unwrap();
+        draft.mark_saved(&commented);
+        assert!(!draft.source_has_comments);
+        assert!(!ConfigDraft::load(&commented).unwrap().source_has_comments);
     }
 }

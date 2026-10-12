@@ -804,7 +804,7 @@ impl ConfigBuilder {
         });
 
         let was_new = self.draft.path.is_none();
-        self.draft.path = Some(path.clone());
+        self.draft.mark_saved(&path);
         if was_new {
             let windows = cx.global_mut::<ConfigBuilderWindows>();
             windows.open.remove(&None);
