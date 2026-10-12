@@ -767,5 +767,18 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 
 ## 10. Addendum — build/test baseline in the audit container
 
-See the final lines appended below by the audit session (whether `cargo test --workspace --no-run`
-completed in the cloud container, and with what errors).
+Measured 2026-10-12 in the Linux cloud container (no `nix develop`, stock Ubuntu libs):
+
+* All dependencies (zed/gpui, gpui-component, ~600 crates) **download and compile**; the first build
+  takes roughly 15 minutes.
+* `cargo test -p workbench-integration` — **14 passed, 0 failed**. This crate has no GPUI link
+  dependency, so it is the fast loop for Phase 1 logic (runtime.rs, draft.rs, validate.rs, chain.rs).
+* `cargo test --workspace --no-run` — **the `app` test binary fails to link**:
+  `rust-lld: unable to find library -lxkbcommon` and `-lxkbcommon-x11`. This is a missing system
+  package, not a code error. Install `libxkbcommon-dev libxkbcommon-x11-dev` (plus
+  `libwayland-dev libx11-xcb-dev libxcb1-dev libfontconfig1-dev libvulkan-dev` if more are
+  reported) or use the repo's `nix develop` shell. Other crates built; `config-builder`, `ui` and
+  `settings` tests were not run separately (they link GPUI too, so expect the same libs).
+* Not run: `cargo fmt --check`, `cargo clippy`, any GUI launch (no display in the container).
+
+Task 0.3 should capture the exact apt/nix commands once confirmed.
