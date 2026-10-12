@@ -36,6 +36,21 @@ Workspace crates (versions are inherited from `[workspace.package].version`):
   Other Linux distributions need the equivalent compiler, `pkg-config`, CMake, Python 3,
   fontconfig/freetype, Wayland/X11/xkbcommon, Vulkan, OpenGL, ALSA, GLib, OpenSSL, SQLite, zlib,
   and zstd development packages. Linux release packaging is not built yet.
+- **Ubuntu 24.04 (verified October 2026, also the Claude Code cloud container).** The stock
+  image already compiles every crate; only the link step of the GPUI test binaries needs more.
+  This is the exact set that made `cargo test --workspace` link and pass:
+  ```sh
+  sudo apt-get update
+  sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+    libx11-xcb-dev libxcb1-dev libfontconfig1-dev libvulkan-dev
+  cargo fmt --all --check
+  cargo clippy --workspace --all-targets -- -D warnings
+  cargo test --workspace
+  ```
+  Without the first two the failure is `rust-lld: unable to find library -lxkbcommon`. The
+  first build fetches zed's git history and compiles GPUI: about 14 minutes on 4 cores.
+  `cargo test -p workbench-integration` needs none of these packages and is the fast loop for
+  config logic (`config/{runtime,draft,patch,chain,validate}.rs`).
 - **Runtime dependency:** the app drives the external
   [Islandora Workbench](https://github.com/mjordan/islandora_workbench) Python tool.
   End users need `python` + `uv` and that tool installed separately — it is **not**
