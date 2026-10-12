@@ -178,7 +178,7 @@ impl ConfigBuilder {
                         this.child(self.render_results(&query, &matches, cx))
                     }),
             )
-            .when(self.draft.values.is_empty(), |this| {
+            .when(self.draft.is_blank(), |this| {
                 this.child(self.render_templates(cx))
             })
     }

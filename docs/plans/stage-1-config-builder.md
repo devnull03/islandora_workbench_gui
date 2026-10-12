@@ -304,3 +304,6 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   unset rather than `0`; the field's placeholder shows the default. Validation accepts null for
   every non-required setting. This also makes a nullable enum's `none` really omit the key, as
   its row always claimed.
+- [x] **1.6 (P0-6)** Templates are reachable. They showed only when the draft had no values,
+  but every draft starts with `task`; they now show while `ConfigDraft::is_blank()` — no setting
+  except an unset `task`. `apply_template` already worked from that state.

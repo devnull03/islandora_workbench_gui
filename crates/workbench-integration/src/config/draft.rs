@@ -81,6 +81,15 @@ impl ConfigDraft {
         self.source_has_comments = false;
     }
 
+    /// Nothing chosen yet: no setting except an unset `task` (which the builder inserts into
+    /// every draft, so "no values at all" never happens on screen). This is when the builder
+    /// offers its templates (mockup `1a`; plan 1.6, P0-6).
+    pub fn is_blank(&self) -> bool {
+        self.values.iter().all(|(key, value)| {
+            key == "task" && (value.is_null() || value.as_str().is_some_and(str::is_empty))
+        })
+    }
+
     /// `true` when the key is one the app writes at run time, so the builder must not offer it.
     pub fn is_app_supplied(key: &str) -> bool {
         APP_SUPPLIED.contains(&key)
@@ -186,6 +195,19 @@ mod tests {
         draft.mark_saved(&commented);
         assert!(!draft.source_has_comments);
         assert!(!ConfigDraft::load(&commented).unwrap().source_has_comments);
+    }
+
+    #[test]
+    fn a_draft_is_blank_until_something_but_an_empty_task_is_set() {
+        assert!(ConfigDraft::default().is_blank());
+        assert!(ConfigDraft::from_yaml("task: ''\n").unwrap().is_blank());
+        assert!(ConfigDraft::from_yaml("task:\n").unwrap().is_blank());
+        assert!(!ConfigDraft::from_yaml("task: create\n").unwrap().is_blank());
+        assert!(
+            !ConfigDraft::from_yaml("task: ''\nid_field: id\n")
+                .unwrap()
+                .is_blank()
+        );
     }
 
     /// P0-5: an unset (null) value keeps its row but is not written.
