@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/_ds_bundle.css"><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/styles.css"><script src="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/_ds_bundle.js"></script><style>
+body{background:var(--ground)}
+.pg{max-width:1120px;margin:0 auto;background:var(--paper);padding:0 0 80px}
+.sec{padding:34px 44px;border-top:1px solid var(--rule-soft)}
+.eb{font:500 11px/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--rust);margin:0 0 10px}
+.h2{font:600 26px/1.2 var(--font-sans);letter-spacing:-.02em;color:var(--ink);margin:0 0 8px}
+.h3{font:600 14px/1.3 var(--font-sans);color:var(--ink);margin:26px 0 10px}
+.p{font:400 14px/1.65 var(--font-sans);color:var(--body);margin:0 0 12px;max-width:74ch;text-wrap:pretty}
+.mono{font-family:var(--font-mono)}
+.code{font:400 12.5px/1.7 var(--font-mono);color:var(--ink);background:#ffffff;border:1px solid var(--rule-soft);padding:14px 16px;white-space:pre;overflow-x:auto;margin:0 0 14px}
+.tw{width:100%;border-collapse:collapse;font:400 13px/1.5 var(--font-sans);color:var(--body)}
+.tw th{font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:left;padding:0 12px 8px 0;border-bottom:1px solid var(--rule)}
+.tw td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+.tw td.m{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+.tw td.mw{font-family:var(--font-mono);font-size:12.5px;line-height:1.5;color:var(--ink);word-break:break-word}
+.tag{display:inline-block;font:500 10.5px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;white-space:nowrap}
+.reuse{background:#1e7d4a1f;color:#1c6b41}
+.wrap{background:#1a73e81f;color:#1558b0}
+.build{background:#a8410f1f;color:var(--rust)}
+</style></helmet>
+
+<div class="pg">
+
+<div style="padding:56px 44px 30px">
+  <p class="eb">Islandora Workbench GUI · implementation spec</p>
+  <h1 style="font:600 44px/1.08 var(--font-sans);letter-spacing:-.035em;color:var(--ink);margin:0 0 14px;max-width:22ch">Design language for the GPUI app</h1>
+  <p class="p" style="font-size:16px;max-width:66ch">Everything a coding agent needs to build the Workbench GUI on <span class="mono">gpui-component</span>: the theme file, the scales, the control geometry, and a per-component verdict on what we reuse and what we write ourselves.</p>
+  <div style="display:flex;gap:34px;margin-top:26px;padding-top:22px;border-top:1px solid var(--rule)">
+    <div><div style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Upstream</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">longbridge/gpui-component<br>crates/ui/src</div></div>
+    <div><div style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Type</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">Archivo<br>IBM Plex Mono</div></div>
+    <div><div style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Grid</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">4px base<br>radius 4 / 6</div></div>
+    <div><div style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Themes</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">6 shipped<br>JSON, hot-swappable</div></div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">01 · How to read this</p>
+  <h2 class="h2">Three rules that decide everything else</h2>
+  <p class="p"><b>The theme is data, not code.</b> <span class="mono">gpui-component</span> loads themes from JSON against its own schema (<span class="mono">theme/schema.rs</span>, <span class="mono">theme/default-theme.json</span>). Ship our palettes as files under <span class="mono">assets/themes/</span> and register them with the <span class="mono">ThemeRegistry</span>. Never hard-code a color in a component; read <span class="mono">cx.theme().colors.*</span>.</p>
+  <p class="p"><b>The settings module already is the config builder.</b> <span class="mono">crates/ui/src/setting/</span> gives us <span class="mono">SettingsPage → SettingGroup → SettingItem → SettingField</span>, with built-in label/description layout, a per-item reset affordance driven by <span class="mono">default_value</span>, and an escape hatch (<span class="mono">SettingField::render</span>) for any control it does not ship. Every one of our 16 YAML value shapes is a <span class="mono">SettingField</span>. We add controls, not layout.</p>
+  <p class="p"><b>Build only what the vocabulary demands.</b> Four widgets have no upstream equivalent: the setting picker, the key/value table, the YAML preview, and the task-chain tree editor. Everything else on screen is upstream with a thin wrapper.</p>
+</div>
+
+<div class="sec">
+  <p class="eb">02 · Color</p>
+  <h2 class="h2">Two shipped themes, four optional</h2>
+  <p class="p">The page shell of the marketing site is fixed paper-and-ink; the <em>app</em> palette is the theme-swapped half. Six palettes exist. Ship <span class="mono">qrate-light</span> and <span class="mono">qrate-dark</span> as the defaults and expose the other four (gruvbox, everforest, each light and dark) in Settings → Appearance, since they cost only a JSON file each.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:22px 0 8px">
+    <div style="border:1px solid var(--rule)">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--rule-soft);font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">qrate-light · default</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr)">
+        <div style="height:52px;background:#fff"></div><div style="height:52px;background:#f9fbfd"></div><div style="height:52px;background:#f3f3f3"></div><div style="height:52px;background:#e8eaed"></div><div style="height:52px;background:#dadce0"></div><div style="height:52px;background:#1a73e8"></div>
+        <div style="height:52px;background:#e8f0fe"></div><div style="height:52px;background:#3c4043"></div><div style="height:52px;background:#202124"></div><div style="height:52px;background:#5f6368"></div><div style="height:52px;background:#d93025"></div><div style="height:52px;background:#f9ab00"></div>
+      </div>
+    </div>
+    <div style="border:1px solid var(--rule)">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--rule-soft);font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">qrate-dark</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr)">
+        <div style="height:52px;background:#2f2f2f"></div><div style="height:52px;background:#292929"></div><div style="height:52px;background:#333"></div><div style="height:52px;background:#242424"></div><div style="height:52px;background:#212121"></div><div style="height:52px;background:#3c78d8"></div>
+        <div style="height:52px;background:#20303f"></div><div style="height:52px;background:#cfcfcf"></div><div style="height:52px;background:#bbb"></div><div style="height:52px;background:#777"></div><div style="height:52px;background:#e62e2e"></div><div style="height:52px;background:#f1c232"></div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="h3">Token map — design token → <span class="mono">ThemeColor</span> field</h3>
+  <table class="tw">
+    <thead><tr><th style="width:20%">Design token</th><th style="width:30%">ThemeColor fields it feeds</th><th style="width:14%">Light</th><th style="width:14%">Dark</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td class="m">app-bg</td><td class="mw">background, list, table, popover, accordion, group_box, tiles</td><td class="m">#ffffff</td><td class="m">#2f2f2f</td><td>Window body, every surface that is not chrome</td></tr>
+      <tr><td class="m">app-fg</td><td class="mw">foreground, popover_foreground, button_foreground</td><td class="m">#202124</td><td class="m">#bbbbbb</td><td>Values, primary text</td></tr>
+      <tr><td class="m">app-head-fg</td><td class="mw">table_head_foreground, list_head, tab_active_foreground, sidebar_foreground</td><td class="m">#3c4043</td><td class="m">#cfcfcf</td><td>Labels, group headings, active nav</td></tr>
+      <tr><td class="m">app-muted</td><td class="mw">muted_foreground, tab_foreground, description_list_label_foreground</td><td class="m">#5f6368</td><td class="m">#777777</td><td>Descriptions, inactive nav, units, placeholders</td></tr>
+      <tr><td class="m">app-border</td><td class="mw">border, input, sidebar_border, title_bar_border, separator</td><td class="m">#dadce0</td><td class="m">#212121</td><td>All 1px rules and control outlines</td></tr>
+      <tr><td class="m">app-title</td><td class="mw">title_bar, status_bar</td><td class="m">#f9fbfd</td><td class="m">#292929</td><td>Custom title bar, bottom status strip</td></tr>
+      <tr><td class="m">app-head</td><td class="mw">table_head, table_foot, secondary, button, tab_bar</td><td class="m">#e8eaed</td><td class="m">#242424</td><td>Table headers, secondary buttons, field backgrounds</td></tr>
+      <tr><td class="m">app-even</td><td class="mw">table_even, list_even</td><td class="m">#f3f3f3</td><td class="m">#333333</td><td>Zebra rows — on tables only, never on setting rows</td></tr>
+      <tr><td class="m">app-active-bg</td><td class="mw">accent, list_active, table_active, list_hover, sidebar_accent, selection</td><td class="m">#e8f0fe</td><td class="m">#3c78d833</td><td>Selection and hover wash</td></tr>
+      <tr><td class="m">accent</td><td class="mw">primary, ring, caret, switch (on), slider_bar, list_active_border, link</td><td class="m">#1a73e8</td><td class="m">#3c78d8</td><td>The one saturated color. Primary action, focus ring, on-state</td></tr>
+      <tr><td class="m">app-danger</td><td class="mw">danger, red, button_danger</td><td class="m">#d93025</td><td class="m">#e62e2e</td><td>Blocking validation errors, Delete</td></tr>
+      <tr><td class="m">app-warn</td><td class="mw">warning, yellow, button_warning</td><td class="m">#f9ab00</td><td class="m">#f1c232</td><td>Semantic warnings — config runs, but probably wrong</td></tr>
+    </tbody>
+  </table>
+
+  <p class="p" style="margin-top:18px"><b>Derived values.</b> Hover is the base surface shifted 4% toward the foreground; active 8%. Compute these once in the theme file rather than per component: <span class="mono">button_hover</span>, <span class="mono">button_active</span>, <span class="mono">primary_hover</span> (accent −6% lightness), <span class="mono">primary_active</span> (−12%), <span class="mono">scrollbar_thumb</span> (foreground at 22% alpha), <span class="mono">overlay</span> (ink at 45%), <span class="mono">drop_target</span> (accent at 12%), <span class="mono">drag_border</span> (accent, 2px).</p>
+
+  <sc-if value="{{ showCode }}" hint-placeholder-val="{{ true }}">
+  <h3 class="h3">Theme file — <span class="mono">assets/themes/qrate-light.json</span></h3>
+  <div class="code">{
+  "name": "qrate-light",
+  "mode": "light",
+  "font_family": "Archivo",
+  "font_size": 12.5,
+  "mono_font_family": "IBM Plex Mono",
+  "mono_font_size": 12.5,
+  "radius": 4,
+  "radius_lg": 6,
+  "shadow": true,
+  "focus_ring": true,
+  "colors": {
+    "background": "#ffffff",
+    "foreground": "#202124",
+    "border": "#dadce0",
+    "input": "#dadce0",
+    "muted": "#e8eaed",
+    "muted_foreground": "#5f6368",
+    "primary": "#1a73e8",
+    "primary_hover": "#1765cc",
+    "primary_active": "#1458b3",
+    "primary_foreground": "#ffffff",
+    "secondary": "#e8eaed",
+    "secondary_foreground": "#3c4043",
+    "accent": "#e8f0fe",
+    "accent_foreground": "#1558b0",
+    "ring": "#1a73e8",
+    "caret": "#1a73e8",
+    "selection": "#e8f0fe",
+    "danger": "#d93025",
+    "warning": "#f9ab00",
+    "success": "#1e7d4a",
+    "title_bar": "#f9fbfd",
+    "title_bar_border": "#dadce0",
+    "status_bar": "#f9fbfd",
+    "sidebar": "#ffffff",
+    "sidebar_accent": "#e8f0fe",
+    "sidebar_border": "#dadce0",
+    "list": "#ffffff",
+    "list_head": "#e8eaed",
+    "list_hover": "#f3f3f3",
+    "list_active": "#e8f0fe",
+    "list_active_border": "#1a73e8",
+    "list_even": "#f3f3f3",
+    "table": "#ffffff",
+    "table_head": "#e8eaed",
+    "table_head_foreground": "#3c4043",
+    "table_even": "#f3f3f3",
+    "table_row_border": "#dadce0",
+    "table_active": "#e8f0fe",
+    "popover": "#ffffff",
+    "popover_foreground": "#202124",
+    "switch": "#dadce0",
+    "switch_thumb": "#ffffff",
+    "scrollbar": "#00000000",
+    "scrollbar_thumb": "#20212438",
+    "drop_target": "#1a73e81f",
+    "drag_border": "#1a73e8",
+    "overlay": "#17140f73"
+  }
+}</div>
+  <p class="p"><span class="mono">qrate-dark.json</span> is the same file with the dark column of the table above and <span class="mono">"mode": "dark"</span>. The gruvbox and everforest variants change only <span class="mono">primary</span>, <span class="mono">accent</span>, and the surface steps — everything structural is shared, so generate them from one template rather than authoring four files by hand.</p>
+  </sc-if>
+</div>
+
+<div class="sec">
+  <p class="eb">03 · Type</p>
+  <h2 class="h2">Two families, six sizes, three weights</h2>
+  <p class="p">Archivo for prose and labels, IBM Plex Mono for anything that is literally YAML, a path, a key, a command, or a numeric value the user will compare digit by digit. The rule is not decorative: monospace signals "this text is data the tool will parse."</p>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:20px 0 6px">
+    <table class="tw">
+      <thead><tr><th>Role</th><th>Spec</th></tr></thead>
+      <tbody>
+        <tr><td>Window title</td><td class="m">Archivo 400 · 12.5 / 1</td></tr>
+        <tr><td>Page heading</td><td class="m">Archivo 600 · 18 / 1.3</td></tr>
+        <tr><td>Group heading</td><td class="m">Archivo 600 · 12.5 / 1</td></tr>
+        <tr><td>Setting label</td><td class="m">Archivo 400 · 12.5 / 1.2</td></tr>
+        <tr><td>Setting description</td><td class="m">Archivo 400 · 11.5 / 1.45</td></tr>
+        <tr><td>Nav item</td><td class="m">Archivo 400/500 · 12.5 / 1.2</td></tr>
+        <tr><td>Button</td><td class="m">Archivo 400 · 12.5 / 1</td></tr>
+        <tr><td>Eyebrow / shape name</td><td class="m">Plex Mono 500 · 11 / 1 · +0.08em caps</td></tr>
+      </tbody>
+    </table>
+    <table class="tw">
+      <thead><tr><th>Role</th><th>Spec</th></tr></thead>
+      <tbody>
+        <tr><td>Field value (text, path, URL)</td><td class="m">Plex Mono 400 · 12.5 / 1.2</td></tr>
+        <tr><td>Numeric value</td><td class="m">Plex Mono 400 · 13 / 1</td></tr>
+        <tr><td>YAML preview</td><td class="m">Plex Mono 400 · 11.5 / 1.6</td></tr>
+        <tr><td>Table cell</td><td class="m">Plex Mono 400 · 12 / 1.2</td></tr>
+        <tr><td>Inline code in prose</td><td class="m">Plex Mono 400 · 12 / inherit</td></tr>
+        <tr><td>Log / console output</td><td class="m">Plex Mono 400 · 11.5 / 1.55</td></tr>
+        <tr><td>Validation message</td><td class="m">Archivo 400 · 11.5 / 1.45</td></tr>
+        <tr><td>Badge / count</td><td class="m">Plex Mono 400 · 11 / 1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="p"><b>Theme fields.</b> <span class="mono">font_family: "Archivo"</span>, <span class="mono">font_size: px(12.5)</span>, <span class="mono">mono_font_family: "IBM Plex Mono"</span>, <span class="mono">mono_font_size: px(12.5)</span>. Bundle both families in <span class="mono">assets/fonts/</span> and load them at startup — do not rely on the OS having them. Fallback chain: Archivo → Inter → system-ui; Plex Mono → Consolas → ui-monospace. Weights: 400 body, 500 active nav and mono labels, 600 headings. Nothing is bold; nothing is italic.</p>
+  <p class="p"><b>Truncation.</b> Paths and URLs truncate at the head, not the tail (<span class="mono">…/scripts/preprocess.py</span>), because the distinguishing part is at the end. Everything else truncates at the tail with a tooltip carrying the full value.</p>
+</div>
+
+<div class="sec">
+  <p class="eb">04 · Space, radius, stroke</p>
+  <h2 class="h2">4px grid, one dense scale</h2>
+  <p class="p">This is a desktop tool that shows 140 settings; density is a feature. The scale below is deliberately tighter than a web app's — the largest gap in a settings pane is 18px.</p>
+
+  <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:30px;margin:20px 0 4px">
+    <div>
+      <table class="tw">
+        <thead><tr><th style="width:56px">px</th><th>Name</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td class="m">2</td><td class="m">px_0p5</td><td>Toggle thumb inset, badge lift</td></tr>
+          <tr><td class="m">3</td><td class="m">gap_xs</td><td>Between nav items; label→description</td></tr>
+          <tr><td class="m">6</td><td class="m">gap_sm</td><td>Inside a compound control; grid cells in a key/value row</td></tr>
+          <tr><td class="m">8</td><td class="m">gap_md</td><td>Control → adjacent button; icon → text</td></tr>
+          <tr><td class="m">11</td><td class="m">gap_lg</td><td>Rows inside one setting group</td></tr>
+          <tr><td class="m">14</td><td class="m">gap_xl</td><td>Label column → control column; cards in a grid</td></tr>
+          <tr><td class="m">18</td><td class="m">gap_2xl</td><td>Group → group</td></tr>
+          <tr><td class="m">22</td><td class="m">pad_page</td><td>Horizontal padding of a settings page body</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table class="tw">
+        <thead><tr><th style="width:56px">px</th><th>Token</th><th>Applies to</th></tr></thead>
+        <tbody>
+          <tr><td class="m">3</td><td class="m">radius_sm</td><td>Nav item, tag, badge, inline pill</td></tr>
+          <tr><td class="m">4</td><td class="m">radius</td><td>Every input, button, select, card — the default</td></tr>
+          <tr><td class="m">6</td><td class="m">radius_lg</td><td>Window, dialog, popover, panel</td></tr>
+          <tr><td class="m">999</td><td class="m">radius_full</td><td>Switch track and thumb only</td></tr>
+        </tbody>
+      </table>
+      <h3 class="h3">Stroke and elevation</h3>
+      <p class="p" style="font-size:13px">Every border is exactly 1px <span class="mono">border</span>. There is no 2px border anywhere except the focus ring and the drag target. Two shadows only: <span class="mono">0 10px 30px rgba(23,20,15,.15)</span> for floating windows and dialogs, <span class="mono">0 4px 12px rgba(23,20,15,.12)</span> for popovers and dropdowns. Cards, rows, and inputs are flat — separation comes from the 1px rule and the surface step, never from a shadow.</p>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">05 · Geometry</p>
+  <h2 class="h2">Control sizes and the anatomy of a setting row</h2>
+  <table class="tw" style="margin-bottom:24px">
+    <thead><tr><th style="width:22%">Element</th><th style="width:14%">Height</th><th style="width:24%">Padding</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>Title bar</td><td class="m">34</td><td class="m">0 12</td><td>Custom, owned by <span class="mono">window-wrapper</span>; traffic lights right, 15px apart</td></tr>
+      <tr><td>Sidebar / page nav</td><td class="m">—</td><td class="m">12 10</td><td>Width <span class="mono">168</span> fixed. Item 6px 9px, radius 3</td></tr>
+      <tr><td>Input, select, path field</td><td class="m">30</td><td class="m">7 10</td><td>Mono value. Full width of its column</td></tr>
+      <tr><td>Number stepper</td><td class="m">30</td><td class="m">7 11 / 7 14</td><td>−, value (min-width 44, centered), +</td></tr>
+      <tr><td>Button</td><td class="m">30</td><td class="m">0 13</td><td>Icon-only 30×30. Small variant 26, padding 0 10</td></tr>
+      <tr><td>Switch</td><td class="m">19</td><td class="m">2</td><td>Track 34×19, thumb 15. Accent when on, <span class="mono">muted</span> when off</td></tr>
+      <tr><td>Checkbox / radio</td><td class="m">15</td><td class="m">—</td><td>15×15, radius 3 (radio full). 8px to its label</td></tr>
+      <tr><td>Segmented enum</td><td class="m">30</td><td class="m">7 13</td><td>Up to 4 options. 5+ becomes a select</td></tr>
+      <tr><td>Table row</td><td class="m">30</td><td class="m">7 10</td><td>Header 30, 1px row border, zebra on <span class="mono">table_even</span></td></tr>
+      <tr><td>Add-row affordance</td><td class="m">26</td><td class="m">5 10</td><td>1px dashed border, radius 3, muted text</td></tr>
+      <tr><td>Setting row</td><td class="m">auto</td><td class="m">—</td><td>Label column <span class="mono">180</span> fixed, 14px gap, control column flexes</td></tr>
+    </tbody>
+  </table>
+
+  <div style="border:1px solid var(--rule)">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--rule-soft);font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Setting row · light · annotated</div>
+    <div style="padding:24px 22px;background:#ffffff;display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <span style="font:600 12.5px/1 var(--font-sans);color:#3c4043">Python Environment</span>
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px">
+            <span style="font:400 12.5px/1.2 var(--font-sans);color:#3c4043">Python Path</span>
+            <span style="font:400 11.5px/1.45 var(--font-sans);color:#5f6368">Interpreter used to run workbench</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;gap:8px">
+            <div style="flex:1;min-width:0;height:30px;box-sizing:border-box;padding:7px 10px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;font:400 12.5px/1.2 var(--font-mono);color:#202124;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/usr/local/bin/python3.12</div>
+            <span style="height:30px;box-sizing:border-box;display:flex;align-items:center;padding:0 13px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;font:400 12.5px/1 var(--font-sans);color:#3c4043">Browse</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px">
+            <span style="font:400 12.5px/1.2 var(--font-sans);color:#3c4043">Workbench Path</span>
+            <span style="font:400 11.5px/1.45 var(--font-sans);color:#5f6368">Folder containing workbench</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;min-width:0;height:30px;box-sizing:border-box;padding:7px 10px;background:#ffffff;border:1px solid #d93025;border-radius:4px;font:400 12.5px/1.2 var(--font-mono);color:#202124;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">~/src/islandora_workbenc</div>
+              <span style="height:30px;box-sizing:border-box;display:flex;align-items:center;padding:0 13px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;font:400 12.5px/1 var(--font-sans);color:#3c4043">Browse</span>
+            </div>
+            <span style="font:400 11.5px/1.45 var(--font-sans);color:#d93025">No such directory</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px">
+            <span style="font:400 12.5px/1.2 var(--font-sans);color:#3c4043">Use UV</span>
+            <span style="font:400 11.5px/1.45 var(--font-sans);color:#5f6368">Run through uv instead of python</span>
+          </div>
+          <div style="width:34px;height:19px;border-radius:10px;background:#1a73e8;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:#ffffff"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="p" style="margin-top:14px;font-size:13px">Left column is a fixed 180px so labels align down the whole page regardless of control type. The control column owns its own validation message, at 5px below the control, never in a tooltip. A row never grows taller than it needs: the description line is optional and most rows omit it.</p>
+</div>
+
+<div class="sec">
+  <p class="eb">06 · States</p>
+  <h2 class="h2">One interaction language for every control</h2>
+  <table class="tw">
+    <thead><tr><th style="width:16%">State</th><th style="width:42%">Treatment</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Rest</td><td>Surface <span class="mono">app-head</span>, border <span class="mono">border</span></td><td>Inputs sit slightly darker than the page — the field is a well, not a card</td></tr>
+      <tr><td>Hover</td><td>Border → <span class="mono">muted_foreground</span>; surface unchanged</td><td>Rows get <span class="mono">list_hover</span> wash instead</td></tr>
+      <tr><td>Focus</td><td>Surface → <span class="mono">background</span>, border → <span class="mono">accent</span>, ring 2px <span class="mono">accent</span> at 35% outside the border</td><td><span class="mono">focus_ring: true</span> in the theme. Never remove; keyboard is a first-class path</td></tr>
+      <tr><td>Active / pressed</td><td>Surface → <span class="mono">button_active</span></td><td>No transform, no scale</td></tr>
+      <tr><td>Disabled</td><td>Opacity 0.5, cursor default</td><td>Do not gray the text separately; one opacity keeps contrast ratios predictable</td></tr>
+      <tr><td>Error</td><td>Border <span class="mono">danger</span>, message below in <span class="mono">danger</span></td><td>Blocks save. Reserve for "this YAML will not parse or the path does not exist"</td></tr>
+      <tr><td>Warning</td><td>Border unchanged, message below in <span class="mono">warning</span> with a 12px marker glyph</td><td>Does not block save. "This runs, but probably isn't what you meant"</td></tr>
+      <tr><td>Modified</td><td>2px <span class="mono">accent</span> bar on the left edge of the label column, inset 0</td><td>Marks a setting that differs from its default; pairs with the reset button</td></tr>
+      <tr><td>Inherited</td><td>Value in <span class="mono">muted_foreground</span>, italic-free, with a mono "default" tag right-aligned</td><td>The setting is present in the schema but not written to the YAML file</td></tr>
+    </tbody>
+  </table>
+  <p class="p" style="margin-top:16px"><b>Motion.</b> 120ms for state color changes, 160ms for popover and dropdown entry, 200ms for panel dock/undock. Ease-out. No spring, no bounce, no animated skeleton beyond the upstream <span class="mono">shimmer</span> during a workbench run.</p>
+</div>
+
+<div class="sec">
+  <p class="eb">07 · Component inventory</p>
+  <h2 class="h2">What we reuse, wrap, and build</h2>
+  <p class="p">Verdicts against the real module list in <span class="mono">crates/ui/src</span>. <span class="tag reuse">reuse</span> means use it directly. <span class="tag wrap">wrap</span> means one thin app-side type that fixes props or adds our validation. <span class="tag build">build</span> means we write it.</p>
+  <table class="tw" style="margin-top:14px">
+    <thead><tr><th style="width:24%">Our surface</th><th style="width:15%">Verdict</th><th style="width:26%">Upstream</th><th>What we add</th></tr></thead>
+    <tbody>
+      <tr><td>Window chrome, traffic lights</td><td><span class="tag reuse">reuse</span></td><td class="m">TitleBar, WindowBorder</td><td>Nothing. Already matches the 34px spec</td></tr>
+      <tr><td>Settings window shell</td><td><span class="tag reuse">reuse</span></td><td class="m">sidebar, setting::SettingsPage</td><td>Page list; 168px sidebar width</td></tr>
+      <tr><td>Setting group + row</td><td><span class="tag reuse">reuse</span></td><td class="m">setting::{SettingGroup, SettingItem}</td><td>Label column width override to 180</td></tr>
+      <tr><td>Bool, int, string, enum fields</td><td><span class="tag reuse">reuse</span></td><td class="m">SettingField::{switch, checkbox, number_input, input, dropdown}</td><td><span class="mono">default_value</span> from the workbench schema, which turns on reset for free</td></tr>
+      <tr><td>Path field with Browse</td><td><span class="tag wrap">wrap</span></td><td class="m">input + button</td><td>Native file dialog, existence check, head-truncation, drag-drop target</td></tr>
+      <tr><td>Task-config picker (search)</td><td><span class="tag wrap">wrap</span></td><td class="m">searchable_list, command, popover</td><td>Category grouping, "142 settings" counter, description in the row, keyboard add</td></tr>
+      <tr><td>Key/value and list editors</td><td><span class="tag build">build</span></td><td class="m">table (as a base)</td><td>Inline editable cells, reorder, add/remove row, duplicate-key detection</td></tr>
+      <tr><td>YAML preview panel</td><td><span class="tag wrap">wrap</span></td><td class="m">highlighter, input::textarea</td><td>YAML grammar, read-only mode, jump-to-line from a validation message</td></tr>
+      <tr><td>secondary_tasks chain</td><td><span class="tag wrap">wrap</span></td><td class="m">tree</td><td>Loop detection, flattened run-order strip, drag to reparent</td></tr>
+      <tr><td>Docked / floated builder</td><td><span class="tag reuse">reuse</span></td><td class="m">dock::{DockArea, TabPanel, Tiles}</td><td>Panel registration only. Snapping is upstream</td></tr>
+      <tr><td>Profile switcher</td><td><span class="tag reuse">reuse</span></td><td class="m">select or menu</td><td>Hidden when only one profile exists</td></tr>
+      <tr><td>Run log</td><td><span class="tag reuse">reuse</span></td><td class="m">input::textarea (read-only), status_bar</td><td>Autoscroll, level coloring off <span class="mono">danger</span>/<span class="mono">warning</span></td></tr>
+      <tr><td>Validation feedback</td><td><span class="tag reuse">reuse</span></td><td class="m">alert, notification, marker</td><td>Alert inline per group; notification only for run outcomes</td></tr>
+      <tr><td>Confirm destructive</td><td><span class="tag reuse">reuse</span></td><td class="m">dialog</td><td>Copy only</td></tr>
+      <tr><td>Progress during a run</td><td><span class="tag reuse">reuse</span></td><td class="m">progress, spinner</td><td>Determinate when the CSV row count is known</td></tr>
+      <tr><td>Shortcut hints</td><td><span class="tag reuse">reuse</span></td><td class="m">kbd, tooltip</td><td>Nothing</td></tr>
+      <tr><td>Charts, rating, avatar, bubble, attachment, plot</td><td>—</td><td class="m">—</td><td>Not used. Do not pull them in</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec">
+  <p class="eb">08 · Value shapes</p>
+  <h2 class="h2">Sixteen shapes, sixteen controls</h2>
+  <p class="p">These cover all 142 keys in <span class="mono">get_default_config()</span>. Each shape is one <span class="mono">SettingField</span> constructor. Nine of them are upstream constructors with no new code; seven go through <span class="mono">SettingField::render</span> and need a widget.</p>
+  <table class="tw" style="margin-top:14px">
+    <thead><tr><th style="width:17%">Shape</th><th style="width:22%">Example</th><th style="width:12%">Verdict</th><th style="width:24%">Control</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td class="m">boolean</td><td class="m">nodes_only: true</td><td><span class="tag reuse">reuse</span></td><td class="m">SettingField::switch</td><td>63 keys. Switch, not checkbox — checkbox is only for multi-select inside a list editor</td></tr>
+      <tr><td class="m">integer</td><td class="m">max_node_title_length: 255</td><td><span class="tag reuse">reuse</span></td><td class="m">SettingField::number_input</td><td>Stepper with min/max from the schema; empty means "use default", not 0</td></tr>
+      <tr><td class="m">string</td><td class="m">user_agent: …</td><td><span class="tag reuse">reuse</span></td><td class="m">SettingField::input</td><td>Mono value. Trim on blur; never auto-quote</td></tr>
+      <tr><td class="m">single character</td><td class="m">subdelimiter: "|"</td><td><span class="tag build">build</span></td><td class="m">CharField</td><td>44px wide, centered, 1 grapheme max, description sits inline to the right</td></tr>
+      <tr><td class="m">enum</td><td class="m">update_mode: replace</td><td><span class="tag wrap">wrap</span></td><td class="m">segmented or dropdown</td><td>≤4 options → segmented; 5+ → <span class="mono">scrollable_dropdown</span></td></tr>
+      <tr><td class="m">nullable enum</td><td class="m">fixity_algorithm: md5</td><td><span class="tag wrap">wrap</span></td><td class="m">dropdown + clear</td><td>Null is a first-class option rendered as a muted <span class="mono">none</span>, not an empty row</td></tr>
+      <tr><td class="m">file path</td><td class="m">input_csv: metadata.csv</td><td><span class="tag wrap">wrap</span></td><td class="m">PathField</td><td>Browse button, existence check, relative-to-config-dir display</td></tr>
+      <tr><td class="m">URL</td><td class="m">media_use_tid: http://…</td><td><span class="tag wrap">wrap</span></td><td class="m">UrlField</td><td>Scheme validation only; no reachability check while typing</td></tr>
+      <tr><td class="m">list of strings</td><td class="m">ignore_csv_columns:</td><td><span class="tag build">build</span></td><td class="m">ListEditor&lt;String&gt;</td><td>One row per item, drag to reorder, dashed Add row, empty list writes nothing</td></tr>
+      <tr><td class="m">list of numbers</td><td class="m">http_retry_on_status_codes:</td><td><span class="tag build">build</span></td><td class="m">ListEditor&lt;i64&gt;</td><td>Same editor, numeric parse per row; reject non-integers at the row, not the field</td></tr>
+      <tr><td class="m">list of one-key maps</td><td class="m">csv_field_templates:</td><td><span class="tag build">build</span></td><td class="m">PairListEditor</td><td>Order matters and duplicate keys are legal — this is why it cannot be a map editor</td></tr>
+      <tr><td class="m">map</td><td class="m">media_fields:</td><td><span class="tag build">build</span></td><td class="m">MapEditor</td><td>Keyed table, 100px key column, duplicate keys are an error</td></tr>
+      <tr><td class="m">map of lists</td><td class="m">media_types:</td><td><span class="tag build">build</span></td><td class="m">MapEditor + chip list</td><td>Values are extension chips; comma or space commits a chip</td></tr>
+      <tr><td class="m">command list</td><td class="m">shutdown:</td><td><span class="tag build">build</span></td><td class="m">CommandListEditor</td><td>Monospace multi-line rows, no shell parsing, warn if the binary is not on PATH</td></tr>
+      <tr><td class="m">template string</td><td class="m">rollback_config_filename_template</td><td><span class="tag wrap">wrap</span></td><td class="m">input + preview</td><td>Highlight <span class="mono">${…}</span> tokens; show the resolved filename under the field</td></tr>
+      <tr><td class="m">config reference</td><td class="m">secondary_tasks:</td><td><span class="tag build">build</span></td><td class="m">ConfigRefPicker</td><td>Picks from the config library, not the filesystem; rejects a reference that would loop</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec">
+  <p class="eb">09 · The four widgets we write</p>
+  <h2 class="h2">Anatomy of the custom pieces</h2>
+
+  <h3 class="h3">SettingPicker — the search-to-add popover</h3>
+  <p class="p">Built on <span class="mono">searchable_list</span> plus <span class="mono">popover</span>; do not hand-roll the filtering or the virtualized list. Panel 420×360, radius 6, popover shadow. Search input pinned at the top, 30px, no border, 1px rule beneath. Results are 34px rows: mono key name left, category tag right in <span class="mono">muted_foreground</span>, one-line description underneath at 11.5px when the row is highlighted. Group headers are 11px mono caps, sticky. Keys already present in the config appear disabled with a mono "added" tag. Enter adds and keeps the panel open; Esc closes; the counter in the footer reads "142 settings · 12 in this config".</p>
+
+  <h3 class="h3">MapEditor / ListEditor / PairListEditor — one family</h3>
+  <p class="p">All three are the same shell: a bordered box, radius 4, header row at <span class="mono">table_head</span> when there are named columns, 30px rows separated by 1px <span class="mono">table_row_border</span>, and a dashed Add-row strip as the last child. Cells are mono inputs that look borderless until focused. A 22px trailing column holds the remove glyph, visible on row hover only. Drag handles occupy a 16px leading column and appear on hover. Differences are only in the cell count and the parse function, so implement one generic <span class="mono">RowEditor</span> with a column spec.</p>
+
+  <h3 class="h3">YamlPreview</h3>
+  <p class="p">Read-only <span class="mono">highlighter</span> with a YAML grammar, 11.5/1.6 mono, no line numbers under 40 lines. It is the source of truth for what will be written: it re-renders on every keystroke, and a validation message links to its line. Panel background is <span class="mono">background</span>, not a darker code well — this is not a code editor and should not pretend to be.</p>
+
+  <h3 class="h3">TaskChainTree</h3>
+  <p class="p">Upstream <span class="mono">tree</span> for the hierarchy, plus a horizontal run-order strip above it: numbered mono chips, 26px tall, with a chevron between them, showing the flattened depth-first order. A reference that would create a cycle is refused at drop time with the offending edge drawn in <span class="mono">danger</span> for 800ms rather than a dialog.</p>
+</div>
+
+<div class="sec">
+  <p class="eb">10 · Handoff</p>
+  <h2 class="h2">File layout and order of work</h2>
+  <sc-if value="{{ showCode }}" hint-placeholder-val="{{ true }}">
+  <div class="code">assets/
+  fonts/            Archivo, IBM Plex Mono (bundled, not system)
+  themes/           qrate-light.json, qrate-dark.json, gruvbox-*.json, everforest-*.json
+
+crates/app/src/
+  theme.rs          register themes with ThemeRegistry; persist choice in settings
+  fields/
+    mod.rs          re-exports; the SettingField extension trait
+    path.rs         PathField      (wrap)
+    url.rs          UrlField       (wrap)
+    char.rs         CharField      (build)
+    enums.rs        segmented + nullable dropdown (wrap)
+    row_editor.rs   RowEditor + column spec -> List/Map/Pair/Command editors (build)
+    template.rs     ${...} highlight + resolved preview (wrap)
+  widgets/
+    setting_picker.rs   searchable_list + popover (wrap)
+    yaml_preview.rs     highlighter, read-only (wrap)
+    task_chain.rs       tree + run-order strip (build)
+  config_builder/   SettingsPage assembled from the schema
+  app_settings/     existing settings window, ported onto setting::SettingsPage</div>
+  </sc-if>
+  <p class="p">Build in this order: theme JSON first, then the generic <span class="mono">RowEditor</span>, then the four wrap-level fields (path, URL, enum, nullable enum), then <span class="mono">SettingPicker</span>, then the tree. The settings window and the config builder both fall out of <span class="mono">setting::SettingsPage</span> once the field set exists, so do not build either screen until the fields are done.</p>
+  <p class="p" style="color:var(--dim)"><b>Two things this spec does not decide.</b> Whether the config library is stored per profile or per machine, and whether a preprocess script must declare anything beyond writing <span class="mono">metadata.csv</span>. Both change what <span class="mono">ConfigRefPicker</span> and the script dropdown read from, so settle them before those two widgets.</p>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showCode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { showCode: this.props.showCode ?? true };
+  }
+}
+</script>
+</body>
+</html>

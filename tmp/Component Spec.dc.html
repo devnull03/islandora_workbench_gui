@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/_ds_bundle.css"><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/styles.css"><script src="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/_ds_bundle.js"></script><style>
+body{background:var(--ground)}
+a{color:var(--rust);text-decoration:none}
+a:hover{color:var(--ink);text-decoration:underline}
+.pg{max-width:1180px;margin:0 auto;background:var(--paper);padding:0 0 80px}
+.sec{padding:34px 44px;border-top:1px solid var(--rule-soft)}
+.eb{font:500 11px/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--rust);margin:0 0 10px}
+.h2{font:600 26px/1.2 var(--font-sans);letter-spacing:-.02em;color:var(--ink);margin:0 0 8px}
+.h3{font:600 14px/1.3 var(--font-sans);color:var(--ink);margin:26px 0 10px}
+.p{font:400 14px/1.65 var(--font-sans);color:var(--body);margin:0 0 12px;max-width:74ch;text-wrap:pretty}
+.mono{font-family:var(--font-mono)}
+.code{font:400 12.5px/1.7 var(--font-mono);color:var(--ink);background:#fff;border:1px solid var(--rule-soft);padding:14px 16px;white-space:pre;overflow-x:auto;margin:0 0 14px}
+.tw{width:100%;border-collapse:collapse;font:400 13px/1.5 var(--font-sans);color:var(--body)}
+.tw th{font:500 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:left;padding:0 12px 8px 0;border-bottom:1px solid var(--rule)}
+.tw td{padding:9px 12px 9px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+.tw td.m{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+.tw td.mw{font-family:var(--font-mono);font-size:12.5px;line-height:1.5;color:var(--ink);word-break:break-word}
+.tag{display:inline-block;font:500 10.5px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;white-space:nowrap}
+.reuse{background:#1e7d4a1f;color:#1c6b41}
+.wrap{background:#1a73e81f;color:#1558b0}
+.build{background:#a8410f1f;color:var(--rust)}
+
+.cmp{border:1px solid var(--rule);margin:0 0 16px;background:#fff}
+.chd{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--rule-soft);background:var(--paper)}
+.cname{font:500 13px/1.2 var(--font-mono);color:var(--ink)}
+.cwhere{font:400 11px/1.2 var(--font-sans);color:var(--faint);margin-left:auto}
+.cbody{display:grid;grid-template-columns:352px 1fr}
+.prev{padding:18px;border-right:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:11px;align-items:flex-start;background:#fff;min-width:0}
+.spec{padding:12px 16px 14px;min-width:0}
+.spec .tw td{padding:7px 10px 7px 0;font-size:12.5px}
+.spec .tw td.k{font:500 10.5px/1.5 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);white-space:nowrap;width:74px}
+.spec .tw tr:last-child td{border-bottom:none}
+.kbd{font:400 11px/1 var(--font-mono);color:var(--body);background:#f3f3f3;border:1px solid #dadce0;border-radius:3px;padding:3px 5px}
+
+.pv-lbl{font:400 12.5px/1.2 var(--font-sans);color:#3c4043}
+.pv-desc{font:400 11.5px/1.45 var(--font-sans);color:#5f6368}
+.pv-in{box-sizing:border-box;height:30px;padding:7px 10px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;font:400 12.5px/1.2 var(--font-mono);color:#202124;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center}
+.pv-in.foc{background:#fff;border-color:#1a73e8;box-shadow:0 0 0 2px #1a73e859}
+.pv-in.err{background:#fff;border-color:#d93025}
+.pv-btn{box-sizing:border-box;height:30px;display:inline-flex;align-items:center;padding:0 13px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;font:400 12.5px/1 var(--font-sans);color:#3c4043;white-space:nowrap}
+.pv-btnp{box-sizing:border-box;height:30px;display:inline-flex;align-items:center;padding:0 13px;background:#1a73e8;border:1px solid #1a73e8;border-radius:4px;font:400 12.5px/1 var(--font-sans);color:#fff;white-space:nowrap}
+.pv-btng{box-sizing:border-box;height:26px;display:inline-flex;align-items:center;padding:0 10px;background:transparent;border:1px solid transparent;border-radius:4px;font:400 12px/1 var(--font-sans);color:#5f6368;white-space:nowrap;flex:none}
+.pv-btnd{box-sizing:border-box;height:30px;display:inline-flex;align-items:center;padding:0 13px;background:#fff;border:1px solid #d93025;border-radius:4px;font:400 12.5px/1 var(--font-sans);color:#d93025;white-space:nowrap}
+.pv-dash{box-sizing:border-box;height:26px;display:inline-flex;align-items:center;padding:0 10px;border:1px dashed #dadce0;border-radius:3px;font:400 12px/1 var(--font-sans);color:#5f6368;white-space:nowrap;flex:none}
+.pv-box>div{min-width:0}
+.pv-sw{width:34px;height:19px;box-sizing:border-box;border-radius:999px;background:#1a73e8;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;flex:none}
+.pv-sw.off{background:#dadce0;justify-content:flex-start}
+.pv-th{width:15px;height:15px;border-radius:50%;background:#fff}
+.pv-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;background:#e8eaed;border:1px solid #dadce0;border-radius:3px;font:400 12px/1 var(--font-mono);color:#202124}
+.pv-x{font:400 11px/1 var(--font-mono);color:#5f6368}
+.pv-msg{display:flex;gap:7px;align-items:flex-start;font:400 11.5px/1.45 var(--font-sans)}
+.pv-g{font:400 11px/1.45 var(--font-mono);flex:none}
+.pv-cell{box-sizing:border-box;min-width:0;height:30px;display:flex;align-items:center;padding:7px 10px;font:400 12px/1.2 var(--font-mono);color:#202124;background:#fff;border-right:1px solid #dadce0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pv-cell span{overflow:hidden;text-overflow:ellipsis}
+.pv-hd{font:500 10.5px/1 var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:#3c4043}
+.pv-row{display:flex;gap:8px;align-items:center;width:100%}
+.pv-box{border:1px solid #dadce0;border-radius:4px;overflow:hidden;width:100%}
+.pv-mini{font:400 11px/1 var(--font-mono);color:#5f6368}
+</style></helmet>
+
+<div class="pg">
+
+<div style="padding:56px 44px 30px">
+  <p class="eb">Islandora Workbench GUI · component specification</p>
+  <h1 style="font:600 44px/1.08 var(--font-sans);letter-spacing:-.035em;color:var(--ink);margin:0 0 14px;max-width:24ch">Every component, with the numbers</h1>
+  <p class="p" style="font-size:16px;max-width:68ch">One entry per component the app renders. Each carries its box model, surface, type, states and behaviour as literal values, plus the upstream <span class="mono">gpui-component</span> module it is built from and the Rust file it belongs in. Read <a href="Design Language.dc.html">Design Language</a> first for tokens; this document is what you build against.</p>
+  <div style="display:flex;gap:34px;margin-top:26px;padding-top:22px;border-top:1px solid var(--rule)">
+    <div><div class="pv-hd" style="color:var(--faint);margin-bottom:6px">Components</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">48 specified<br>8 groups</div></div>
+    <div><div class="pv-hd" style="color:var(--faint);margin-bottom:6px">Source of truth</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">Config Builder Mockups<br>Design Language</div></div>
+    <div><div class="pv-hd" style="color:var(--faint);margin-bottom:6px">Previews</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">qrate-light<br>literal hex, real geometry</div></div>
+    <div><div class="pv-hd" style="color:var(--faint);margin-bottom:6px">Colors in code</div><div style="font:400 13px/1.5 var(--font-mono);color:var(--ink)">cx.theme().colors.*<br>never a literal</div></div>
+  </div>
+</div>
+
+<sc-if value="{{ showCorrections }}" hint-placeholder-val="{{ true }}">
+<div class="sec">
+  <p class="eb">00 · Normalization</p>
+  <h2 class="h2">Twelve decisions that end the drift</h2>
+  <p class="p">The mockups were drawn in three passes and disagree with each other. Where they disagree, this column wins — the mockup is wrong, not the spec. Nothing below is a preference; each one removes a duplicate way of doing the same thing.</p>
+  <table class="tw">
+    <thead><tr><th style="width:16%">Subject</th><th style="width:30%">Drift in the mockups</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>Accent</td><td>SACDA orange <span class="mono">#F99D2A</span> in groups D–F, amber app-chrome tokens in A–C</td><td>One accent, from the theme: <span class="mono">primary</span> — <span class="mono">#1a73e8</span> light, <span class="mono">#3c78d8</span> dark. Orange appears nowhere in the app.</td></tr>
+      <tr><td>Type</td><td><span class="mono">Segoe UI</span> and <span class="mono">ui-monospace</span> in D–F</td><td>Archivo and IBM Plex Mono only, bundled in <span class="mono">assets/fonts/</span>. The mockup stacks were placeholders.</td></tr>
+      <tr><td>Title bar</td><td>34px in A, 36px and 40px in B and E</td><td><span class="mono">34</span>px, every window, padding <span class="mono">0 12</span>.</td></tr>
+      <tr><td>Sidebar</td><td>168px in the builder, 186px in settings</td><td><span class="mono">176</span>px in both. The search field is an optional first slot, not a different sidebar.</td></tr>
+      <tr><td>Control height</td><td>6px and 7px vertical padding used interchangeably</td><td><span class="mono">30</span>px tall, padding <span class="mono">7 10</span>. Small variant <span class="mono">26</span>px, padding <span class="mono">0 10</span>. Nothing else.</td></tr>
+      <tr><td>Radius</td><td>3, 4, 6 and 8 all present</td><td><span class="mono">3</span> nav item / tag / chip, <span class="mono">4</span> control / card, <span class="mono">6</span> window / dialog / popover, <span class="mono">999</span> switch. No 8.</td></tr>
+      <tr><td>Label column</td><td>180px in settings, 210px in the builder</td><td><span class="mono">180</span>px, gap <span class="mono">14</span>. Long keys wrap to two lines; the column does not grow.</td></tr>
+      <tr><td>Inline actions</td><td>Bare text — Edit, Test, Duplicate, Switch to, Manage profiles</td><td>All become <span class="mono">GhostButton</span>, 26px, with a hover surface. No unbordered clickable text anywhere except a real hyperlink.</td></tr>
+      <tr><td>Status dots</td><td>Accent used for "reachable" and for "active profile"</td><td>Dots are semantic only: <span class="mono">success</span> / <span class="mono">danger</span> / <span class="mono">warning</span> / <span class="mono">muted_foreground</span>. Accent means action or selection, never health.</td></tr>
+      <tr><td>Validation</td><td>Sometimes inline, sometimes a colored row background</td><td>Always a message under the control, 5px gap, 11px mono glyph in a fixed 14px column. Row backgrounds never carry error state.</td></tr>
+      <tr><td>Zebra</td><td>Applied to setting rows in one mockup</td><td>Zebra (<span class="mono">table_even</span>) lives in <span class="mono">RowEditor</span> tables only. Setting rows are separated by a 1px rule.</td></tr>
+      <tr><td>Type badge</td><td>60px right column in the builder, absent in settings</td><td>Kept, at <span class="mono">56</span>px, right-aligned, <span class="mono">faint</span> — builder only. It is the one legitimate difference between the two windows.</td></tr>
+    </tbody>
+  </table>
+</div>
+</sc-if>
+
+<div class="sec">
+  <p class="eb">01 · Index</p>
+  <h2 class="h2">The 48</h2>
+  <p class="p"><span class="tag reuse">reuse</span> upstream as-is. <span class="tag wrap">wrap</span> one app-side type over an upstream component. <span class="tag build">build</span> written from scratch. "Seen in" points at the mockup that establishes it.</p>
+  <table class="tw" style="margin-top:14px">
+    <thead><tr><th style="width:22%">Component</th><th style="width:11%">Verdict</th><th style="width:25%">Upstream</th><th style="width:13%">Seen in</th><th>Rust file</th></tr></thead>
+    <tbody>
+      <tr><td class="m">AppWindow</td><td><span class="tag reuse">reuse</span></td><td class="mw">WindowBorder</td><td class="m">all</td><td class="mw">shell/window.rs</td></tr>
+      <tr><td class="m">TitleBar</td><td><span class="tag wrap">wrap</span></td><td class="mw">TitleBar</td><td class="m">all</td><td class="mw">shell/title_bar.rs</td></tr>
+      <tr><td class="m">StatusBar</td><td><span class="tag build">build</span></td><td class="mw">h_flex</td><td class="m">2c, 1b</td><td class="mw">shell/status_bar.rs</td></tr>
+      <tr><td class="m">ProfileBar</td><td><span class="tag build">build</span></td><td class="mw">h_flex + dropdown</td><td class="m">2c</td><td class="mw">shell/profile_bar.rs</td></tr>
+      <tr><td class="m">Sidebar</td><td><span class="tag wrap">wrap</span></td><td class="mw">sidebar</td><td class="m">3a, 3b, 3c</td><td class="mw">shell/sidebar.rs</td></tr>
+      <tr><td class="m">SidebarItem</td><td><span class="tag reuse">reuse</span></td><td class="mw">sidebar::SidebarMenuItem</td><td class="m">3a–3c</td><td class="mw">shell/sidebar.rs</td></tr>
+      <tr><td class="m">SidebarFooter</td><td><span class="tag build">build</span></td><td class="mw">h_flex</td><td class="m">3b</td><td class="mw">shell/sidebar.rs</td></tr>
+      <tr><td class="m">DockedPanel</td><td><span class="tag reuse">reuse</span></td><td class="mw">dock::{DockArea, TabPanel}</td><td class="m">2b</td><td class="mw">shell/dock.rs</td></tr>
+      <tr><td class="m">SettingsPage</td><td><span class="tag reuse">reuse</span></td><td class="mw">setting::SettingsPage</td><td class="m">3a–3c</td><td class="mw">pages/mod.rs</td></tr>
+      <tr><td class="m">SettingGroup</td><td><span class="tag reuse">reuse</span></td><td class="mw">setting::SettingGroup</td><td class="m">3a, 3b</td><td class="mw">pages/mod.rs</td></tr>
+      <tr><td class="m">SettingRow</td><td><span class="tag wrap">wrap</span></td><td class="mw">setting::SettingItem</td><td class="m">3a, 1b</td><td class="mw">fields/row.rs</td></tr>
+      <tr><td class="m">RequiredBadge</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1b</td><td class="mw">fields/row.rs</td></tr>
+      <tr><td class="m">TypeBadge</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1a, 1b</td><td class="mw">fields/row.rs</td></tr>
+      <tr><td class="m">DefaultHint</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1b</td><td class="mw">fields/row.rs</td></tr>
+      <tr><td class="m">ModifiedMark</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">—</td><td class="mw">fields/row.rs</td></tr>
+      <tr><td class="m">InlineMessage</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1b, 3b</td><td class="mw">fields/message.rs</td></tr>
+      <tr><td class="m">Callout</td><td><span class="tag wrap">wrap</span></td><td class="mw">alert</td><td class="m">3b, 3c</td><td class="mw">widgets/callout.rs</td></tr>
+      <tr><td class="m">TextInput</td><td><span class="tag reuse">reuse</span></td><td class="mw">input::TextInput</td><td class="m">3a, 3b</td><td class="mw">—</td></tr>
+      <tr><td class="m">MonoInput</td><td><span class="tag wrap">wrap</span></td><td class="mw">input::TextInput</td><td class="m">1b</td><td class="mw">fields/text.rs</td></tr>
+      <tr><td class="m">PathField</td><td><span class="tag wrap">wrap</span></td><td class="mw">input + button</td><td class="m">3a, 3b, 1b</td><td class="mw">fields/path.rs</td></tr>
+      <tr><td class="m">UrlField</td><td><span class="tag wrap">wrap</span></td><td class="mw">input::TextInput</td><td class="m">3b</td><td class="mw">fields/url.rs</td></tr>
+      <tr><td class="m">CharField</td><td><span class="tag build">build</span></td><td class="mw">input::TextInput</td><td class="m">1c</td><td class="mw">fields/char.rs</td></tr>
+      <tr><td class="m">NumberStepper</td><td><span class="tag wrap">wrap</span></td><td class="mw">input::NumberInput</td><td class="m">1b</td><td class="mw">fields/number.rs</td></tr>
+      <tr><td class="m">TemplateField</td><td><span class="tag build">build</span></td><td class="mw">input + highlighter</td><td class="m">1c</td><td class="mw">fields/template.rs</td></tr>
+      <tr><td class="m">Switch</td><td><span class="tag reuse">reuse</span></td><td class="mw">switch::Switch</td><td class="m">3a, 3b, 1b</td><td class="mw">—</td></tr>
+      <tr><td class="m">Checkbox</td><td><span class="tag reuse">reuse</span></td><td class="mw">checkbox::Checkbox</td><td class="m">2c</td><td class="mw">—</td></tr>
+      <tr><td class="m">SegmentedControl</td><td><span class="tag wrap">wrap</span></td><td class="mw">tab::TabBar (segmented)</td><td class="m">1b</td><td class="mw">fields/enums.rs</td></tr>
+      <tr><td class="m">Dropdown</td><td><span class="tag reuse">reuse</span></td><td class="mw">dropdown::Dropdown</td><td class="m">3a, 2c</td><td class="mw">—</td></tr>
+      <tr><td class="m">NullableDropdown</td><td><span class="tag wrap">wrap</span></td><td class="mw">dropdown::Dropdown</td><td class="m">1c</td><td class="mw">fields/enums.rs</td></tr>
+      <tr><td class="m">ChipList</td><td><span class="tag build">build</span></td><td class="mw">searchable_list (source)</td><td class="m">1b</td><td class="mw">fields/chips.rs</td></tr>
+      <tr><td class="m">Chip</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1b, 3c</td><td class="mw">fields/chips.rs</td></tr>
+      <tr><td class="m">Button</td><td><span class="tag reuse">reuse</span></td><td class="mw">button::Button</td><td class="m">all</td><td class="mw">—</td></tr>
+      <tr><td class="m">GhostButton</td><td><span class="tag wrap">wrap</span></td><td class="mw">button::Button (ghost)</td><td class="m">3b, 3c, 2c</td><td class="mw">widgets/buttons.rs</td></tr>
+      <tr><td class="m">IconButton</td><td><span class="tag reuse">reuse</span></td><td class="mw">button::Button (icon)</td><td class="m">3a–3c</td><td class="mw">—</td></tr>
+      <tr><td class="m">AddRowButton</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">3b, 1b</td><td class="mw">widgets/buttons.rs</td></tr>
+      <tr><td class="m">RowEditor</td><td><span class="tag build">build</span></td><td class="mw">table (base)</td><td class="m">1b, 1c</td><td class="mw">fields/row_editor.rs</td></tr>
+      <tr><td class="m">SettingPicker</td><td><span class="tag wrap">wrap</span></td><td class="mw">searchable_list + popover</td><td class="m">1a, 1b</td><td class="mw">widgets/setting_picker.rs</td></tr>
+      <tr><td class="m">YamlPreview</td><td><span class="tag wrap">wrap</span></td><td class="mw">highlighter</td><td class="m">1b</td><td class="mw">widgets/yaml_preview.rs</td></tr>
+      <tr><td class="m">TaskChainTree</td><td><span class="tag build">build</span></td><td class="mw">tree</td><td class="m">1d, 2c</td><td class="mw">widgets/task_chain.rs</td></tr>
+      <tr><td class="m">RunOrderStrip</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1d</td><td class="mw">widgets/task_chain.rs</td></tr>
+      <tr><td class="m">EntityCard</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">3b, 3c</td><td class="mw">widgets/entity_card.rs</td></tr>
+      <tr><td class="m">LockedBand</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1a</td><td class="mw">widgets/locked_band.rs</td></tr>
+      <tr><td class="m">TemplateCard</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1a</td><td class="mw">widgets/template_card.rs</td></tr>
+      <tr><td class="m">StepSection</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">2c</td><td class="mw">main/step.rs</td></tr>
+      <tr><td class="m">LogPane</td><td><span class="tag wrap">wrap</span></td><td class="mw">input::textarea (read-only)</td><td class="m">2c</td><td class="mw">main/log.rs</td></tr>
+      <tr><td class="m">ProblemSummary</td><td><span class="tag build">build</span></td><td class="mw">—</td><td class="m">1b</td><td class="mw">widgets/problem_summary.rs</td></tr>
+      <tr><td class="m">ConfirmDialog</td><td><span class="tag reuse">reuse</span></td><td class="mw">modal::Modal</td><td class="m">—</td><td class="mw">—</td></tr>
+      <tr><td class="m">RunProgress</td><td><span class="tag reuse">reuse</span></td><td class="mw">progress + spinner</td><td class="m">—</td><td class="mw">—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec">
+  <p class="eb">02 · Shell and chrome</p>
+  <h2 class="h2">The window and its edges</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">AppWindow</span><span class="tag reuse">reuse</span><span class="cwhere">every window</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;border:1px solid #dadce0;border-radius:6px;overflow:hidden;box-shadow:0 10px 30px rgba(23,20,15,.15)">
+          <div style="height:34px;display:flex;align-items:center;padding:0 12px;background:#f9fbfd;border-bottom:1px solid #dadce0"><span style="font:400 12.5px/1 var(--font-sans);color:#3c4043">Settings</span><div style="flex:1"></div><div style="display:flex;gap:15px" class="pv-mini"><span>—</span><span>▢</span><span>✕</span></div></div>
+          <div style="height:64px;background:#fff"></div>
+          <div style="height:30px;display:flex;align-items:center;padding:0 13px;background:#f9fbfd;border-top:1px solid #dadce0" class="pv-mini">Ready</div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">radius_lg 6 · border 1px <span class="mono">border</span> · shadow <span class="mono">0 10px 30px rgba(23,20,15,.15)</span> · overflow hidden</td></tr>
+        <tr><td class="k">Surface</td><td class="mw">background</td></tr>
+        <tr><td class="k">Slots</td><td class="mw">title_bar (34, required) → optional ProfileBar → body (flex 1, min 0) → optional StatusBar (30)</td></tr>
+        <tr><td class="k">Sizes</td><td class="mw">main 470×720 min 420×560 · settings 846×470 min 720×420 · builder 800×760 min 640×520, docked min 480 wide</td></tr>
+        <tr><td class="k">Rust</td><td class="mw">WindowBorder wraps the root; window options resizable, decorations: client-side. Persist size and position per window kind on this machine, never in the profile.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">TitleBar</span><span class="tag wrap">wrap</span><span class="cwhere">3a, 2c, 1a</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;height:34px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#f9fbfd;border:1px solid #dadce0;border-radius:6px 6px 0 0"><span style="font:400 12.5px/1 var(--font-sans);color:#3c4043">Settings</span><span style="font:400 11.5px/1 var(--font-sans);color:#5f6368">Config builder</span><div style="flex:1"></div><div style="display:flex;gap:15px" class="pv-mini"><span>—</span><span>▢</span><span>✕</span></div></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">h 34 · pad 0 12 · gap 10 · border-bottom 1px <span class="mono">title_bar_border</span> · surface <span class="mono">title_bar</span></td></tr>
+        <tr><td class="k">Type</td><td class="mw">Archivo 400 12.5/1 <span class="mono">app-head-fg</span> title · Archivo 400 11.5/1 <span class="mono">muted_foreground</span> for the page crumb after it</td></tr>
+        <tr><td class="k">Controls</td><td class="mw">Right cluster, 15px apart, 12px mono glyphs in <span class="mono">muted_foreground</span>; hover → <span class="mono">foreground</span>, close hover → <span class="mono">danger</span> surface at 12%. On macOS defer to the platform lights and leave the cluster empty.</td></tr>
+        <tr><td class="k">Slots</td><td class="mw">title · crumb · left nav links (Github, Help) at 12px · right: transient status text (<span class="mono">Draft saved 12:04</span>) then controls</td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Whole bar is the drag region except the control cluster and any link. Double-click maximizes.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">StatusBar</span><span class="tag build">build</span><span class="cwhere">2c, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;height:30px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 13px;background:#f9fbfd;border:1px solid #dadce0;border-radius:0 0 6px 6px">
+          <span style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-sans);color:#d93025"><span style="width:6px;height:6px;border-radius:50%;background:#d93025"></span>Unreachable 530</span>
+          <div style="flex:1"></div><span class="pv-mini">↻ Reload</span><span class="pv-mini">▢ Open terminal</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">h 30 · pad 0 13 · gap 12 · border-top 1px <span class="mono">border</span> · surface <span class="mono">status_bar</span></td></tr>
+        <tr><td class="k">Left</td><td class="mw">One health item: 6px dot + Archivo 400 11.5/1 in the matching semantic color. Never more than one; the log holds the rest.</td></tr>
+        <tr><td class="k">Right</td><td class="mw">GhostButtons at 26px, glyph + label, <span class="mono">muted_foreground</span></td></tr>
+        <tr><td class="k">Builder</td><td class="mw">In the builder the bar is a footer instead: ProblemSummary left, Discard draft (ghost) and Save to library (primary, disabled while any error stands) right, pad 9 14.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">ProfileBar</span><span class="tag build">build</span><span class="cwhere">2c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;display:flex;align-items:center;gap:9px;padding:9px 14px;background:#e8eaed;border:1px solid #dadce0">
+          <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:#5f6368">Profile</span>
+          <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px;background:#fff;border:1px solid #dadce0;border-radius:4px"><span style="font:400 12px/1 var(--font-sans);color:#202124">SACDA — UFV</span><span class="pv-mini">▾</span></div>
+          <div style="flex:1"></div><span class="pv-btng" style="color:#1a73e8">Manage profiles</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">pad 9 14 · gap 9 · surface <span class="mono">table_head</span> · border-bottom 1px <span class="mono">border</span></td></tr>
+        <tr><td class="k">Parts</td><td class="mw">eyebrow label · Dropdown at the 26px small height · GhostButton right in <span class="mono">primary</span></td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Hidden entirely while exactly one profile exists. Switching reloads server list, input source, config library and builder defaults together, and cancels nothing — a run in flight keeps its original profile until it ends.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">Sidebar · SidebarItem · SidebarFooter</span><span class="tag wrap">wrap</span><span class="cwhere">3a, 3b, 3c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:176px;box-sizing:border-box;border:1px solid #dadce0;background:#fff;display:flex;flex-direction:column">
+          <div style="padding:10px;border-bottom:1px solid #dadce0"><div class="pv-in" style="height:26px;padding:0 9px;font-family:var(--font-sans);color:#5f6368">Search settings</div></div>
+          <div style="padding:10px;display:flex;flex-direction:column;gap:3px">
+            <div style="padding:6px 9px;border-radius:3px;font:400 12.5px/1.2 var(--font-sans);color:#5f6368">General</div>
+            <div style="padding:6px 9px;border-radius:3px;background:#e8f0fe;font:500 12.5px/1.2 var(--font-sans);color:#3c4043">Servers</div>
+            <div style="padding:6px 9px;border-radius:3px;font:400 12.5px/1.2 var(--font-sans);color:#5f6368">Config library</div>
+          </div>
+          <div style="padding:10px;border-top:1px solid #dadce0;display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#1e7d4a"></span><span style="font:400 11px/1.3 var(--font-sans);color:#5f6368">Profile: SACDA — UFV</span></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">w 176 fixed · surface <span class="mono">sidebar</span> · border-right 1px <span class="mono">sidebar_border</span> · sections padded 10, gap 3</td></tr>
+        <tr><td class="k">Item</td><td class="mw">pad 6 9 · radius 3 · Archivo 400 12.5/1.2 <span class="mono">muted_foreground</span>. Active: surface <span class="mono">sidebar_accent</span>, weight 500, color <span class="mono">app-head-fg</span>. Hover: <span class="mono">list_hover</span>. No left bar, no icon.</td></tr>
+        <tr><td class="k">Search</td><td class="mw">Optional first slot, own 1px bottom rule, input at the 26px height. Typing filters items and, on Enter, jumps to the first matching setting row and flashes its label for 800ms.</td></tr>
+        <tr><td class="k">Footer</td><td class="mw">Pinned bottom, own 1px top rule, 6px dot + 11px label. Dot is <span class="mono">success</span> when the active profile's server last checked OK, <span class="mono">danger</span> when it failed, <span class="mono">muted_foreground</span> when never checked.</td></tr>
+        <tr><td class="k">Pages</td><td class="mw">General · Workbench &amp; Python · Servers · Config library · Input &amp; preprocess · Config builder · Appearance · Profiles — in that order, Profiles last.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">DockedPanel</span><span class="tag reuse">reuse</span><span class="cwhere">2b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;display:flex;border:1px solid #dadce0;border-radius:4px;overflow:hidden;height:110px">
+          <div style="flex:1;background:#fff"></div>
+          <div style="width:6px;background:#e8eaed;border-left:1px solid #dadce0;border-right:1px solid #dadce0"></div>
+          <div style="width:150px;display:flex;flex-direction:column;background:#fff">
+            <div style="height:28px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#e8eaed;border-bottom:1px solid #dadce0"><span style="font:400 11.5px/1 var(--font-sans);color:#202124">Config Builder</span><span class="pv-mini">✕</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">Resize handle 6px, surface <span class="mono">table_head</span>, cursor col-resize, hover → <span class="mono">primary</span> at 30%. Tab strip 28px, surface <span class="mono">tab_bar</span>.</td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Default dock: right, 480px, min 420, max 60% of the window. Drag the tab out to float; drop within 24px of an edge to re-dock, with a <span class="mono">drop_target</span> wash and a 2px <span class="mono">drag_border</span> preview. Dock side and width persist per machine.</td></tr>
+        <tr><td class="k">Rust</td><td class="mw">Register the builder as a <span class="mono">Panel</span> in a <span class="mono">DockArea</span>; do not hand-roll snapping.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">03 · Setting anatomy</p>
+  <h2 class="h2">Page, group, row, and the marks a row can carry</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">SettingsPage · SettingGroup</span><span class="tag reuse">reuse</span><span class="cwhere">3a, 3b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:5px"><span style="font:600 14px/1.2 var(--font-sans);color:#3c4043">Servers</span><span class="pv-desc">Islandora endpoints this profile can ingest into.</span></div>
+          <div style="display:flex;flex-direction:column;gap:11px"><span style="font:600 12.5px/1 var(--font-sans);color:#3c4043">Workbench Installation</span><div class="pv-in" style="width:100%">C:\…\islandora_workbench</div></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Page</td><td class="mw">pad 16 22 20 · scroll y · header: Archivo 600 14/1.2 + description Archivo 400 11.5/1.5 <span class="mono">muted_foreground</span>, gap 5, then 16 to the first group</td></tr>
+        <tr><td class="k">Group</td><td class="mw">heading Archivo 600 12.5/1 · gap 11 between rows · gap 18 group→group · no border, no card. A group of one row still gets a heading.</td></tr>
+        <tr><td class="k">Rust</td><td class="mw">setting::SettingsPage with SettingGroup children; override the label column to 180 once, globally, not per item.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">SettingRow</span><span class="tag wrap">wrap</span><span class="cwhere">3a, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid #dadce0">
+          <div style="width:130px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:7px"><span style="font:400 12.5px/1.2 var(--font-mono);color:#202124">rollback_dir</span></div>
+            <span class="pv-desc">Folder for rollback CSVs.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+            <div class="pv-in err">empty</div>
+            <div class="pv-msg" style="color:#d93025"><span class="pv-g" style="color:#d93025">✕</span><span>A folder is needed because <span class="mono">timestamp_rollback</span> is on.</span></div>
+          </div>
+          <span style="width:44px;flex:none;text-align:right;font:400 11px/1.6 var(--font-mono);color:#9aa0a6">path</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">pad 14 0 · gap 14 · align items flex-start (center when the control is a Switch or Checkbox) · border-bottom 1px <span class="mono">table_row_border</span>, none on the last row</td></tr>
+        <tr><td class="k">Label col</td><td class="mw">w 180 fixed, flex none, gap 4. Settings: Archivo 400 12.5/1.2. Builder: Plex Mono 400 12.5/1.2, because the label is the literal YAML key. Description Archivo 400 11.5/1.4 <span class="mono">muted_foreground</span>, optional, max 2 lines.</td></tr>
+        <tr><td class="k">Control col</td><td class="mw">flex 1, min-width 0, column, gap 5. Owns its own value line, unit suffix, DefaultHint and InlineMessage. Never a tooltip for validation.</td></tr>
+        <tr><td class="k">Type col</td><td class="mw">Builder only. w 56, flex none, right, Plex Mono 400 11/1.6 <span class="mono">faint</span>. Values: <span class="mono">boolean integer string char enum path url list map map list command template ref</span></td></tr>
+        <tr><td class="k">States</td><td class="mw">Hover → no change (rows are not clickable). Focus within → label color <span class="mono">foreground</span>. Modified → ModifiedMark. Error → control border <span class="mono">danger</span> only; the row itself never tints.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">RequiredBadge · TypeBadge · DefaultHint · ModifiedMark</span><span class="tag build">build</span><span class="cwhere">1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 12.5px/1.2 var(--font-mono);color:#202124">task</span><span style="font:600 9.5px/1 var(--font-sans);letter-spacing:.09em;text-transform:uppercase;color:#1a73e8">required</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><div class="pv-sw"><span class="pv-th"></span></div><span style="font:400 12.5px/1 var(--font-sans);color:#202124">true</span><span style="font:400 11.5px/1 var(--font-sans);color:#5f6368">default: false</span></div>
+        <div style="display:flex;align-items:stretch;gap:8px"><span style="width:2px;background:#1a73e8;border-radius:1px"></span><div style="display:flex;flex-direction:column;gap:3px"><span class="pv-lbl">adaptive_pause</span><span class="pv-desc">modified from default</span></div></div>
+        <span style="font:400 11px/1 var(--font-mono);color:#9aa0a6">map list</span>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Required</td><td class="mw">Archivo 600 9.5/1, +0.09em, uppercase, <span class="mono">primary</span>, 7px after the key. Only on <span class="mono">task</span>; nothing else in the schema is required.</td></tr>
+        <tr><td class="k">Default</td><td class="mw">Archivo 400 11.5/1 <span class="mono">muted_foreground</span>, after the value, prefix "default: ". Shown only when the current value differs from the default.</td></tr>
+        <tr><td class="k">Modified</td><td class="mw">2px × full-height <span class="mono">primary</span> bar at the left edge of the label column, inset 0, radius 1, 8px gap to the text. Pairs with a 26px icon-only reset button at the right of the control column, visible on row hover or when focus is inside the row.</td></tr>
+        <tr><td class="k">Inherited</td><td class="mw">Value in <span class="mono">muted_foreground</span> plus a right-aligned mono <span class="mono">default</span> tag. The key is not written to the YAML at all.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">InlineMessage</span><span class="tag build">build</span><span class="cwhere">1b, 3b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-msg" style="color:#d93025"><span class="pv-g" style="color:#d93025">✕</span><span>A folder is needed because <span class="mono">timestamp_rollback</span> is on.</span></div>
+        <div class="pv-msg" style="color:#8a6100"><span class="pv-g" style="color:#f9ab00">!</span><span>At 3s across 1,240 rows this adds roughly an hour.</span></div>
+        <div class="pv-msg" style="color:#5f6368"><span class="pv-g" style="color:#1e7d4a">✓</span><span>Resolves to <span class="mono">…\g\logs\workbench.log</span> — folder exists, writable.</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">gap 7 · align flex-start · 5px below the control · glyph column 14px, Plex Mono 400 11/1.45 · text Archivo 400 11.5/1.45</td></tr>
+        <tr><td class="k">Error</td><td class="mw">glyph <span class="mono">✕</span> and text both <span class="mono">danger</span>. Blocks Save. Reserve for "will not parse" or "path does not exist".</td></tr>
+        <tr><td class="k">Warning</td><td class="mw">glyph <span class="mono">!</span> in <span class="mono">warning</span>, text at <span class="mono">warning</span> darkened 25% for contrast on light surfaces. Does not block Save.</td></tr>
+        <tr><td class="k">Info</td><td class="mw">glyph <span class="mono">✓</span> in <span class="mono">success</span>, text in <span class="mono">muted_foreground</span>. Confirmation, not praise — one line, facts only.</td></tr>
+        <tr><td class="k">Rules</td><td class="mw">One message per control at a time, worst level wins. Messages never animate in. Text is a full sentence and names the other setting that caused the conflict.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">Callout</span><span class="tag wrap">wrap</span><span class="cwhere">3b, 3c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;display:flex;gap:8px;align-items:flex-start;padding:10px 11px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px">
+          <span class="pv-g" style="color:#f9ab00">!</span>
+          <span style="font:400 11.5px/1.5 var(--font-sans);color:#5f6368"><b style="color:#3c4043">production</b> needs confirmation before a run. Destructive tasks always prompt.</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">pad 10 11 · gap 8 · radius 4 · surface <span class="mono">table_head</span> · border 1px <span class="mono">border</span></td></tr>
+        <tr><td class="k">Type</td><td class="mw">Archivo 400 11.5/1.5 <span class="mono">muted_foreground</span>; emphasised nouns at <span class="mono">app-head-fg</span>, weight 600, never bold-colored</td></tr>
+        <tr><td class="k">Rules</td><td class="mw">Group-level, at the end of the group it explains. Never tinted by level — only the glyph carries level. Maximum one per group; a page with three callouts is a page with a structure problem.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">04 · Text and value inputs</p>
+  <h2 class="h2">Everything you type into</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">TextInput · MonoInput</span><span class="tag reuse">reuse</span><span class="cwhere">3a, 3b, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-in" style="width:100%;font-family:var(--font-sans)">Main batch items</div>
+        <div class="pv-in" style="width:100%">/usr/local/bin/python3.12</div>
+        <div class="pv-in foc" style="width:100%">focused</div>
+        <div class="pv-in" style="width:100%;opacity:.5">disabled</div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">h 30 · pad 7 10 · radius 4 · border 1px <span class="mono">input</span> · surface <span class="mono">table_head</span> · full width of its column</td></tr>
+        <tr><td class="k">Type</td><td class="mw">TextInput Archivo 400 12.5/1.2; MonoInput Plex Mono 400 12.5/1.2. Placeholder <span class="mono">muted_foreground</span>, same size, never italic.</td></tr>
+        <tr><td class="k">States</td><td class="mw">Hover border → <span class="mono">muted_foreground</span>. Focus surface → <span class="mono">background</span>, border → <span class="mono">primary</span>, 2px ring <span class="mono">primary</span> at 35% outside. Error border → <span class="mono">danger</span> with surface <span class="mono">background</span>. Disabled opacity .5.</td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Trim on blur. Never auto-quote, never auto-capitalise. Overflow truncates with an ellipsis at the tail and a tooltip with the full value. Validation runs on blur, not on keystroke, except path existence which is debounced 300ms.</td></tr>
+        <tr><td class="k">Use</td><td class="mw">MonoInput for any value that lands in YAML verbatim. TextInput for labels and descriptions the app owns.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">PathField</span><span class="tag wrap">wrap</span><span class="cwhere">3a, 3b, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-row"><div class="pv-in" style="flex:1;min-width:0">./g/logs/workbench.log</div><span class="pv-btn">Browse…</span></div>
+        <div class="pv-msg" style="color:#5f6368"><span class="pv-g" style="color:#1e7d4a">✓</span><span>Resolves to <span class="mono">C:\islandora_workbench\g\logs\workbench.log</span></span></div>
+        <div class="pv-row"><div class="pv-in err" style="flex:1;min-width:0;color:#5f6368">empty</div><span class="pv-btn">Browse…</span></div>
+        <div class="pv-msg" style="color:#d93025"><span class="pv-g" style="color:#d93025">✕</span><span>No such directory</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">MonoInput flex 1 + 8px gap + Button "Browse…" at 30px, pad 0 13, flex none, never truncated</td></tr>
+        <tr><td class="k">Variants</td><td class="mw"><span class="mono">file</span> (with an extension filter), <span class="mono">dir</span>, <span class="mono">new_file</span> (parent must exist, file need not). The dialog opens at the current value's parent, else the config directory.</td></tr>
+        <tr><td class="k">Display</td><td class="mw">Stored relative to the config directory when the path is inside it, absolute otherwise. Truncate at the HEAD — <span class="mono">…/scripts/preprocess.py</span>. Resolved absolute path shown as an info InlineMessage under the field.</td></tr>
+        <tr><td class="k">Validation</td><td class="mw">Existence, and writability for log and rollback targets. Debounced 300ms while typing, immediate on blur and after a dialog pick. Missing → error. Exists but wrong kind (file where a dir is wanted) → error naming the kind.</td></tr>
+        <tr><td class="k">Drop</td><td class="mw">Whole field is a drop target: surface <span class="mono">drop_target</span>, 2px <span class="mono">drag_border</span> while hovering a dragged path. Multi-drop takes the first item.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">UrlField · CharField · NumberStepper</span><span class="tag wrap">wrap</span><span class="cwhere">3b, 1b, 1c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-in" style="width:100%">https://isle.dvnl.work</div>
+        <div class="pv-row"><div class="pv-in" style="width:44px;justify-content:center;padding:7px 0">|</div><span class="pv-desc">One character. Separates values inside a CSV cell.</span></div>
+        <div class="pv-row" style="width:auto">
+          <div style="display:flex;align-items:center;height:30px;box-sizing:border-box;border:1px solid #dadce0;border-radius:4px;background:#e8eaed;overflow:hidden">
+            <span style="padding:0 11px;align-self:stretch;display:flex;align-items:center;border-right:1px solid #dadce0;font:400 13px/1 var(--font-mono);color:#5f6368">−</span>
+            <span style="min-width:44px;text-align:center;font:400 13px/1 var(--font-mono);color:#202124">3</span>
+            <span style="padding:0 11px;align-self:stretch;display:flex;align-items:center;border-left:1px solid #dadce0;font:400 13px/1 var(--font-mono);color:#5f6368">+</span>
+          </div>
+          <span style="font:400 12px/1 var(--font-sans);color:#5f6368">seconds</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Url</td><td class="mw">MonoInput geometry. Scheme validation only, on blur — <span class="mono">http</span> or <span class="mono">https</span>, host non-empty. Never fetch while typing. A Test action, where one exists, belongs to the EntityCard, not the field.</td></tr>
+        <tr><td class="k">Char</td><td class="mw">w 44 fixed, centered, pad 7 0, 1 grapheme max. Extra input replaces rather than appends. Description sits inline to the right at 11.5px, not underneath.</td></tr>
+        <tr><td class="k">Stepper</td><td class="mw">h 30, radius 4, one border around all three parts; − and + are 1px-separated 33px cells in <span class="mono">muted_foreground</span>, value cell min-width 44 centered, Plex Mono 400 13/1. Unit suffix outside the control, Archivo 400 12/1 <span class="mono">muted_foreground</span>, 8px gap.</td></tr>
+        <tr><td class="k">Stepper rules</td><td class="mw">min/max from the schema; buttons disable at the bounds (opacity .5, no press state). Empty is legal and means "use the default" — it is not 0. Arrow keys step by 1, shift-arrow by 10. Text is editable directly; non-integers are rejected on blur with the old value restored.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">TemplateField</span><span class="tag build">build</span><span class="cwhere">1c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-in" style="width:100%;background:#fff">rollback.<span style="color:#1a73e8">${config_filename}</span>.<span style="color:#1a73e8">${timestamp}</span>.csv</div>
+        <div class="pv-msg" style="color:#5f6368"><span class="pv-g" style="color:#1e7d4a">✓</span><span><span class="mono">rollback.main.20260831T1204.csv</span></span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">MonoInput geometry, surface <span class="mono">background</span> so the token highlight reads</td></tr>
+        <tr><td class="k">Tokens</td><td class="mw"><span class="mono">${…}</span> spans in <span class="mono">primary</span>, weight unchanged, no background. Unknown token name → underline in <span class="mono">danger</span> plus an error message listing the legal tokens.</td></tr>
+        <tr><td class="k">Preview</td><td class="mw">Resolved filename as an info InlineMessage, recomputed on every keystroke against the current config. Also used for <span class="mono">csv_value_templates</span> cells, where <span class="mono">$csv_value</span> is the token.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">05 · Choice controls</p>
+  <h2 class="h2">Booleans, enums, and sets</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">Switch · Checkbox</span><span class="tag reuse">reuse</span><span class="cwhere">3a, 3b, 2c, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-row" style="width:auto"><div class="pv-sw"><span class="pv-th"></span></div><span style="font:400 12.5px/1 var(--font-sans);color:#202124">true</span><span style="font:400 11.5px/1 var(--font-sans);color:#5f6368">default: false</span></div>
+        <div class="pv-row" style="width:auto"><div class="pv-sw off"><span class="pv-th" style="background:#5f6368"></span></div><span style="font:400 12.5px/1 var(--font-sans);color:#5f6368">false</span></div>
+        <div class="pv-row" style="width:auto"><span style="width:15px;height:15px;box-sizing:border-box;border-radius:3px;background:#1a73e8;border:1px solid #1a73e8;display:flex;align-items:center;justify-content:center;font:400 10px/1 var(--font-mono);color:#fff">✓</span><span style="font:400 12px/1 var(--font-sans);color:#202124">Auto-accept prompts</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Switch</td><td class="mw">track 34×19 radius 999, thumb 15 circle, inset 2. On: track <span class="mono">primary</span>, thumb <span class="mono">background</span>. Off: track <span class="mono">switch</span> (= border), thumb <span class="mono">muted_foreground</span>. 120ms ease-out on the thumb and track together.</td></tr>
+        <tr><td class="k">Value text</td><td class="mw">Literal <span class="mono">true</span>/<span class="mono">false</span> in Archivo 400 12.5/1 to the right, 10px gap — the YAML word, not "On". <span class="mono">foreground</span> when true, <span class="mono">muted_foreground</span> when false.</td></tr>
+        <tr><td class="k">Checkbox</td><td class="mw">15×15, radius 3, border 1px <span class="mono">input</span>; checked fills <span class="mono">primary</span> with a 10px white glyph. 8px to its label. Used ONLY for run-time options like Auto-accept and for multi-select inside a RowEditor. A YAML boolean is always a Switch.</td></tr>
+        <tr><td class="k">Row align</td><td class="mw">A row whose control is a Switch or Checkbox aligns items center, not flex-start.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">SegmentedControl</span><span class="tag wrap">wrap</span><span class="cwhere">1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="display:flex;border:1px solid #dadce0;border-radius:4px;overflow:hidden;width:fit-content;height:30px;box-sizing:border-box">
+          <span style="padding:0 13px;display:flex;align-items:center;background:#1a73e8;color:#fff;font:400 12.5px/1 var(--font-sans)">create</span>
+          <span style="padding:0 13px;display:flex;align-items:center;background:#e8eaed;color:#3c4043;border-left:1px solid #dadce0;font:400 12.5px/1 var(--font-sans)">add_media</span>
+          <span style="padding:0 13px;display:flex;align-items:center;background:#e8eaed;color:#3c4043;border-left:1px solid #dadce0;font:400 12.5px/1 var(--font-sans)">update</span>
+          <span style="padding:0 11px;display:flex;align-items:center;background:#e8eaed;color:#5f6368;border-left:1px solid #dadce0;font:400 12.5px/1 var(--font-mono)">+9</span>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">h 30 · one 1px <span class="mono">border</span> around the group, radius 4, overflow hidden · segments pad 0 13, divided by 1px <span class="mono">border</span> · width fit-content</td></tr>
+        <tr><td class="k">States</td><td class="mw">Rest surface <span class="mono">table_head</span>, text <span class="mono">app-head-fg</span>. Selected surface <span class="mono">primary</span>, text <span class="mono">primary_foreground</span>. Hover unselected → <span class="mono">list_hover</span>. Focus ring wraps the whole group, arrow keys move selection.</td></tr>
+        <tr><td class="k">Overflow</td><td class="mw">Up to 4 options inline. Beyond that show the first 3 plus a <span class="mono">+N</span> segment in mono <span class="mono">muted_foreground</span> that opens a Dropdown of the rest; picking one swaps it into the visible row. At 8+ options use a plain Dropdown instead — <span class="mono">task</span> with its 12 values is the borderline case and keeps the segmented form because it is the row people look at first.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">Dropdown · NullableDropdown</span><span class="tag reuse">reuse</span><span class="cwhere">3a, 2c, 1c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-in" style="width:100%;font-family:var(--font-sans);justify-content:space-between"><span>create — Create new nodes</span><span class="pv-mini">▾</span></div>
+        <div class="pv-in" style="width:100%;font-family:var(--font-sans);justify-content:space-between;color:#5f6368"><span style="color:#5f6368">none</span><span class="pv-mini">▾</span></div>
+        <div style="width:100%;background:#fff;border:1px solid #dadce0;border-radius:4px;box-shadow:0 4px 12px rgba(23,20,15,.12);overflow:hidden">
+          <div style="height:30px;display:flex;align-items:center;padding:0 10px;background:#e8f0fe;font:400 12.5px/1 var(--font-sans);color:#202124">md5</div>
+          <div style="height:30px;display:flex;align-items:center;padding:0 10px;font:400 12.5px/1 var(--font-sans);color:#202124">sha1</div>
+          <div style="height:30px;display:flex;align-items:center;padding:0 10px;font:400 12.5px/1 var(--font-mono);color:#5f6368;border-top:1px solid #dadce0">none</div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Trigger</td><td class="mw">Input geometry, h 30, pad 7 10, caret <span class="mono">▾</span> 10px mono <span class="mono">muted_foreground</span> right. Label Archivo 400 12.5 when it is prose (<span class="mono">create — Create new nodes</span>), Plex Mono when it is a bare YAML value.</td></tr>
+        <tr><td class="k">Menu</td><td class="mw">radius 4, surface <span class="mono">popover</span>, popover shadow, rows 30px pad 0 10, hover <span class="mono">list_hover</span>, selected <span class="mono">list_active</span>. Min width = trigger width, max height 280 then scroll. Opens 4px below, flips above when short of room. 160ms fade+2px rise.</td></tr>
+        <tr><td class="k">Nullable</td><td class="mw"><span class="mono">none</span> is a real row, last, above a 1px rule, mono <span class="mono">muted_foreground</span>. When selected the trigger shows <span class="mono">none</span> in <span class="mono">muted_foreground</span> and the key is omitted from the YAML. No separate clear button.</td></tr>
+        <tr><td class="k">Searchable</td><td class="mw">At 12+ options add a 30px search field at the top of the menu (<span class="mono">scrollable_dropdown</span>). Used by the preprocess-script and vocabulary pickers.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">ChipList · Chip</span><span class="tag build">build</span><span class="cwhere">1b, 3c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%">
+          <span class="pv-chip">islandora_models<span class="pv-x">✕</span></span>
+          <span class="pv-chip">genre<span class="pv-x">✕</span></span>
+          <span class="pv-chip">copyright<span class="pv-x">✕</span></span>
+          <span class="pv-dash">+ Add</span>
+        </div>
+        <span class="pv-desc">4 of 10 vocabularies on <span class="mono">isle.dvnl.work</span>. Type to search the live list.</span>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Chip</td><td class="mw">h 22 · pad 0 8 · gap 6 · radius 3 · surface <span class="mono">table_head</span> · border 1px <span class="mono">border</span> · Plex Mono 400 12/1 <span class="mono">foreground</span> · remove glyph 11px <span class="mono">muted_foreground</span>, hover <span class="mono">danger</span></td></tr>
+        <tr><td class="k">List</td><td class="mw">wrap, gap 6, AddRowButton as the last item. Backspace in the empty add field removes the last chip. Comma, space or Enter commits a chip; duplicates are silently dropped, not flagged.</td></tr>
+        <tr><td class="k">Source</td><td class="mw">Free text, or a live list from the server (vocabularies, fields). Live mode shows a searchable Dropdown on Add and a count line beneath: "4 of 10 on <host>". If the server is unreachable the field stays free-text and the count line becomes a warning.</td></tr>
+        <tr><td class="k">Not for</td><td class="mw">Ordered lists. Chips imply order does not matter — <span class="mono">ignore_csv_columns</span> is chips, <span class="mono">csv_field_templates</span> is a RowEditor.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">06 · Actions</p>
+  <h2 class="h2">Four buttons, and where each is allowed</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">Button · GhostButton · IconButton · AddRowButton</span><span class="tag reuse">reuse</span><span class="cwhere">all</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-row" style="width:auto;flex-wrap:wrap"><span class="pv-btnp">Run Ingest</span><span class="pv-btn">Browse…</span><span class="pv-btng">Duplicate</span><span class="pv-btnd">Delete</span></div>
+        <div class="pv-row" style="width:auto"><span class="pv-btn" style="width:30px;padding:0;justify-content:center">▢</span><span class="pv-btn" style="height:26px;padding:0 10px">Small</span><span class="pv-dash">+ Add a server</span></div>
+        <div class="pv-row" style="width:auto"><span class="pv-btnp" style="opacity:.5">Save to library</span><span class="pv-mini">disabled while an error stands</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Primary</td><td class="mw">h 30 · pad 0 13 · radius 4 · surface <span class="mono">primary</span> · text <span class="mono">primary_foreground</span> · border 1px <span class="mono">primary</span>. Hover <span class="mono">primary_hover</span>, press <span class="mono">primary_active</span>. Exactly one per window region: Run Ingest, Save to library, Add Configuration.</td></tr>
+        <tr><td class="k">Secondary</td><td class="mw">Same box, surface <span class="mono">secondary</span>, text <span class="mono">secondary_foreground</span>, border 1px <span class="mono">border</span>. Hover <span class="mono">button_hover</span>. The default button.</td></tr>
+        <tr><td class="k">Ghost</td><td class="mw">h 26 · pad 0 10 · transparent, no border · text Archivo 400 12/1 <span class="mono">muted_foreground</span>. Hover surface <span class="mono">list_hover</span> and text <span class="mono">foreground</span>. This replaces every bare text action in the mockups.</td></tr>
+        <tr><td class="k">Danger</td><td class="mw">Same box as secondary, border and text <span class="mono">danger</span>, surface <span class="mono">background</span>; hover surface <span class="mono">danger</span> at 8%. Only inside a ConfirmDialog or as a row's destructive action.</td></tr>
+        <tr><td class="k">Icon</td><td class="mw">30×30 (26×26 small), glyph 12px centered, otherwise the secondary or ghost skin. Always has a tooltip — an icon with no tooltip is a bug.</td></tr>
+        <tr><td class="k">AddRow</td><td class="mw">h 26 · pad 0 10 · radius 3 · border 1px dashed <span class="mono">border</span> · text Archivo 400 12/1 <span class="mono">muted_foreground</span> · label always "+ " + the singular noun ("+ Add a server", "+ Add row"). Hover: border and text → <span class="mono">primary</span>, no fill.</td></tr>
+        <tr><td class="k">Disabled</td><td class="mw">opacity .5, no hover, cursor default, tooltip saying why. Save is disabled only by errors, never by warnings.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">07 · Composite editors</p>
+  <h2 class="h2">One RowEditor, four column specs</h2>
+  <p class="p">All four YAML collection shapes are the same widget with a different column spec and parse function. Build <span class="mono">RowEditor</span> once; the others are constructor calls.</p>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">RowEditor</span><span class="tag build">build</span><span class="cwhere">1b, 1c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div class="pv-box">
+          <div style="display:grid;grid-template-columns:16px 1fr 1.4fr 22px;background:#e8eaed;border-bottom:1px solid #dadce0">
+            <span></span><span class="pv-hd" style="padding:7px 10px">CSV column</span><span class="pv-hd" style="padding:7px 10px">Template</span><span></span>
+          </div>
+          <div style="display:grid;grid-template-columns:16px 1fr 1.4fr 22px;border-bottom:1px solid #dadce0">
+            <span style="display:flex;align-items:center;justify-content:center;font:400 10px/1 var(--font-mono);color:#9aa0a6">⋮</span>
+            <span class="pv-cell">field_linked_agent</span><span class="pv-cell">relators:cre:$csv_value</span>
+            <span style="display:flex;align-items:center;justify-content:center" class="pv-x">✕</span>
+          </div>
+          <div style="display:grid;grid-template-columns:16px 1fr 1.4fr 22px;border-bottom:1px solid #dadce0;background:#f3f3f3">
+            <span></span><span class="pv-cell" style="background:transparent">file</span><span class="pv-cell" style="background:transparent">access/$csv_value</span><span></span>
+          </div>
+          <div style="padding:6px 8px"><span class="pv-dash">+ Add row</span></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Shell</td><td class="mw">border 1px <span class="mono">border</span>, radius 4, overflow hidden, full width of the control column. Header row 30px, surface <span class="mono">table_head</span>, labels Plex Mono 500 10.5 caps +0.07em <span class="mono">table_head_foreground</span> — shown only when columns are named.</td></tr>
+        <tr><td class="k">Rows</td><td class="mw">h 30, 1px <span class="mono">table_row_border</span> between, zebra <span class="mono">table_even</span> on odd rows. Grid columns: 16px drag handle · the value columns · 22px remove. Handle and remove glyphs are hidden until row hover or keyboard focus.</td></tr>
+        <tr><td class="k">Cells</td><td class="mw">Plex Mono 400 12/1.2, pad 7 10, borderless until focused, then the full focus treatment inset inside the cell (surface <span class="mono">background</span>, 1px <span class="mono">primary</span>, no outer ring). Tab moves cell to cell, Enter on the last cell adds a row.</td></tr>
+        <tr><td class="k">Footer</td><td class="mw">AddRowButton in a 6px 8px strip, no top border. An empty editor shows only the header and the add strip, never an empty-state illustration.</td></tr>
+        <tr><td class="k">Errors</td><td class="mw">Per cell: 1px <span class="mono">danger</span> border on the cell and one message under the whole editor naming the row number. Duplicate keys in a MapEditor mark both cells.</td></tr>
+        <tr><td class="k">Specs</td><td class="mw"><span class="mono">ListEditor&lt;String&gt;</span> 1 unnamed col · <span class="mono">ListEditor&lt;i64&gt;</span> 1 col, integer parse, right-aligned · <span class="mono">MapEditor</span> key 100px + value · <span class="mono">PairListEditor</span> 1fr + 1.4fr, order significant, duplicate keys legal · <span class="mono">CommandListEditor</span> 1 col, rows grow to 3 lines, warn when argv[0] is not on PATH</td></tr>
+        <tr><td class="k">Reorder</td><td class="mw">Drag by the handle; 2px <span class="mono">primary</span> insertion line between rows. Order-insignificant specs (ListEditor of strings for a set, MapEditor) hide the handle entirely.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">08 · Custom widgets</p>
+  <h2 class="h2">The five pieces with no upstream equivalent</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">SettingPicker</span><span class="tag wrap">wrap</span><span class="cwhere">1a, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;display:flex;align-items:center;gap:10px;height:34px;box-sizing:border-box;padding:0 12px;background:#fff;border:1px solid #1a73e8;border-radius:4px;box-shadow:0 0 0 2px #1a73e859"><span style="font:400 13px/1 var(--font-mono);color:#1a73e8">›</span><span style="font:400 13px/1 var(--font-sans);color:#202124">roll</span><div style="flex:1"></div><span class="pv-mini">7 of 142</span></div>
+        <div style="width:100%;background:#fff;border:1px solid #dadce0;border-radius:6px;box-shadow:0 4px 12px rgba(23,20,15,.12);overflow:hidden">
+          <div style="padding:8px 12px 6px;background:#e8eaed;border-bottom:1px solid #dadce0;display:flex;gap:8px;align-items:center"><span class="pv-hd">Rollback</span><span class="pv-mini">3</span></div>
+          <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;background:#e8f0fe;border-bottom:1px solid #dadce0">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:400 12.5px/1.2 var(--font-mono);color:#202124">rollback_dir</span><span class="pv-desc">Folder for rollback CSVs.</span></div>
+            <span class="pv-chip" style="height:20px">path</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid #dadce0"><span style="flex:1;font:400 12.5px/1.2 var(--font-mono);color:#202124">timestamp_rollback</span><span class="pv-mini">added</span></div>
+          <div style="display:flex;gap:14px;padding:7px 12px;background:#e8eaed"><span class="pv-mini">↑↓ move</span><span class="pv-mini">↵ add</span><span class="pv-mini">esc close</span></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Trigger</td><td class="mw">h 34, pad 0 12, radius 4, surface <span class="mono">background</span>, border 1px <span class="mono">border</span> → <span class="mono">primary</span> with focus ring when open. Leading <span class="mono">›</span> 13px mono <span class="mono">primary</span>; query Archivo 400 13/1; right counter "7 of 142" 11.5px <span class="mono">muted_foreground</span>. Placeholder: <span class="mono">Search settings to add — try "log", "rollback", "media"</span>.</td></tr>
+        <tr><td class="k">Panel</td><td class="mw">w = trigger, max-h 360, 6px below, radius 6, surface <span class="mono">popover</span>, popover shadow, 160ms fade + 2px rise. Virtualized via <span class="mono">searchable_list</span>; never filter by hand.</td></tr>
+        <tr><td class="k">Group header</td><td class="mw">sticky, pad 8 12 6, surface <span class="mono">table_head</span>, 1px bottom rule, Plex Mono 500 10.5 caps +0.07em, count after it in <span class="mono">faint</span>. Groups follow the schema's own sections.</td></tr>
+        <tr><td class="k">Result row</td><td class="mw">min-h 34, pad 8 12, gap 10, 1px bottom rule. Key Plex Mono 400 12.5/1.2 <span class="mono">foreground</span>; description Archivo 400 11.5/1.35 <span class="mono">muted_foreground</span>, rendered only on the highlighted row; type chip right at h 20. Highlighted row surface <span class="mono">list_active</span>. Already added → whole row opacity .5, mono <span class="mono">added</span> tag, not selectable.</td></tr>
+        <tr><td class="k">Keys</td><td class="mw">↑↓ move, Enter adds and keeps the panel open with the query intact, Esc closes, Tab closes and focuses the newly added row's control. Match on key name first, then description; substring, case-insensitive, no fuzzy scoring.</td></tr>
+        <tr><td class="k">Footer</td><td class="mw">pad 7 12, surface <span class="mono">table_head</span>, three hints at 11px <span class="mono">faint</span>. Empty result: one 34px row reading "No setting matches roll" — no illustration, no suggestion list.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">YamlPreview</span><span class="tag wrap">wrap</span><span class="cwhere">1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;border:1px solid #dadce0;border-radius:4px;overflow:hidden;background:#fff">
+          <div style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid #dadce0"><span class="pv-mini">▾</span><span class="pv-hd">YAML preview</span><div style="flex:1"></div><span class="pv-mini">read-only</span></div>
+          <div style="padding:10px 0;font:400 11.5px/1.6 var(--font-mono)">
+            <div style="display:flex;gap:12px;padding:0 12px"><span style="width:16px;text-align:right;color:#9aa0a6">17</span><span style="white-space:pre;color:#202124">timestamp_rollback: <span style="color:#1a73e8">true</span></span></div>
+            <div style="display:flex;gap:12px;padding:0 12px;background:#fce8e6"><span style="width:16px;text-align:right;color:#d93025">18</span><span style="white-space:pre;color:#d93025">rollback_dir:</span></div>
+            <div style="display:flex;gap:12px;padding:0 12px 0 40px"><span style="font:400 11px/1.6 var(--font-sans);color:#d93025">↑ value required</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Box</td><td class="mw">Panel 400 wide docked right of the builder body, 1px left border, surface <span class="mono">background</span> — not a dark code well. Header 30px with a collapse caret and a mono <span class="mono">read-only</span> note right.</td></tr>
+        <tr><td class="k">Lines</td><td class="mw">Plex Mono 400 11.5/1.6, pad 0 12, gutter 16px right-aligned <span class="mono">faint</span>, 12px gap to the text. Line numbers appear only past 40 lines. Keys <span class="mono">foreground</span>, scalars <span class="mono">primary</span>, comments <span class="mono">muted_foreground</span> — three colors, no more.</td></tr>
+        <tr><td class="k">Errors</td><td class="mw">Offending line: surface <span class="mono">danger</span> at 10%, gutter number and text in <span class="mono">danger</span>, plus an indented 11px annotation line beneath it. Clicking either focuses the matching setting row.</td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Re-renders on every keystroke, debounced 120ms. Key order = the order the settings were added, with <span class="mono">task</span> always first. Copy YAML action in the header on hover.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">TaskChainTree · RunOrderStrip</span><span class="tag build">build</span><span class="cwhere">1d, 2c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="pv-chip" style="height:26px;border-color:#1a73e8"><span style="color:#1a73e8">1</span>main.yml</span><span class="pv-mini">›</span>
+          <span class="pv-chip" style="height:26px"><span style="color:#5f6368">2</span>pages.yml</span><span class="pv-mini">›</span>
+          <span class="pv-chip" style="height:26px"><span style="color:#5f6368">3</span>media.yml</span>
+        </div>
+        <div style="width:100%;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;background:#e8f0fe;border-radius:3px"><span class="pv-mini">▾</span><span style="font:400 12px/1 var(--font-mono);color:#202124">main.yml</span><span class="pv-mini">create</span></div>
+          <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 8px 0 26px"><span style="font:400 12px/1 var(--font-mono);color:#202124">pages.yml</span><span class="pv-mini">create</span></div>
+          <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 8px 0 44px"><span style="font:400 12px/1 var(--font-mono);color:#202124">media.yml</span><span class="pv-mini">add_media</span></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Strip</td><td class="mw">Chips h 26, radius 3, gap 6, Plex Mono 400 12/1; leading index in <span class="mono">muted_foreground</span> (<span class="mono">primary</span> on the current config), <span class="mono">›</span> separator in <span class="mono">faint</span>. Shows the flattened depth-first run order. Wraps rather than scrolls.</td></tr>
+        <tr><td class="k">Tree</td><td class="mw">Upstream <span class="mono">tree</span>. Rows h 28, indent 18 per level, radius 3, hover <span class="mono">list_hover</span>, selected <span class="mono">list_active</span>. Row: caret 10px · config name mono 12 · task name 11px <span class="mono">muted_foreground</span> · on hover, ghost actions Open, Unlink.</td></tr>
+        <tr><td class="k">Cycles</td><td class="mw">A drop that would create a loop is refused: the offending edge draws in <span class="mono">danger</span> for 800ms and the row snaps back. No dialog, no toast.</td></tr>
+        <tr><td class="k">Depth</td><td class="mw">Warn at depth 4 and beyond with a Callout, do not block. A config referenced twice appears twice in the strip and once in the tree, with a <span class="mono">×2</span> mono tag.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">EntityCard</span><span class="tag build">build</span><span class="cwhere">3b, 3c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;display:flex;align-items:center;gap:9px;padding:9px 11px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;overflow:hidden">
+          <span style="width:6px;height:6px;border-radius:50%;background:#1e7d4a;flex:none"></span>
+          <span style="font:600 12.5px/1.2 var(--font-sans);color:#3c4043;flex:none">production</span>
+          <span style="font:400 11.5px/1.2 var(--font-mono);color:#5f6368;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">islandora.ufv.ca</span>
+          <div style="flex:1;min-width:0"></div><span class="pv-btng">Test</span><span class="pv-btng" style="padding:0 8px">✕</span>
+        </div>
+        <div style="width:100%;box-sizing:border-box;padding:10px 11px;background:#e8eaed;border:1px solid #1a73e8;border-radius:4px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:#d93025"></span><span style="font:600 12.5px/1.2 var(--font-sans);color:#3c4043">dev</span><div style="flex:1"></div><span class="pv-btng">Test</span><span class="pv-btng">✕</span></div>
+          <div style="display:flex;gap:9px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 var(--font-sans);color:#5f6368">Label</span><div class="pv-in" style="background:#fff;height:26px;font-family:var(--font-sans)">dev</div></div>
+            <div style="flex:2;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 var(--font-sans);color:#5f6368">Server URL</span><div class="pv-in" style="background:#fff;height:26px">https://isle.dvnl.work</div></div>
+          </div>
+          <div class="pv-msg" style="color:#d93025"><span class="pv-g" style="color:#d93025">✕</span><span>Last checked 12:03 — HTTP 530, host unreachable.</span></div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Collapsed</td><td class="mw">pad 9 11 · gap 9 · radius 4 · surface <span class="mono">table_head</span> · border 1px <span class="mono">border</span>. Row: 6px status dot · name Archivo 600 12.5/1.2 · one mono detail <span class="mono">muted_foreground</span> · spacer · ghost action cluster (Edit, Test, Duplicate, ✕) revealed on hover, except ✕ which is always present.</td></tr>
+        <tr><td class="k">Expanded</td><td class="mw">Same box, border → <span class="mono">primary</span>, column layout gap 8. Header row keeps the dot, name and actions; fields below in a 1fr/2fr grid with 11px labels above 26px inputs; validation as an InlineMessage last. Only one card expanded at a time within a list.</td></tr>
+        <tr><td class="k">Meta chips</td><td class="mw">Profile cards carry a wrapped chip row: h 22, surface <span class="mono">background</span>, border 1px <span class="mono">border</span>, mono 11 <span class="mono">muted_foreground</span> — "2 servers", "6 configs", "source: Google Sheet". Facts only, never actions.</td></tr>
+        <tr><td class="k">Active</td><td class="mw">The active profile card: dot <span class="mono">success</span> plus a mono <span class="mono">active</span> tag in <span class="mono">primary</span> caps 10/+0.08em after the name. Inactive cards get a ghost "Switch to".</td></tr>
+        <tr><td class="k">Used by</td><td class="mw">Servers, Profiles, Config library. One widget, three column specs — do not write three cards.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">LockedBand · TemplateCard</span><span class="tag build">build</span><span class="cwhere">1a</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;padding:11px 13px;background:#f3f3f3;border:1px solid #dadce0;border-radius:4px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="pv-hd">Supplied by the app at run time</span><span class="pv-mini">you don't set these here</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <span class="pv-chip" style="background:#fff;gap:7px">host<span style="font-family:var(--font-sans);color:#5f6368">Ingest server</span></span>
+            <span class="pv-chip" style="background:#fff;gap:7px">input_csv<span style="font-family:var(--font-sans);color:#5f6368">Processed sheet</span></span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:11px 13px;width:172px;box-sizing:border-box;background:#fff;border:1px solid #dadce0;border-radius:4px"><span style="font:600 12.5px/1.2 var(--font-sans);color:#202124">Create nodes</span><span style="font:400 11px/1.4 var(--font-sans);color:#5f6368">task: create, plus 6 settings</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">LockedBand</td><td class="mw">pad 11 13 · radius 4 · surface <span class="mono">table_even</span> · border 1px <span class="mono">border</span>. Eyebrow + aside, then wrapped pills: mono key + Archivo 11.5 source note, surface <span class="mono">background</span>. Not interactive, not focusable, no disabled styling — these are facts, not disabled controls.</td></tr>
+        <tr><td class="k">Keys</td><td class="mw"><span class="mono">host</span>, <span class="mono">credentials_file_path</span>, <span class="mono">input_csv</span>. Sits directly under the title block, above the picker.</td></tr>
+        <tr><td class="k">TemplateCard</td><td class="mw">w 172 · pad 11 13 · gap 4 · radius 4 · surface <span class="mono">background</span> · border 1px <span class="mono">border</span>. Title Archivo 600 12.5/1.2, subtitle Archivo 400 11/1.4 <span class="mono">muted_foreground</span> naming the task and the setting count. Hover: border <span class="mono">primary</span>. Shown only in the empty builder, in a wrapped row under a "Or start from a template" eyebrow.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">09 · Main window and feedback</p>
+  <h2 class="h2">Steps, log, problems, dialogs</h2>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">StepSection</span><span class="tag build">build</span><span class="cwhere">2c</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:400 11px/1 var(--font-mono);color:#5f6368">1</span><span style="font:600 13px/1 var(--font-sans);color:#3c4043">Input source</span><div style="flex:1"></div><span class="pv-mini">optional step</span></div>
+          <div class="pv-in" style="width:100%;font-family:var(--font-sans);justify-content:space-between;border-color:#1a73e8"><span>Google Sheet → CSV</span><span class="pv-mini">plugin ▾</span></div>
+          <div style="padding:11px;background:#e8eaed;border:1px solid #dadce0;border-radius:4px;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 11.5px/1 var(--font-sans);color:#3c4043">Sheet URL</span><div class="pv-in" style="background:#fff">…N1pTA/edit?gid=0</div></div>
+            <div class="pv-row"><span class="pv-btn">Process</span><span class="pv-btng">Open processed</span><div style="flex:1"></div><span class="pv-mini">last run 11:52</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Header</td><td class="mw">gap 8 · index Plex Mono 400 11/1 <span class="mono">muted_foreground</span> · title Archivo 600 13/1 <span class="mono">app-head-fg</span> · right aside 11px <span class="mono">muted_foreground</span> ("optional step")</td></tr>
+        <tr><td class="k">Body</td><td class="mw">gap 9, pad 16 14 0 on the section. A plugin's own fields sit in a nested block: pad 11, radius 4, surface <span class="mono">table_head</span>, border 1px <span class="mono">border</span>, field labels Archivo 400 11.5/1 above 30px inputs on <span class="mono">background</span>.</td></tr>
+        <tr><td class="k">Steps</td><td class="mw">1 Input source (optional) · 2 Config · 3 Server. Numbered in run order. The step's own action button is secondary; only step 3's Run Ingest is primary.</td></tr>
+        <tr><td class="k">Plugin</td><td class="mw">The source selector is a Dropdown with a mono <span class="mono">plugin</span> tag before the caret. Changing it swaps the field block entirely; values are kept per plugin so switching back does not lose them.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">LogPane · ProblemSummary</span><span class="tag wrap">wrap</span><span class="cwhere">2c, 1b</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;padding:11px;background:#fff;border:1px solid #dadce0;border-radius:4px;display:flex;flex-direction:column;gap:6px;min-height:70px">
+          <span style="font:400 11.5px/1.55 var(--font-mono);color:#d93025">[Server] https://isle.dvnl.work: Error response (HTTP 530)</span>
+          <span style="font:400 11.5px/1.55 var(--font-mono);color:#5f6368">[Source] Google Sheet → CSV: wrote 1,240 rows to metadata.csv</span>
+        </div>
+        <div class="pv-row" style="width:auto"><span style="display:flex;align-items:center;gap:6px;font:400 12px/1 var(--font-sans);color:#d93025"><span class="pv-g" style="color:#d93025">✕</span>1 problem to fix</span><span style="display:flex;align-items:center;gap:6px;font:400 12px/1 var(--font-sans);color:#8a6100"><span class="pv-g" style="color:#f9ab00">!</span>2 things to know</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">LogPane</td><td class="mw">pad 11 · radius 4 · surface <span class="mono">background</span> · border 1px <span class="mono">border</span> · min-h 96 · Plex Mono 400 11.5/1.55. Source prefix in brackets at <span class="mono">muted_foreground</span>; the line takes its level color: error <span class="mono">danger</span>, warning <span class="mono">warning</span>, info <span class="mono">muted_foreground</span>. No timestamps unless the run is longer than a minute.</td></tr>
+        <tr><td class="k">Behavior</td><td class="mw">Autoscroll while pinned to the bottom; scrolling up pins the view and shows a "jump to latest" ghost button. Selectable, read-only, never focus-stealing.</td></tr>
+        <tr><td class="k">Problems</td><td class="mw">Two counters, glyph + Archivo 400 12/1, gap 6, 14px between them. Zero-count counters are omitted, not shown as 0. Clicking one scrolls to and focuses the first offending row. Copy: "N problems to fix" / "N things to know" — never "errors" and "warnings".</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+
+  <div class="cmp">
+    <div class="chd"><span class="cname">ConfirmDialog · RunProgress · Tooltip · Kbd</span><span class="tag reuse">reuse</span><span class="cwhere">—</span></div>
+    <div class="cbody">
+      <div class="prev">
+        <div style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #dadce0;border-radius:6px;box-shadow:0 10px 30px rgba(23,20,15,.15);padding:18px;display:flex;flex-direction:column;gap:10px">
+          <span style="font:600 14px/1.3 var(--font-sans);color:#202124">Delete the profile "Sandbox"?</span>
+          <span class="pv-desc">Its servers and config library go with it. The YAML files on disk stay where they are.</span>
+          <div class="pv-row" style="justify-content:flex-end"><span class="pv-btng">Cancel</span><span class="pv-btnd">Delete profile</span></div>
+        </div>
+        <div style="width:100%;height:4px;background:#e8eaed;border-radius:2px;overflow:hidden"><div style="width:38%;height:100%;background:#1a73e8"></div></div>
+        <div class="pv-row" style="width:auto"><span class="kbd">⌘</span><span class="kbd">S</span><span class="pv-mini">Save to library</span></div>
+      </div>
+      <div class="spec"><table class="tw"><tbody>
+        <tr><td class="k">Dialog</td><td class="mw">w 420 · pad 18 · gap 10 · radius 6 · window shadow · overlay <span class="mono">overlay</span>. Title Archivo 600 14/1.3, body 11.5/1.45 <span class="mono">muted_foreground</span>, actions right-aligned with Cancel as a ghost and the destructive action as danger. Title asks a question naming the object; body states what is not lost.</td></tr>
+        <tr><td class="k">Progress</td><td class="mw">h 4 · radius 2 · track <span class="mono">table_head</span> · bar <span class="mono">primary</span> · determinate when the CSV row count is known, otherwise a 16px spinner in <span class="mono">muted_foreground</span> beside the status text. No percentage label under 10 seconds.</td></tr>
+        <tr><td class="k">Tooltip</td><td class="mw">pad 5 8 · radius 3 · surface <span class="mono">popover</span> · border 1px <span class="mono">border</span> · Archivo 400 11.5/1.4 · 500ms delay · 220 max width. Carries full values for truncated text and the reason a control is disabled.</td></tr>
+        <tr><td class="k">Kbd</td><td class="mw">h 18 · pad 3 5 · radius 3 · surface <span class="mono">table_even</span> · border 1px <span class="mono">border</span> · Plex Mono 400 11/1. Only in menus and the shortcut list, never inline in prose.</td></tr>
+        <tr><td class="k">Notification</td><td class="mw">Upstream toast, bottom-right, 4s, for run outcomes only. Never for validation, never for saves.</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <p class="eb">10 · Build order</p>
+  <h2 class="h2">What to write, in what order</h2>
+  <sc-if value="{{ showFileMap }}" hint-placeholder-val="{{ true }}">
+  <div class="code">crates/app/src/
+  theme.rs              register qrate-light / qrate-dark with ThemeRegistry
+  shell/
+    window.rs           AppWindow sizes, persistence
+    title_bar.rs        TitleBar, window controls
+    status_bar.rs       StatusBar, builder footer variant
+    sidebar.rs          Sidebar, SidebarItem, SidebarFooter, search
+    profile_bar.rs      ProfileBar
+    dock.rs             DockedPanel registration
+  fields/
+    row.rs              SettingRow, RequiredBadge, TypeBadge, DefaultHint, ModifiedMark
+    message.rs          InlineMessage
+    text.rs             MonoInput
+    path.rs             PathField
+    url.rs              UrlField
+    char.rs             CharField
+    number.rs           NumberStepper
+    enums.rs            SegmentedControl, NullableDropdown
+    chips.rs            Chip, ChipList
+    template.rs         TemplateField
+    row_editor.rs       RowEditor + List/Map/Pair/Command specs
+  widgets/
+    buttons.rs          GhostButton, AddRowButton
+    callout.rs          Callout
+    setting_picker.rs   SettingPicker
+    yaml_preview.rs     YamlPreview
+    task_chain.rs       TaskChainTree, RunOrderStrip
+    entity_card.rs      EntityCard
+    locked_band.rs      LockedBand
+    template_card.rs    TemplateCard
+    problem_summary.rs  ProblemSummary
+  main/                 StepSection, LogPane, the three steps
+  pages/                SettingsPage assembly, one module per sidebar page
+  builder/              the builder window, assembled from the above</div>
+  </sc-if>
+  <p class="p"><b>Order.</b> Theme JSON, then <span class="mono">fields/row.rs</span> and <span class="mono">message.rs</span> — every other field renders inside them. Then the simple fields (text, path, url, char, number), then <span class="mono">row_editor.rs</span>, which is the largest single piece and unblocks five value shapes. Then <span class="mono">shell/</span>, which lets both windows exist. <span class="mono">SettingPicker</span>, <span class="mono">YamlPreview</span> and <span class="mono">EntityCard</span> next. <span class="mono">task_chain.rs</span> last — it depends on the config library being real.</p>
+  <p class="p"><b>Two invariants for review.</b> No component reads a literal color: every surface, border and text color comes from <span class="mono">cx.theme().colors.*</span>. No component sets its own height: heights are 26, 30, 34 and nothing else, taken from the constants in <span class="mono">theme.rs</span>. A patch that adds a fifth height or a fourth radius should be sent back.</p>
+  <p class="p" style="color:var(--dim)"><b>Still undecided, and it blocks two components.</b> Whether the config library belongs to the profile or the machine (<span class="mono">EntityCard</span>'s config spec and <span class="mono">ConfigRefPicker</span>), and whether a preprocess script must declare anything beyond writing <span class="mono">metadata.csv</span> (the <span class="mono">StepSection</span> plugin contract). Everything else here can be built today.</p>
+</div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showCorrections&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;showFileMap&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showCorrections: this.props.showCorrections ?? true,
+      showFileMap: this.props.showFileMap ?? true,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
