@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/_ds_bundle.css"><link rel="stylesheet" href="_ds/qrate-site-design-system-8a1a1545-7731-4a7c-ba35-5ab5fbbc2c9c/styles.css"><style>body{margin:0!important;max-width:none!important;background:var(--ground)!important;font-family:"Segoe UI",system-ui,sans-serif}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55)}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#F99D2A;color:#1a1a1a}.dv-next{margin:22px 0 0;font:12px/1.5 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.5)}</style></helmet>
+
+<section class="dv-turn" id="brief" style="background:#e8e5df">
+<div class="dv-thd"><span class="dv-tid" style="background:#F99D2A;color:#1a1a1a">READ ME</span><span class="dv-tname">How this canvas is organised, and what it assumes</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(260px,340px));gap:26px;font:13px/1.65 'Segoe UI',system-ui,sans-serif;color:#2c2a28">
+<div><div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8578;margin-bottom:10px">Layout</div><p style="margin:0 0 10px">One group per subject, stacked top to bottom; the mockups inside a group read left to right. Groups are ordered by how far out they sit from the config builder: settings and profiles first, then the main window, then window placement, then chaining, then the builder itself and its input vocabulary.</p><p style="margin:0">Every mockup keeps a permanent id — <a class="dv-oid" href="#3b">3b</a>, <a class="dv-oid" href="#2a">2a</a>, <a class="dv-oid" href="#1c">1c</a> — so you can point at one in chat and I will know exactly which.</p></div>
+<div><div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8578;margin-bottom:10px">Grounding</div><p style="margin:0 0 10px">Chrome, spacing and controls follow the GPUI app: 40px title bar, bottom status bar, small-radius inputs, and for the settings window the real page / group / item structure from <code style="font:12px ui-monospace,Consolas,monospace">app_settings/mod.rs</code>.</p><p style="margin:0">Every option name, type and default is real, read from <code style="font:12px ui-monospace,Consolas,monospace">WorkbenchConfig.py</code> (~140 keys) and your <code style="font:12px ui-monospace,Consolas,monospace">test.config.yml</code>. Task names come from <code style="font:12px ui-monospace,Consolas,monospace">TASK_OPTIONS</code>.</p></div>
+<div><div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a8578;margin-bottom:10px">Standing assumptions</div><p style="margin:0 0 10px"><b>task</b> is the only setting the builder demands. <b>host</b>, <b>credentials_file_path</b> and <b>input_csv</b> are written by the app at run time and shown as a locked band so nobody thinks they are missing.</p><p style="margin:0">Two accent families appear: groups D–F use the SACDA orange from the first pass, groups A–C use the design system's amber app-chrome tokens. Same intent, marginally different hue — say the word and I will settle on one.</p></div>
+</div>
+</section>
+
+<section class="dv-turn" id="g1" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g1">A</a><span class="dv-tname">Settings window and profiles <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— What the app knows about this machine and this institution</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Settings as it exists today, recreated from the source</div>
+<div class="dv-card" style="width:1040px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:24px;align-items:flex-start">
+    <div style="width:620px;flex:none;display:flex;flex-direction:column;gap:18px">
+
+      <div style="background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border)">
+          <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Settings</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:15px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="display:flex;min-height:330px">
+          <div style="width:168px;flex:none;padding:12px 10px;border-right:1px solid var(--app-border);display:flex;flex-direction:column;gap:3px">
+            <div style="padding:6px 9px;background:var(--app-active-bg);border-radius:3px;font:500 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Paths</div>
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Servers</div>
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Task Configs</div>
+          </div>
+          <div style="flex:1;min-width:0;padding:16px 16px 20px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <span style="font:600 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Workbench Installation</span>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Workbench Path</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Path to Islandora Workbench installation directory</span></div>
+                <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">C:\Users\Arnav\Projects\islandora_workbench</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <span style="font:600 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Python Environment</span>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Python Path</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Path to Python executable</span></div>
+                <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">python.exe</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+              </div>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">UV Path</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Path to UV package manager (optional)</span></div>
+                <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">uv.exe</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+              </div>
+              <div style="display:flex;gap:14px;align-items:center">
+                <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Use UV</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Use UV instead of pip for running workbench</span></div>
+                <div style="width:34px;height:19px;border-radius:10px;background:var(--app-active-border);display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:var(--app-bg)"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border)">
+          <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Settings</span>
+          <span style="margin-left:10px;font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Task Configs</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:15px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="display:flex">
+          <div style="width:168px;flex:none;padding:12px 10px;border-right:1px solid var(--app-border);display:flex;flex-direction:column;gap:3px">
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Paths</div>
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Servers</div>
+            <div style="padding:6px 9px;background:var(--app-active-bg);border-radius:3px;font:500 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Task Configs</div>
+          </div>
+          <div style="flex:1;min-width:0;padding:16px 16px 20px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <span style="font:600 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Saved Configurations</span>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--app-head);border-radius:4px">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 12px/1.3 var(--font-sans);color:var(--app-head-fg)">Main batch items</span><span style="font:400 11px/1.35 var(--font-sans);color:var(--app-muted)">Task: create</span><span style="font:400 11px/1.35 var(--font-mono);color:var(--app-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">./g/config/main.yml</span></div>
+                <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--app-head);border-radius:4px">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 12px/1.3 var(--font-sans);color:var(--app-head-fg)">Child pages</span><span style="font:400 11px/1.35 var(--font-sans);color:var(--app-muted)">Task: create</span><span style="font:400 11px/1.35 var(--font-mono);color:var(--app-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">./g/config/pages.yml</span></div>
+                <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <span style="font:600 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Add New Configuration</span>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:150px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Label</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Display name for this configuration</span></div>
+                <div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-muted)">&nbsp;</div>
+              </div>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:150px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Task Name</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Workbench task to perform</span></div>
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px"><span style="flex:1;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">create - Create new nodes</span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+              </div>
+              <div style="display:flex;gap:14px;align-items:flex-start">
+                <div style="width:150px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Config File</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Path to YAML configuration file</span></div>
+                <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">&nbsp;</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+              </div>
+              <div style="display:flex;justify-content:flex-end"><span style="padding:6px 13px;background:var(--app-active-border);border-radius:3px;font:500 12px/1.2 var(--font-sans);color:#fff">Add Configuration</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div><p class="eyebrow">What's here now</p><p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">Three pages — Paths, Servers, Task Configs — each a list of groups, each group a list of label / description / control rows. Saved servers and saved configs are read-only rows with a remove button.</p></div>
+      <div><p class="eyebrow">Where it strains</p>
+        <ul style="margin:6px 0 0;padding-left:16px;font:400 12.5px/1.7 var(--font-sans);color:var(--body)">
+          <li>A saved config is only a label, a task name and a path to a YAML someone wrote elsewhere. Nothing in the app can produce that file.</li>
+          <li>Adding an entry is a separate group from the list of entries, so the page reads as two unrelated forms.</li>
+          <li>Entries can be removed but not edited or renamed — a typo in a URL means delete and retype.</li>
+          <li>Everything is global to the machine. There is one server list and one config list, so a dev credential and a production host can be paired by accident.</li>
+          <li>Nothing here can be handed to another institution; setup lives in a document instead of a file.</li>
+        </ul>
+      </div>
+      <div style="padding:13px 15px;background:var(--paper);border:1px solid var(--rule-soft);border-radius:4px"><p class="eyebrow">Kept in the rework</p><p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">The page / group / row anatomy is good and matches the rest of the app. <a class="dv-oid" href="#3b">3b</a> keeps it and changes what sits inside.</p></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="3b"><div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Settings, reworked — editable lists, and the settings the builder needs</div>
+<div class="dv-card" style="width:1060px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:24px;align-items:flex-start">
+    <div style="width:660px;flex:none;display:flex;flex-direction:column;gap:18px">
+
+      <div style="background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border)">
+          <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Settings</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:15px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="display:flex;min-height:390px">
+          <div style="width:186px;flex:none;border-right:1px solid var(--app-border);display:flex;flex-direction:column">
+            <div style="padding:10px;border-bottom:1px solid var(--app-border)"><div style="padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-muted)">Search settings</div></div>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:3px">
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">General</div>
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Workbench &amp; Python</div>
+              <div style="padding:6px 9px;background:var(--app-active-bg);border-radius:3px;font:500 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Servers</div>
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Config library</div>
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Input &amp; preprocess</div>
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Config builder</div>
+              <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Profiles</div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="padding:10px;border-top:1px solid var(--app-border);display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:var(--app-active-border)"></span><span style="font:400 11px/1.3 var(--font-sans);color:var(--app-muted)">Profile: SACDA — UFV</span></div>
+          </div>
+          <div style="flex:1;min-width:0;padding:16px 16px 20px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font:600 14px/1.2 var(--font-sans);color:var(--app-head-fg)">Servers</span>
+              <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Islandora endpoints this profile can ingest into. Each keeps its own credentials file.</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="padding:10px 11px;background:var(--app-head);border:1px solid var(--app-active-border);border-radius:4px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:var(--app-danger)"></span>
+                  <span style="font:600 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">dev</span>
+                  <span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">isle.dvnl.work</span>
+                  <div style="flex:1"></div>
+                  <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Test</span>
+                  <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Duplicate</span>
+                  <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+                </div>
+                <div style="display:flex;gap:9px">
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Label</span><div style="padding:6px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">dev</div></div>
+                  <div style="flex:2;min-width:0;display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Server URL</span><div style="padding:6px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">https://isle.dvnl.work</div></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Credentials file</span><div style="display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">…\islandora_workbench\credentials_isle.yml</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div></div>
+                <div style="display:flex;align-items:flex-start;gap:7px"><span style="font:400 11px/1.4 var(--font-mono);color:var(--app-danger)">✕</span><span style="font:400 11px/1.45 var(--font-sans);color:var(--app-danger)">Last checked 12:03 — HTTP 530, host unreachable. Credentials were not tested.</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:4px">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--app-active-border)"></span>
+                <span style="font:600 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">production</span>
+                <span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">islandora.ufv.ca</span>
+                <div style="flex:1"></div>
+                <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Edit</span>
+                <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Test</span>
+                <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+              </div>
+              <span style="padding:7px 11px;border:1px dashed var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-muted);width:fit-content">+ Add a server</span>
+            </div>
+            <div style="padding:10px 11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;align-items:flex-start;gap:8px">
+              <span style="font:400 11px/1.4 var(--font-mono);color:var(--app-warn)">!</span>
+              <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)"><b style="color:var(--app-head-fg)">production</b> is marked as needing confirmation before a run. Destructive tasks on it always prompt, whatever the auto-accept setting says.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border)">
+          <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Settings</span>
+          <span style="margin-left:10px;font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Config builder</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:15px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="display:flex">
+          <div style="width:186px;flex:none;border-right:1px solid var(--app-border);padding:10px;display:flex;flex-direction:column;gap:3px">
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Config library</div>
+            <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Input &amp; preprocess</div>
+            <div style="padding:6px 9px;background:var(--app-active-bg);border-radius:3px;font:500 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Config builder</div>
+          </div>
+          <div style="flex:1;min-width:0;padding:16px 16px 20px;display:flex;flex-direction:column;gap:13px">
+            <div style="display:flex;gap:14px;align-items:center">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Open the builder docked</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Snapped to the right of the main window instead of as its own window</span></div>
+              <div style="width:34px;height:19px;flex:none;border-radius:10px;background:var(--app-active-border);display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:var(--app-bg)"></span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Show the YAML panel</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Side-by-side preview, open by default</span></div>
+              <div style="width:34px;height:19px;flex:none;border-radius:10px;background:var(--app-row-border);display:flex;align-items:center;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:var(--app-muted)"></span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Check paths as you type</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Confirms folders and files exist while editing a setting</span></div>
+              <div style="width:34px;height:19px;flex:none;border-radius:10px;background:var(--app-active-border);display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:var(--app-bg)"></span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Warn about settings that clash</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">For example rollback turned on with no rollback folder</span></div>
+              <div style="width:34px;height:19px;flex:none;border-radius:10px;background:var(--app-active-border);display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:var(--app-bg)"></span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Read vocabularies from</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Server used to fill in term and field pickers</span></div>
+              <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px"><span style="flex:1;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">The server picked for the run</span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Save new configs to</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Where the builder writes YAML files</span></div>
+              <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">./g/config</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Preprocess scripts folder</span><span style="font:400 11px/1.4 var(--font-sans);color:var(--app-muted)">Fills the dropdown in step 1 of the main window</span></div>
+              <div style="flex:1;min-width:0;display:flex;gap:7px"><div style="flex:1;min-width:0;padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">./g/scripts</div><span style="padding:6px 9px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div><p class="eyebrow">Four changes</p>
+        <ul style="margin:6px 0 0;padding-left:16px;font:400 12.5px/1.7 var(--font-sans);color:var(--body)">
+          <li>A list and its add form are one thing. Rows expand in place to edit; the last row is always "+ Add".</li>
+          <li>Each server carries its own credentials file and its last check result, so a bad pairing is visible before a run rather than during one.</li>
+          <li>Pages are named after what you are doing, and a search field covers the case where you don't know which page it's on.</li>
+          <li>The builder gets its own page — every default that used to be a guess in code is a setting here.</li>
+        </ul>
+      </div>
+      <div><p class="eyebrow">Kept from today</p><p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">Same window, same sidebar, same label / description / control row. Workbench path, Python and UV move to one page called Workbench &amp; Python — they are facts about the machine, so they sit apart from anything institutional.</p></div>
+      <div style="padding:13px 15px;background:var(--paper);border:1px solid var(--rule-soft);border-radius:4px"><p class="eyebrow">Note</p><p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">The footer shows the active profile at all times — the one piece of <a class="dv-oid" href="#3c">3c</a> that has to be visible everywhere, so no one edits the wrong institution's servers.</p></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="3c"><div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Profiles — what they are, why they exist</div>
+<div class="dv-card" style="width:1060px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:24px;align-items:flex-start">
+    <div style="width:620px;flex:none;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+      <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border)">
+        <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Settings</span>
+        <span style="margin-left:10px;font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Profiles</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:15px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+      <div style="display:flex;min-height:400px">
+        <div style="width:186px;flex:none;border-right:1px solid var(--app-border);padding:10px;display:flex;flex-direction:column;gap:3px">
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">General</div>
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Workbench &amp; Python</div>
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Servers</div>
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Config library</div>
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Input &amp; preprocess</div>
+          <div style="padding:6px 9px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-muted)">Config builder</div>
+          <div style="padding:6px 9px;background:var(--app-active-bg);border-radius:3px;font:500 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Profiles</div>
+        </div>
+        <div style="flex:1;min-width:0;padding:16px 16px 20px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <span style="font:600 14px/1.2 var(--font-sans);color:var(--app-head-fg)">Profiles</span>
+            <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">A profile is one institution's setup: its servers, its input source and scripts, its config library. Switching profiles switches all of them together.</span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="padding:11px;background:var(--app-head);border:1px solid var(--app-active-border);border-radius:4px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--app-active-border)"></span>
+                <span style="font:600 13px/1.2 var(--font-sans);color:var(--app-head-fg)">SACDA — UFV</span>
+                <span style="font:500 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--app-active-border)">active</span>
+                <div style="flex:1"></div>
+                <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Rename</span>
+                <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Duplicate</span>
+                <span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Export…</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.2 var(--font-mono);color:var(--app-muted)">2 servers</span>
+                <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.2 var(--font-mono);color:var(--app-muted)">6 configs</span>
+                <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.2 var(--font-mono);color:var(--app-muted)">source: Google Sheet</span>
+                <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.2 var(--font-mono);color:var(--app-muted)">3 scripts</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;padding:10px 11px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:4px">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--app-row-border)"></span>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Sandbox</span><span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">1 server · 2 configs · source: CSV file</span></div>
+              <span style="font:400 11px/1 var(--font-sans);color:var(--app-active-border)">Switch to</span>
+              <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+            </div>
+            <div style="display:flex;gap:9px">
+              <span style="padding:7px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">New profile</span>
+              <span style="padding:7px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Import a profile file…</span>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="padding:11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:7px">
+              <span style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--app-active-border)">In the profile</span>
+              <span style="font:400 11.5px/1.7 var(--font-sans);color:var(--app-muted)">Servers and credential paths<br>Input source and its values<br>Preprocess scripts folder<br>Config library and builder defaults<br>Auto-accept and confirmation rules</span>
+            </div>
+            <div style="padding:11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:7px">
+              <span style="font:500 10.5px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--app-muted)">On this machine</span>
+              <span style="font:400 11.5px/1.7 var(--font-sans);color:var(--app-muted)">Workbench install path<br>Python and UV paths<br>Theme and window sizes<br>The credential files themselves</span>
+            </div>
+          </div>
+
+          <div style="padding:10px 11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;align-items:flex-start;gap:8px">
+            <span style="font:400 11px/1.4 var(--font-mono);color:var(--app-warn)">!</span>
+            <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Export writes a <span style="font-family:var(--font-mono)">.profile.yml</span> with paths and settings but never passwords. The person importing it supplies their own credentials file.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div><p class="eyebrow">The problem</p><p style="margin:6px 0 0;font:400 12.5px/1.65 var(--font-sans);color:var(--body)">Today every setting is global to the machine: one server list, one config list, one input step. That is exactly right for one person ingesting for one institution, and it breaks in three ordinary situations.</p></div>
+      <div><p class="eyebrow">Three situations</p>
+        <ul style="margin:6px 0 0;padding-left:16px;font:400 12.5px/1.7 var(--font-sans);color:var(--body)">
+          <li><b style="color:var(--ink)">Dev and production side by side.</b> Same config library, different hosts and credentials. Nothing currently stops a config written for dev being run against production.</li>
+          <li><b style="color:var(--ink)">Another institution.</b> They need their own servers, sources and configs, and none of ours. Without profiles the app has to be re-set-up by hand and ours has to be deleted.</li>
+          <li><b style="color:var(--ink)">A second machine.</b> Onboarding today means following a setup document. With profiles it means opening a file.</li>
+        </ul>
+      </div>
+      <div><p class="eyebrow">Why a bundle, not more settings</p><p style="margin:6px 0 0;font:400 12.5px/1.65 var(--font-sans);color:var(--body)">The dangerous mistakes are mismatches — a dev credential with a production host, our transform script against someone else's sheet. Grouping the institutional settings into one named thing that switches atomically removes that class of mistake, which a longer settings list does not.</p></div>
+      <div><p class="eyebrow">The cost, and how it's paid</p><p style="margin:6px 0 0;font:400 12.5px/1.65 var(--font-sans);color:var(--body)">Profiles are one more concept for someone who only ever needs one. So the app ships with a single profile called Default, the Profiles page is the last item in the sidebar, and the switcher in the main window stays hidden until a second profile exists. Nobody meets the idea until they need it.</p></div>
+      <div style="padding:13px 15px;background:var(--paper);border:1px solid var(--rule-soft);border-radius:4px"><p class="eyebrow">Open question</p><p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">Does the config library belong to the profile or to the machine? Institutional, as drawn here. But if you keep one folder of YAML shared across profiles, it should move out — worth deciding before this is built.</p></div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "merge <a class="dv-oid" href="#3a">3a</a> and <a class="dv-oid" href="#3b">3b</a> — keep the old sidebar" · "show the profile export file" · "drop profiles, use one settings file"</p>
+</section>
+
+<section class="dv-turn" id="g2" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g2">B</a><span class="dv-tname">Main window <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— Generalized so another institution can use it unchanged</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2c"><div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Main window, generalized — the Sheets step becomes a pluggable input source</div>
+<div class="dv-card" style="width:1000px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:26px;align-items:flex-start">
+
+    <div style="width:470px;flex:none;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+      <div style="display:flex;align-items:center;height:36px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:14px">
+        <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Islandora Workbench</span>
+        <span style="font:400 12px/1 var(--font-sans);color:var(--app-muted)">Github</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:16px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:9px;padding:9px 14px;background:var(--app-head);border-bottom:1px solid var(--app-border)">
+        <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-muted)">Profile</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px"><span style="font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">SACDA — UFV</span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+        <div style="flex:1"></div>
+        <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-active-border)">Manage profiles</span>
+      </div>
+
+      <div style="padding:16px 14px 0;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">1</span><span style="font:600 13px/1 var(--font-sans);color:var(--app-head-fg)">Input source</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">optional step</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--app-head);border:1px solid var(--app-active-border);border-radius:3px">
+          <span style="flex:1;font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Google Sheet → CSV</span>
+          <span style="font:400 10.5px/1 var(--font-mono);color:var(--app-muted)">plugin</span>
+          <span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px;padding:11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:3px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Sheet URL</span><div style="padding:7px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">…N1pTA/edit?gid=0</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Ingest dir</span><div style="display:flex;gap:7px"><div style="flex:1;min-width:0;padding:7px 9px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">…h\input_data\access</div><span style="padding:7px 10px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">▢</span></div></div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Preprocess script</span>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px"><span style="flex:1;font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">sacda_access_sheet.py</span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+            <span style="font:400 11px/1.5 var(--font-sans);color:var(--app-muted)">Turns the sheet into <span style="font-family:var(--font-mono)">metadata.csv</span>. Choices come from the scripts folder in Settings, plus None.</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center"><span style="padding:6px 12px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Process</span><span style="padding:6px 12px;border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-muted)">Open processed</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">last run 11:52</span></div>
+        </div>
+      </div>
+
+      <div style="padding:16px 14px 0;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">2</span><span style="font:600 13px/1 var(--font-sans);color:var(--app-head-fg)">Config</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px"><span style="flex:1;font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Main batch items</span><span style="font:400 10.5px/1 var(--font-mono);color:var(--app-active-border)">↳ 2</span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+          <span style="padding:7px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Edit</span>
+          <span style="padding:7px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">New</span>
+        </div>
+        <span style="font:400 11px/1.5 var(--font-sans);color:var(--app-muted)">14 settings · runs 2 secondary configs · last edited yesterday</span>
+      </div>
+
+      <div style="padding:16px 14px 0;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">3</span><span style="font:600 13px/1 var(--font-sans);color:var(--app-head-fg)">Server</span></div>
+        <div style="display:flex;gap:9px">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px"><span style="flex:1;font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">dev — isle.dvnl.work</span><span style="width:6px;height:6px;border-radius:50%;background:var(--app-danger)"></span><span style="font:400 10px/1 var(--font-mono);color:var(--app-muted)">▾</span></div>
+          <span style="padding:7px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Manage</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:15px;height:15px;border:1px solid var(--app-active-border);background:var(--app-active-border);border-radius:2px;display:flex;align-items:center;justify-content:center;font:400 10px/1 var(--font-mono);color:#fff">✓</span><span style="font:400 12px/1 var(--font-sans);color:var(--app-head-fg)">Auto-accept prompts</span></div>
+          <div style="flex:1"></div>
+          <span style="padding:7px 14px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Check</span>
+          <span style="padding:7px 14px;background:var(--app-active-border);border-radius:3px;font:500 12px/1.2 var(--font-sans);color:#fff">Run Ingest</span>
+        </div>
+      </div>
+
+      <div style="margin:16px 14px;padding:11px;background:var(--app-head);border:1px solid var(--app-border);border-radius:3px;min-height:96px;display:flex;flex-direction:column;gap:6px">
+        <span style="font:400 11.5px/1.5 var(--font-mono);color:var(--app-danger)">[Server] https://isle.dvnl.work: Error response (HTTP 530)</span>
+        <span style="font:400 11.5px/1.5 var(--font-mono);color:var(--app-muted)">[Source] Google Sheet → CSV: wrote 1,240 rows to metadata.csv</span>
+      </div>
+
+      <div style="padding:8px 13px;background:var(--app-title);border-top:1px solid var(--app-border);display:flex;align-items:center;gap:12px">
+        <span style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-sans);color:var(--app-danger)"><span style="width:6px;height:6px;border-radius:50%;background:var(--app-danger)"></span>Unreachable 530</span>
+        <div style="flex:1"></div>
+        <span style="font:400 11.5px/1 var(--font-mono);color:var(--app-muted)">↻ Reload</span>
+        <span style="font:400 11.5px/1 var(--font-mono);color:var(--app-muted)">▢ Open Terminal</span>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:18px">
+      <div>
+        <p class="eyebrow">What changed</p>
+        <p style="margin:6px 0 0;font:400 13px/1.65 var(--font-sans);color:var(--body)">Step 1 was the only institution-specific part of the window. It now has three fields and no site knowledge: the <b style="color:var(--ink)">input source</b> picks where rows come from, its <b style="color:var(--ink)">Sheet URL</b> and <b style="color:var(--ink)">Ingest dir</b> are always shown, and a single <b style="color:var(--ink)">preprocess script</b> dropdown replaces the hard-coded SACDA transform. The collection node ID is gone — it belongs in the script, not in the window. A site with no transform picks None and just presses Process.</p>
+      </div>
+      <div>
+        <p class="eyebrow">Profiles</p>
+        <p style="margin:6px 0 0;font:400 13px/1.65 var(--font-sans);color:var(--body)">Everything site-specific — input source and its values, server list, credentials, config library — lives in a named profile. SACDA keeps "SACDA — UFV"; another institution creates its own and never sees ours. This also gives a clean export: hand someone a profile file instead of a setup document.</p>
+      </div>
+      <div>
+        <p class="eyebrow">Three numbered steps</p>
+        <p style="margin:6px 0 0;font:400 13px/1.65 var(--font-sans);color:var(--body)">Input source, config, server — in the order a run actually happens, with step 1 marked optional because a site that already has its CSV skips it. The config row grew a chain count and Edit / New, so the builder is reachable from the place the config is chosen.</p>
+      </div>
+      <div style="padding:13px 15px;background:var(--paper);border:1px solid var(--rule-soft);border-radius:4px">
+        <p class="eyebrow">Open question</p>
+        <p style="margin:6px 0 0;font:400 12.5px/1.6 var(--font-sans);color:var(--body)">Preprocess scripts are listed from a folder set in Settings — see <a class="dv-oid" href="#3b">3b</a>. Open question: do they need to declare anything (a name, expected columns) or is a bare <span style="font-family:var(--font-mono)">.py</span> file that writes <span style="font-family:var(--font-mono)">metadata.csv</span> the whole contract?</p>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#2c">2c</a> two-pane instead of stacked steps" · "show the preprocess script picker open" · "what does step 1 look like for a plain CSV site"</p>
+</section>
+
+<section class="dv-turn" id="g3" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g3">C</a><span class="dv-tname">Builder window placement <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— Docked beside the main window, floated free, and snapping back</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Docked → floated → snapping back</div>
+<div class="dv-card" style="width:1340px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:26px;align-items:flex-start">
+
+    <div style="width:400px;flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 10px 30px #17140f26">
+        <div style="display:flex;align-items:center;height:34px;padding:0 11px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:12px">
+          <span style="font:400 12px/1 var(--font-sans);color:var(--app-head-fg)">Islandora Workbench</span>
+          <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Github</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:12px;font:400 11.5px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="display:flex;height:420px">
+          <div style="width:168px;flex:none;padding:12px;display:flex;flex-direction:column;gap:10px;border-right:1px solid var(--app-border)">
+            <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-muted)">Run</span>
+            <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Sheet URL</div>
+            <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Ingest dir</div>
+            <div style="padding:6px 8px;background:var(--app-active-bg);border:1px solid var(--app-active-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-head-fg)">Main batch items</div>
+            <div style="flex:1"></div>
+            <div style="padding:7px 8px;background:var(--app-active-border);border-radius:3px;text-align:center;font:500 11.5px/1.2 var(--font-sans);color:#fff">Run Ingest</div>
+          </div>
+          <div style="width:5px;flex:none;background:var(--app-title);display:flex;align-items:center;justify-content:center"><div style="width:1px;height:26px;background:var(--app-muted)"></div></div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--app-head);border-bottom:1px solid var(--app-border)">
+              <span style="font:400 12px/1 var(--font-sans);color:var(--app-head-fg)">Config Builder</span>
+              <div style="flex:1"></div>
+              <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">⇱ Pop out</span>
+              <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">✕</span>
+            </div>
+            <div style="padding:12px;display:flex;flex-direction:column;gap:9px">
+              <span style="font:600 14px/1.3 var(--font-sans);color:var(--app-head-fg)">Main batch items</span>
+              <div style="padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-muted)">› Search settings</div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">task</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">create</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">allow_missing_files</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">true</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">adaptive_pause</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">3</span></div>
+                <div style="display:flex;justify-content:space-between;gap:8px"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">rollback_dir</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-danger)">missing</span></div>
+              </div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="padding:8px 11px;background:var(--app-title);border-top:1px solid var(--app-border);display:flex;align-items:center;gap:8px"><span style="font:400 11px/1 var(--font-sans);color:var(--app-danger)">1 problem</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Draft saved</span></div>
+          </div>
+        </div>
+        <div style="padding:7px 11px;background:var(--app-title);border-top:1px solid var(--app-border);display:flex;align-items:center;gap:10px"><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Ready · isle.dvnl.work</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">Open Terminal</span></div>
+      </div>
+      <div style="font:400 11.5px/1.6 var(--font-sans);color:var(--body)"><b style="color:var(--ink)">Docked.</b> One window, one title bar, one status bar. The builder takes the right pane and the run controls compress to a rail. Drag the divider to rebalance; <span style="font-family:var(--font-mono)">⇱ Pop out</span> detaches.</div>
+    </div>
+
+    <div style="width:400px;flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative;height:454px">
+        <div style="position:absolute;left:0;top:34px;width:190px;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 6px 18px #17140f1f">
+          <div style="display:flex;align-items:center;height:32px;padding:0 10px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:8px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Islandora Workbench</span><div style="flex:1"></div><div style="display:flex;gap:9px;font:400 11px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>✕</span></div></div>
+          <div style="padding:11px;display:flex;flex-direction:column;gap:9px;height:340px">
+            <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-muted)">Run</span>
+            <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Sheet URL</div>
+            <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Ingest dir</div>
+            <div style="display:flex;align-items:center;gap:7px;padding:6px 8px;background:var(--app-head);border:1px dashed var(--app-active-border);border-radius:3px"><span style="font:400 11px/1 var(--font-mono);color:var(--app-active-border)">⇲</span><span style="font:400 11px/1.3 var(--font-sans);color:var(--app-muted)">Builder floating</span></div>
+            <div style="flex:1"></div>
+            <div style="padding:7px 8px;background:var(--app-active-border);border-radius:3px;text-align:center;font:500 11.5px/1.2 var(--font-sans);color:#fff">Run Ingest</div>
+          </div>
+          <div style="padding:6px 10px;background:var(--app-title);border-top:1px solid var(--app-border);font:400 10.5px/1 var(--font-sans);color:var(--app-muted)">Ready</div>
+        </div>
+        <div style="position:absolute;right:0;top:0;width:270px;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 18px 44px #17140f3d">
+          <div style="display:flex;align-items:center;height:32px;padding:0 10px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:8px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Config Builder</span><span style="font:400 10.5px/1 var(--font-sans);color:var(--app-muted)">Main batch items</span><div style="flex:1"></div><div style="display:flex;gap:9px;font:400 11px/1 var(--font-mono);color:var(--app-muted)"><span>⇲</span><span>—</span><span>✕</span></div></div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:9px">
+            <span style="font:600 14px/1.3 var(--font-sans);color:var(--app-head-fg)">Main batch items</span>
+            <div style="padding:6px 9px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-muted)">› Search settings</div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">task</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">create</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">protected_vocabularies</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">4</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--app-row-border)"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">csv_value_templates</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-muted)">5</span></div>
+              <div style="display:flex;justify-content:space-between;gap:8px"><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-head-fg)">secondary_tasks</span><span style="font:400 11.5px/1.2 var(--font-mono);color:var(--app-active-border)">2</span></div>
+            </div>
+            <div style="padding:8px 10px;background:var(--app-head);border:1px solid var(--app-border);border-radius:3px;font:400 11px/1.5 var(--font-sans);color:var(--app-muted)">Its own window: resize freely, move to a second monitor, keep it open across runs.</div>
+          </div>
+          <div style="padding:7px 10px;background:var(--app-title);border-top:1px solid var(--app-border);display:flex;gap:8px;align-items:center"><span style="font:400 11px/1 var(--font-sans);color:var(--app-muted)">Draft saved 12:04</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">⇱ Dock</span></div>
+        </div>
+      </div>
+      <div style="font:400 11.5px/1.6 var(--font-sans);color:var(--body)"><b style="color:var(--ink)">Floated.</b> A real OS window with its own chrome. The parent keeps a dashed placeholder where the builder was, so the relationship stays visible and one click brings it home.</div>
+    </div>
+
+    <div style="width:400px;flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative;height:454px">
+        <div style="position:absolute;left:0;top:34px;width:330px;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden;box-shadow:0 6px 18px #17140f1f">
+          <div style="display:flex;align-items:center;height:32px;padding:0 10px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:8px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Islandora Workbench</span><div style="flex:1"></div><div style="display:flex;gap:9px;font:400 11px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>✕</span></div></div>
+          <div style="display:flex;height:340px">
+            <div style="width:150px;flex:none;padding:11px;display:flex;flex-direction:column;gap:9px">
+              <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-muted)">Run</span>
+              <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Sheet URL</div>
+              <div style="padding:6px 8px;background:var(--app-head);border:1px solid var(--app-row-border);border-radius:3px;font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">Ingest dir</div>
+              <div style="flex:1"></div>
+              <div style="padding:7px 8px;background:var(--app-active-border);border-radius:3px;text-align:center;font:500 11.5px/1.2 var(--font-sans);color:#fff">Run Ingest</div>
+            </div>
+            <div style="flex:1;margin:8px 8px 8px 0;border:2px dashed var(--app-active-border);border-radius:4px;background:var(--app-active-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px">
+              <span style="font:400 15px/1 var(--font-mono);color:var(--app-active-border)">⇥</span>
+              <span style="font:500 11.5px/1.3 var(--font-sans);color:var(--app-head-fg)">Snap builder here</span>
+              <span style="font:400 10.5px/1.3 var(--font-mono);color:var(--app-muted)">right half · 52%</span>
+            </div>
+          </div>
+          <div style="padding:6px 10px;background:var(--app-title);border-top:1px solid var(--app-border);font:400 10.5px/1 var(--font-sans);color:var(--app-muted)">Release to dock</div>
+        </div>
+        <div style="position:absolute;right:0;top:104px;width:250px;opacity:.62;background:var(--app-bg);border:1px solid var(--app-active-border);border-radius:6px;overflow:hidden;box-shadow:0 22px 50px #17140f47;transform:rotate(-1.2deg)">
+          <div style="display:flex;align-items:center;height:30px;padding:0 10px;background:var(--app-title);border-bottom:1px solid var(--app-active-border);gap:8px"><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Config Builder</span><div style="flex:1"></div><span style="font:400 11px/1 var(--font-mono);color:var(--app-active-border)">⇱</span></div>
+          <div style="padding:11px;display:flex;flex-direction:column;gap:8px">
+            <span style="font:600 13px/1.3 var(--font-sans);color:var(--app-head-fg)">Main batch items</span>
+            <div style="height:7px;width:80%;background:var(--app-head);border-radius:2px"></div>
+            <div style="height:7px;width:62%;background:var(--app-head);border-radius:2px"></div>
+            <div style="height:7px;width:71%;background:var(--app-head);border-radius:2px"></div>
+            <div style="height:7px;width:45%;background:var(--app-head);border-radius:2px"></div>
+          </div>
+        </div>
+      </div>
+      <div style="font:400 11.5px/1.6 var(--font-sans);color:var(--body)"><b style="color:var(--ink)">Snapping in.</b> Dragging the floating builder over the parent's right edge lights a dashed target with the width it will take. Release docks it; drag away and the target fades. <span style="font-family:var(--font-mono)">Ctrl+\</span> toggles the two states without the mouse.</div>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "add a keyboard-only snap state" · "show the builder docked on the left instead" · "what happens on a second monitor"</p>
+</section>
+
+<section class="dv-turn" id="g4" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g4">D</a><span class="dv-tname">Config chaining <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— secondary_tasks, nested to any depth</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Chains nest without limit — a child is just a config, so it has its own children</div>
+<div class="dv-card" style="width:1340px;background:var(--ground);border-color:var(--rule-soft);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:22px;align-items:flex-start">
+
+    <div style="width:560px;flex:none;background:var(--app-bg);border:1px solid var(--app-border);border-radius:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;height:36px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-border);gap:10px">
+        <span style="font:400 12.5px/1 var(--font-sans);color:var(--app-head-fg)">Config Builder</span>
+        <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Main batch items</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:14px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+      <div style="padding:18px 18px 0;display:flex;flex-direction:column;gap:4px">
+        <span style="font:600 18px/1.3 var(--font-sans);color:var(--app-head-fg)">Main batch items</span>
+        <span style="font:400 12px/1.5 var(--font-sans);color:var(--app-muted)">14 settings · task: create · root of the chain</span>
+      </div>
+
+      <div style="margin:16px 18px 22px;padding:14px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font:400 12px/1 var(--font-mono);color:var(--app-active-border)">↳</span>
+          <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-active-border)">Chain</span>
+          <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">4 configs, 3 levels deep</span>
+          <div style="flex:1"></div>
+          <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-head-fg)">Collapse all</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--app-active-bg);border:1px solid var(--app-active-border);border-radius:4px">
+            <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">1</span>
+            <span style="font:400 11px/1 var(--font-mono);color:var(--app-head-fg)">▾</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:400 13px/1.2 var(--font-sans);color:var(--app-head-fg)">Child pages</span><span style="display:flex;align-items:center;gap:5px;font:500 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--app-active-border)"><span style="width:5px;height:5px;border-radius:50%;background:var(--app-active-border)"></span>open</span></div>
+              <span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">pages.yml · create · 9 settings · 2 children</span>
+            </div>
+            <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Unlink</span>
+          </div>
+
+          <div style="display:flex;gap:8px;padding-left:14px">
+            <div style="width:14px;flex:none;border-left:1px solid var(--app-row-border)"></div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:4px">
+                <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">1.1</span>
+                <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">▾</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                  <span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Page OCR</span>
+                  <span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">ocr.yml · add_media · 5 settings · 1 child</span>
+                </div>
+                <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-active-border)">Open</span>
+              </div>
+              <div style="display:flex;gap:8px;padding-left:14px">
+                <div style="width:14px;flex:none;border-left:1px solid var(--app-row-border)"></div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:4px">
+                    <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">1.1.1</span>
+                    <span style="width:9px"></span>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                      <span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Extracted text cleanup</span>
+                      <span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">cleanup.yml · update · 3 settings</span>
+                    </div>
+                    <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-active-border)">Open</span>
+                  </div>
+                  <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 11px;background:var(--app-bg);border:1px dashed var(--app-danger);border-radius:4px">
+                    <span style="font:400 11px/1.4 var(--font-mono);color:var(--app-danger)">✕</span>
+                    <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-danger)">Can't link <span style="font-family:var(--font-mono)">pages.yml</span> here — it already runs at step 1, and a config can't run inside itself.</span>
+                  </div>
+                  <span style="padding:5px 10px;border:1px dashed var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-muted);width:fit-content">+ Add a config under this one</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:4px">
+            <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">2</span>
+            <span style="font:400 11px/1 var(--font-mono);color:var(--app-head-fg)">▸</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:400 13px/1.2 var(--font-sans);color:var(--app-head-fg)">Commit to Git</span>
+              <span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">commit.yml · create · 2 settings · 1 child hidden</span>
+            </div>
+            <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-active-border)">Open</span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:9px;padding-top:2px">
+          <span style="padding:7px 12px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Link an existing config</span>
+          <span style="padding:7px 12px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Create a new one</span>
+        </div>
+      </div>
+
+      <div style="margin:0 18px 18px;padding:12px 14px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:8px">
+        <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-muted)">Run order</span>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span style="padding:4px 8px;background:var(--app-active-bg);border:1px solid var(--app-active-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Main batch items</span>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">→</span>
+          <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Child pages</span>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">→</span>
+          <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Page OCR</span>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">→</span>
+          <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Extracted text cleanup</span>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">→</span>
+          <span style="padding:4px 8px;background:var(--app-bg);border:1px solid var(--app-row-border);border-radius:3px;font:400 11.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Commit to Git</span>
+        </div>
+        <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Depth-first, the same order Workbench walks <span style="font-family:var(--font-mono)">secondary_tasks</span>. Flattened here so nesting never hides what actually runs.</span>
+      </div>
+    </div>
+
+    <div style="width:560px;flex:none;display:flex;flex-direction:column;gap:18px;padding-top:60px">
+
+      <div style="position:relative;background:var(--app-bg);border:1px solid var(--app-active-border);border-radius:6px;overflow:hidden">
+        <div style="position:absolute;left:-22px;top:0;width:22px;height:18px;border-left:1px solid var(--app-active-border);border-bottom:1px solid var(--app-active-border)"></div>
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-active-border);gap:9px">
+          <span style="font:400 12px/1 var(--font-mono);color:var(--app-active-border)">↳</span>
+          <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-sans);color:var(--app-muted)"><span>Main batch items</span><span>/</span><span style="color:var(--app-head-fg)">Child pages</span></div>
+          <div style="flex:1"></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">level 2</span>
+          <div style="display:flex;gap:13px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="padding:12px 16px;background:var(--app-head);border-bottom:1px solid var(--app-border);display:flex;align-items:center;gap:10px">
+          <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Inherits <span style="font-family:var(--font-mono)">host</span> and <span style="font-family:var(--font-mono)">credentials_file_path</span> from the root</span>
+          <div style="flex:1"></div>
+          <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-active-border)">Up to parent</span>
+        </div>
+        <div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:4px">
+          <span style="font:600 16px/1.3 var(--font-sans);color:var(--app-head-fg)">Child pages</span>
+          <span style="font:400 12px/1.5 var(--font-sans);color:var(--app-muted)">9 settings · task: create</span>
+        </div>
+        <div style="margin:14px 16px 16px;padding:13px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:400 12px/1 var(--font-mono);color:var(--app-active-border)">↳</span><span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-active-border)">Chain</span><span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">this config's own children</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 11px;background:var(--app-active-bg);border:1px solid var(--app-active-border);border-radius:4px">
+            <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">1</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:400 12.5px/1.2 var(--font-sans);color:var(--app-head-fg)">Page OCR</span><span style="display:flex;align-items:center;gap:5px;font:500 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--app-active-border)"><span style="width:5px;height:5px;border-radius:50%;background:var(--app-active-border)"></span>open</span></div>
+              <span style="font:400 11px/1.3 var(--font-mono);color:var(--app-muted)">ocr.yml · add_media · 1 child</span>
+            </div>
+            <span style="font:400 11.5px/1 var(--font-sans);color:var(--app-muted)">Unlink</span>
+          </div>
+          <div style="display:flex;gap:9px">
+            <span style="padding:6px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Link an existing config</span>
+            <span style="padding:6px 11px;background:var(--app-title);border:1px solid var(--app-row-border);border-radius:3px;font:400 12px/1.2 var(--font-sans);color:var(--app-head-fg)">Create a new one</span>
+          </div>
+          <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Identical panel at every level — the builder does not care how deep it is.</span>
+        </div>
+      </div>
+
+      <div style="position:relative;margin-left:36px;background:var(--app-bg);border:1px solid var(--app-active-border);border-radius:6px;overflow:hidden">
+        <div style="position:absolute;left:-22px;top:0;width:22px;height:18px;border-left:1px solid var(--app-active-border);border-bottom:1px solid var(--app-active-border)"></div>
+        <div style="display:flex;align-items:center;height:34px;padding:0 12px;background:var(--app-title);border-bottom:1px solid var(--app-active-border);gap:9px">
+          <span style="font:400 12px/1 var(--font-mono);color:var(--app-active-border)">↳</span>
+          <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-sans);color:var(--app-muted)"><span>Main batch items</span><span>/</span><span>Child pages</span><span>/</span><span style="color:var(--app-head-fg)">Page OCR</span></div>
+          <div style="flex:1"></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--app-muted)">level 3</span>
+          <div style="display:flex;gap:13px;font:400 12px/1 var(--font-mono);color:var(--app-muted)"><span>—</span><span>▢</span><span>✕</span></div>
+        </div>
+        <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+            <span style="font:600 15px/1.3 var(--font-sans);color:var(--app-head-fg)">Page OCR</span>
+            <span style="font:400 11.5px/1.5 var(--font-sans);color:var(--app-muted)">Deeper windows open cascaded and indented, so the stack itself shows the depth.</span>
+          </div>
+          <span style="padding:6px 12px;background:var(--app-active-border);border-radius:3px;font:500 12px/1.2 var(--font-sans);color:#fff">Save to library</span>
+        </div>
+      </div>
+
+      <div style="padding:13px 15px;background:var(--app-head);border:1px solid var(--app-border);border-radius:4px;display:flex;flex-direction:column;gap:7px">
+        <span style="font:500 11px/1 var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--app-warn)">Guardrails</span>
+        <span style="font:400 12px/1.6 var(--font-sans);color:var(--app-muted)">A config already in the chain can't be linked again — that's the loop error shown on the left. Windows past level 3 stop cascading and open centred with the full breadcrumb instead. Unlinking a config never deletes it; it stays in the library.</span>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Chaining — ordered list in the parent, child opens in a tethered window</div>
+<div class="dv-card" style="width:1320px;background:#e8e5df;border-color:rgba(0,0,0,.08);border-radius:8px">
+  <div style="padding:26px;display:flex;gap:0;align-items:flex-start;position:relative">
+
+    <div style="width:560px;flex:none;background:#141414;border:1px solid #2b2b2b;border-radius:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;height:36px;padding:0 12px;background:#1b1b1b;border-bottom:1px solid #2b2b2b;gap:10px">
+        <span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Config Builder</span>
+        <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Main batch items</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:14px;font:400 12px/1 ui-monospace,Consolas,monospace;color:#8b8b8b"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+      <div style="padding:18px 18px 6px;display:flex;flex-direction:column;gap:4px">
+        <span style="font:600 18px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Main batch items</span>
+        <span style="font:400 12px/1.5 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">14 settings · task: create</span>
+      </div>
+      <div style="margin:14px 18px 0;padding:10px 12px;background:#101010;border:1px solid #2b2b2b;border-radius:4px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Settings list collapsed for this view</div>
+
+      <div style="margin:16px 18px 22px;padding:14px;background:#171717;border:1px solid #2b2b2b;border-radius:4px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#F99D2A">↳</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8b8b8b">Secondary configs</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">run in order after this config</span></div>
+
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:#101010;border:1px solid #F99D2A;border-radius:4px">
+            <span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#6a6a6a">1</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:400 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Child pages</span><span style="display:flex;align-items:center;gap:5px;font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#F99D2A"><span style="width:5px;height:5px;border-radius:50%;background:#F99D2A"></span>open</span></div>
+              <span style="font:400 11px/1.3 ui-monospace,Consolas,monospace;color:#6a6a6a">pages.yml · task: create · 9 settings</span>
+            </div>
+            <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#9a9a9a">Unlink</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:#101010;border:1px solid #2b2b2b;border-radius:4px">
+            <span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#6a6a6a">2</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:400 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">OCR text</span>
+              <span style="font:400 11px/1.3 ui-monospace,Consolas,monospace;color:#6a6a6a">ocr.yml · task: add_media · 5 settings</span>
+            </div>
+            <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#F99D2A">Open</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;background:#141010;border:1px solid #E5484D;border-radius:4px">
+            <span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#6a6a6a">3</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <span style="font:400 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Thumbnails</span>
+              <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#e08a8c">thumbs.yml was moved or deleted — relink it or remove this step.</span>
+            </div>
+            <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#9a9a9a">Relink</span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:9px;padding-top:2px">
+          <span style="padding:7px 12px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4">Link an existing config</span>
+          <span style="padding:7px 12px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4">Create a new one</span>
+        </div>
+        <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Both open a builder window beside this one. Host and credentials are inherited from the parent — you never set them twice.</span>
+      </div>
+    </div>
+
+    <div style="width:80px;flex:none;align-self:stretch;position:relative;display:flex;align-items:center;justify-content:center">
+      <div style="position:absolute;left:0;right:0;top:236px;height:1px;background:#F99D2A"></div>
+      <div style="position:absolute;left:-4px;top:233px;width:7px;height:7px;border-radius:50%;background:#F99D2A"></div>
+      <div style="position:absolute;right:-4px;top:233px;width:7px;height:7px;border-radius:50%;background:#F99D2A"></div>
+      <div style="position:absolute;left:6px;right:6px;top:246px;text-align:center;font:600 9px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#a8834a">linked</div>
+    </div>
+
+    <div style="width:560px;flex:none;background:#141414;border:1px solid #F99D2A;border-radius:6px;overflow:hidden;margin-top:120px">
+      <div style="display:flex;align-items:center;height:36px;padding:0 12px;background:#1f1a12;border-bottom:1px solid #F99D2A;gap:10px">
+        <span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#F99D2A">↳</span>
+        <div style="display:flex;align-items:center;gap:7px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8b8b8b"><span>Main batch items</span><span style="color:#5a5a5a">/</span><span style="color:#e8e8e8">Child pages</span></div>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:14px;font:400 12px/1 ui-monospace,Consolas,monospace;color:#8b8b8b"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+
+      <div style="padding:14px 18px;background:#191510;border-bottom:1px solid #2b2b2b;display:flex;align-items:center;gap:10px">
+        <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c9a15a">Secondary config · step 1 of 3 · inherits <span style="font:400 11.5px/1.5 ui-monospace,Consolas,monospace">host</span> and <span style="font:400 11.5px/1.5 ui-monospace,Consolas,monospace">credentials_file_path</span> from the parent</span>
+        <div style="flex:1"></div>
+        <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#F99D2A">Back to parent</span>
+      </div>
+
+      <div style="padding:18px 18px 6px;display:flex;flex-direction:column;gap:5px">
+        <span style="font:600 18px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Child pages</span>
+        <span style="font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">Creates the page-level nodes under each item created by the parent run.</span>
+      </div>
+
+      <div style="margin:14px 18px 0;display:flex;flex-direction:column;gap:1px">
+        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #202020">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><div style="display:flex;align-items:center;gap:7px"><span style="font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">task</span><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#F99D2A">required</span></div></div>
+          <div style="flex:1;display:flex;border:1px solid #3a3a3a;border-radius:4px;overflow:hidden;width:fit-content;height:fit-content"><span style="padding:6px 12px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;background:#F99D2A;color:#1a1a1a">create</span><span style="padding:6px 12px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">add_media</span><span style="padding:6px 12px;font:400 12px/1 ui-monospace,Consolas,monospace;background:#101010;color:#6a6a6a;border-left:1px solid #3a3a3a">+10</span></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #202020">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">paged_content_from_directories</span></div>
+          <div style="flex:1;display:flex;align-items:center;gap:10px"><div style="width:34px;height:19px;border-radius:10px;background:#F99D2A;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:#141414"></span></div><span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">true</span></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #202020">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">page_title_template</span></div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px"><div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8"><span style="color:#F99D2A">$parent_title</span>, page <span style="color:#F99D2A">$weight</span></div><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Preview: Punjabi Language Day programme, page 4</span></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:12px 0">
+          <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:3px"><span style="font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">parent_id</span></div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px"><div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">accessIdentifier</div><div style="display:flex;gap:7px"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#3FA06A">✓</span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Matches the parent config's <span style="font:400 11.5px/1.45 ui-monospace,Consolas,monospace;color:#9a9a9a">id_field</span>, so pages will attach correctly.</span></div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;padding:9px 14px;background:#1b1b1b;border-top:1px solid #2b2b2b;display:flex;align-items:center;gap:12px">
+        <span style="display:flex;align-items:center;gap:6px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#3FA06A"><span style="font:400 11px/1 ui-monospace,Consolas,monospace">✓</span>No problems</span>
+        <div style="flex:1"></div>
+        <span style="padding:6px 14px;background:#F99D2A;border-radius:3px;font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Save to library</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:0 26px 24px;display:flex;gap:26px">
+    <div style="width:560px;flex:none;font:400 11.5px/1.6 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55)">The parent keeps the chain: ordered, renumbered on drag, with a broken link called out in place rather than at save time. Depth is not limited, but the list only ever shows one level — you walk the chain by opening a child.</div>
+    <div style="width:640px;flex:none;font:400 11.5px/1.6 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55)">The child window is unmistakably a child: orange frame, breadcrumb instead of a plain title, an inheritance line, and a "Back to parent" affordance. The tether is drawn only while both windows are visible and snapped; when the child is floated free, the breadcrumb carries the relationship on its own.</div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "add a whole-chain map view" · "show what happens past level 3" · "make the run-order strip clickable"</p>
+</section>
+
+<section class="dv-turn" id="g5" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g5">E</a><span class="dv-tname">Config builder <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— Search, add, edit, validate, save</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>New config — search open, nothing added yet</div>
+<div class="dv-card" style="width:800px;background:#141414;border-color:#2b2b2b;border-radius:6px">
+  <div style="display:flex;align-items:center;height:40px;padding:0 12px;background:#1b1b1b;border-bottom:1px solid #2b2b2b;gap:16px">
+    <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Config Builder</span>
+    <span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">Help</span>
+    <div style="flex:1"></div>
+    <div style="display:flex;gap:18px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#8b8b8b"><span>—</span><span>▢</span><span>✕</span></div>
+  </div>
+
+  <div style="padding:20px 22px 0;display:flex;flex-direction:column;gap:6px">
+    <input type="text" placeholder="Untitled config" style="width:100%;box-sizing:border-box;background:transparent;border:none;outline:none;font:600 22px/1.3 'Segoe UI',system-ui,sans-serif;color:#4a4a4a;padding:0">
+    <input type="text" placeholder="Describe what this config is for — your future self will thank you" style="width:100%;box-sizing:border-box;background:transparent;border:none;outline:none;font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#4a4a4a;padding:0">
+  </div>
+
+  <div style="margin:18px 22px 0;padding:12px 14px;background:#171717;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:9px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6a6a6a">Supplied by the app at run time</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">— you don't set these here</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:7px;padding:5px 9px;background:#101010;border:1px solid #2b2b2b;border-radius:3px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#9a9a9a">host</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Ingest server</span></div>
+      <div style="display:flex;align-items:baseline;gap:7px;padding:5px 9px;background:#101010;border:1px solid #2b2b2b;border-radius:3px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#9a9a9a">credentials_file_path</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">App settings</span></div>
+      <div style="display:flex;align-items:baseline;gap:7px;padding:5px 9px;background:#101010;border:1px solid #2b2b2b;border-radius:3px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#9a9a9a">input_csv</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Processed sheet</span></div>
+    </div>
+  </div>
+
+  <div style="margin:20px 22px 0;position:relative">
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:#101010;border:1px solid #F99D2A;border-radius:4px">
+      <span style="font:400 14px/1 ui-monospace,Consolas,monospace;color:#F99D2A">›</span>
+      <span style="font:400 14px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">roll</span>
+      <span style="width:1px;height:16px;background:#F99D2A"></span>
+      <div style="flex:1"></div>
+      <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">7 of 142 settings</span>
+    </div>
+
+    <div style="margin-top:6px;background:#181818;border:1px solid #303030;border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden">
+      <sc-for list="{{ resultGroups }}" as="grp" hint-placeholder-count="2">
+        <div style="padding:9px 13px 6px;background:#1c1c1c;border-bottom:1px solid #262626;display:flex;align-items:center;gap:8px">
+          <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#8b8b8b">{{ grp.name }}</span>
+          <span style="font:400 10px/1 ui-monospace,Consolas,monospace;color:#5a5a5a">{{ grp.count }}</span>
+        </div>
+        <sc-for list="{{ grp.items }}" as="opt" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:12px;padding:9px 13px;border-bottom:1px solid #202020" style-hover="background:#202020">
+            <span style="width:22px;text-align:center;font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">{{ opt.glyph }}</span>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+              <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">{{ opt.name }}</span>
+              <span style="font:400 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">{{ opt.desc }}</span>
+            </div>
+            <span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#9a9a9a;padding:4px 7px;background:#101010;border:1px solid #303030;border-radius:3px;white-space:nowrap">{{ opt.type }}</span>
+            <span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a;width:52px;text-align:right">{{ opt.def }}</span>
+          </div>
+        </sc-for>
+      </sc-for>
+      <div style="display:flex;align-items:center;gap:14px;padding:8px 13px;background:#1c1c1c"><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">↑↓ to move</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Enter to add</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Esc to close</span></div>
+    </div>
+  </div>
+
+  <div style="margin:26px 22px 0;padding-top:20px;border-top:1px solid #262626;display:flex;flex-direction:column;gap:12px">
+    <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6a6a6a">Or start from a template</span>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:4px;padding:11px 13px;width:172px;background:#1a1a1a;border:1px solid #303030;border-radius:4px" style-hover="border-color:#F99D2A"><span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Create nodes</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">task: create, plus 6 settings</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding:11px 13px;width:172px;background:#1a1a1a;border:1px solid #303030;border-radius:4px"><span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Add media</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">task: add_media, plus 4</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding:11px 13px;width:172px;background:#1a1a1a;border:1px solid #303030;border-radius:4px"><span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Update metadata</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">task: update, plus 5</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding:11px 13px;width:172px;background:#1a1a1a;border:1px solid #303030;border-radius:4px"><span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Export CSV</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">task: export_csv, plus 5</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;padding:9px 14px;background:#1b1b1b;border-top:1px solid #2b2b2b;display:flex;align-items:center;gap:10px">
+    <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Add <span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#F99D2A">task</span> to get started</span>
+    <div style="flex:1"></div>
+    <span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Save to library</span>
+  </div>
+</div></div>
+
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Seven settings added, live validation, YAML panel open</div>
+<div class="dv-card" style="width:1180px;background:#141414;border-color:#2b2b2b;border-radius:6px">
+  <div style="display:flex;align-items:center;height:40px;padding:0 12px;background:#1b1b1b;border-bottom:1px solid #2b2b2b;gap:16px">
+    <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Config Builder</span>
+    <span style="font:400 13px/1 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">Help</span>
+    <div style="flex:1"></div>
+    <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Draft saved 12:04</span>
+    <div style="display:flex;gap:18px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#8b8b8b"><span>—</span><span>▢</span><span>✕</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 400px">
+    <div style="min-width:0;border-right:1px solid #262626">
+      <div style="padding:20px 22px 0;display:flex;flex-direction:column;gap:6px">
+        <div style="font:600 22px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Main batch items</div>
+        <div style="font:400 13px/1.5 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">Standard photograph ingest from the processed access sheet. Creates nodes and their original files, with rollback on.</div>
+      </div>
+
+      <div style="margin:18px 22px 0;display:flex;align-items:center;gap:10px;padding:10px 13px;background:#101010;border:1px solid #3a3a3a;border-radius:4px">
+        <span style="font:400 14px/1 ui-monospace,Consolas,monospace;color:#6a6a6a">›</span>
+        <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Search settings to add — try "log", "rollback", "media"</span>
+      </div>
+
+      <div style="margin:16px 22px 0;display:flex;flex-direction:column;gap:1px">
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:7px"><span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">task</span><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#F99D2A">required</span></div>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">What this run does to Islandora.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:0;border:1px solid #3a3a3a;border-radius:4px;overflow:hidden;width:fit-content">
+              <span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#F99D2A;color:#1a1a1a">create</span>
+              <span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">add_media</span>
+              <span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">update</span>
+              <span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">delete</span>
+              <span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">export_csv</span>
+              <span style="padding:7px 13px;font:400 12.5px/1 ui-monospace,Consolas,monospace;background:#101010;color:#6a6a6a;border-left:1px solid #3a3a3a">+7</span>
+            </div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">enum</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">allow_missing_files</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Keep going when a file named in the CSV isn't on disk.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:34px;height:19px;border-radius:10px;background:#F99D2A;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:#141414"></span></div>
+              <span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">true</span>
+              <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">default: false</span>
+            </div>
+            <div style="display:flex;gap:7px;align-items:flex-start"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#F99D2A">!</span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c9a15a">Missing files will be reported in the log but won't stop the run. Check the log afterwards.</span></div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">boolean</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">adaptive_pause</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Seconds to wait between requests.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="display:flex;align-items:center;border:1px solid #3a3a3a;border-radius:4px;background:#101010;overflow:hidden;width:fit-content">
+                <span style="padding:7px 11px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#9a9a9a;border-right:1px solid #2b2b2b">−</span>
+                <span style="padding:7px 14px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#e8e8e8;min-width:34px;text-align:center">3</span>
+                <span style="padding:7px 11px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#9a9a9a;border-left:1px solid #2b2b2b">+</span>
+              </div>
+              <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">seconds</span>
+            </div>
+            <div style="display:flex;gap:7px;align-items:flex-start"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#F99D2A">!</span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c9a15a">At 3s across 1,240 rows this adds roughly an hour to the run.</span></div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">integer</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">log_file_path</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Where Workbench writes this run's log.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;min-width:0;padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">./g/logs/workbench.log</div>
+              <span style="padding:7px 12px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4;white-space:nowrap">Browse…</span>
+            </div>
+            <div style="display:flex;gap:7px;align-items:flex-start"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#3FA06A">✓</span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Resolves to <span style="font:400 11.5px/1.45 ui-monospace,Consolas,monospace;color:#9a9a9a">C:\islandora_workbench\g\logs\workbench.log</span> — folder exists, writable.</span></div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">path</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">timestamp_rollback</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Stamp rollback files so runs don't overwrite each other.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px">
+            <div style="width:34px;height:19px;border-radius:10px;background:#F99D2A;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:#141414"></span></div>
+            <span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">true</span>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">boolean</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020;background:#1a1414;margin:0 -12px;padding-left:12px;padding-right:12px;border-left:none">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">rollback_dir</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Folder for rollback CSVs.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;min-width:0;padding:7px 10px;background:#101010;border:1px solid #E5484D;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#5a5a5a">empty</div>
+              <span style="padding:7px 12px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4;white-space:nowrap">Browse…</span>
+            </div>
+            <div style="display:flex;gap:7px;align-items:flex-start"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#E5484D">✕</span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#e08a8c">A folder is needed because <span style="font:400 11.5px/1.45 ui-monospace,Consolas,monospace">timestamp_rollback</span> is on. Without it the run can't be undone.</span></div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">path</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #202020">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">protected_vocabularies</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Vocabularies Workbench may never add terms to.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <span style="display:flex;align-items:center;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">islandora_models<span style="color:#7d7d7d">✕</span></span>
+              <span style="display:flex;align-items:center;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">islandora_display<span style="color:#7d7d7d">✕</span></span>
+              <span style="display:flex;align-items:center;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">genre<span style="color:#7d7d7d">✕</span></span>
+              <span style="display:flex;align-items:center;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">copyright<span style="color:#7d7d7d">✕</span></span>
+              <span style="padding:4px 9px;border:1px dashed #3a3a3a;border-radius:3px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+ Add</span>
+            </div>
+            <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">4 of 10 vocabularies on <span style="font:400 11.5px/1.45 ui-monospace,Consolas,monospace">isle.dvnl.work</span>. Type to search the live list.</span>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">list</span>
+        </div>
+
+        <div style="display:flex;gap:14px;padding:14px 0">
+          <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:4px">
+            <span style="font:400 13px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">csv_value_templates</span>
+            <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Rewrite a column's value before it is sent.</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+            <div style="display:grid;grid-template-columns:1fr 1.4fr 24px;gap:6px;align-items:center">
+              <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#6a6a6a">CSV column</span>
+              <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#6a6a6a">Template</span>
+              <span></span>
+              <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">field_linked_agent</div>
+              <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">relators:cre:person:$csv_value</div>
+              <span style="text-align:center;font:400 12px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">✕</span>
+              <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">file</div>
+              <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">access/$csv_value</div>
+              <span style="text-align:center;font:400 12px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">✕</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="padding:5px 10px;border:1px dashed #3a3a3a;border-radius:3px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+ Add row</span>
+              <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#5a5a5a"><span style="font:400 11.5px/1.45 ui-monospace,Consolas,monospace;color:#F99D2A">$csv_value</span> stands in for the cell's original value.</span>
+            </div>
+          </div>
+          <span style="width:60px;flex:none;text-align:right;font:400 11px/1.6 ui-monospace,Consolas,monospace;color:#3f3f3f">map list</span>
+        </div>
+      </div>
+
+      <div style="margin:22px 22px 24px;padding:13px 14px;background:#171717;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#F99D2A">↳</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8b8b8b">Secondary configs</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">run after this one finishes</span></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="padding:6px 11px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4">Link an existing config</span>
+          <span style="padding:6px 11px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4">Create a new one</span>
+          <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">see <a href="#1d" style="color:#F99D2A;text-decoration:none">1d</a></span>
+        </div>
+      </div>
+    </div>
+
+    <div style="min-width:0;display:flex;flex-direction:column;background:#101010">
+      <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid #262626">
+        <span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">▾</span>
+        <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8b8b8b">YAML preview</span>
+        <div style="flex:1"></div>
+        <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">read-only</span>
+      </div>
+      <div style="padding:14px 0;font:400 12px/1.75 ui-monospace,Consolas,monospace;color:#c8c8c8">
+        <sc-for list="{{ yamlLines }}" as="line" hint-placeholder-count="24">
+          <div style="display:flex;gap:12px;padding:0 14px">
+            <span style="width:18px;flex:none;text-align:right;color:#3f3f3f">{{ line.n }}</span>
+            <span style="white-space:pre;color:#c8c8c8">{{ line.t }}</span>
+          </div>
+        </sc-for>
+        <div style="display:flex;gap:12px;padding:1px 14px;background:#1f1416">
+          <span style="width:18px;flex:none;text-align:right;color:#E5484D">19</span>
+          <span style="white-space:pre;color:#e08a8c">rollback_dir:</span>
+        </div>
+        <div style="display:flex;gap:12px;padding:0 14px 0 44px"><span style="font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:#e08a8c">↑ value required</span></div>
+        <sc-for list="{{ yamlLinesTail }}" as="line" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;padding:0 14px">
+            <span style="width:18px;flex:none;text-align:right;color:#3f3f3f">{{ line.n }}</span>
+            <span style="white-space:pre;color:#c8c8c8">{{ line.t }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:9px 14px;background:#1b1b1b;border-top:1px solid #2b2b2b;display:flex;align-items:center;gap:14px">
+    <span style="display:flex;align-items:center;gap:6px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#e08a8c"><span style="font:400 11px/1 ui-monospace,Consolas,monospace">✕</span>1 problem to fix</span>
+    <span style="display:flex;align-items:center;gap:6px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#c9a15a"><span style="font:400 11px/1 ui-monospace,Consolas,monospace">!</span>2 things to know</span>
+    <div style="flex:1"></div>
+    <span style="padding:6px 13px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#9a9a9a">Discard draft</span>
+    <span style="padding:6px 14px;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:3px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Save to library</span>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "two-pane search with categories on the left" · "show the builder at 6 settings on a small window" · "add a diff against the saved version"</p>
+</section>
+
+<section class="dv-turn" id="g6" data-theme="gruvbox-dark">
+<div class="dv-thd"><a class="dv-tid" href="#g6">F</a><span class="dv-tname">YAML value shapes <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.45)">— The input vocabulary every setting in the builder draws from</span></span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Every YAML value shape, and the input it gets</div>
+<div class="dv-card" style="width:1020px;background:#141414;border-color:#2b2b2b;border-radius:6px">
+  <div style="padding:20px 22px 4px;display:flex;flex-direction:column;gap:5px">
+    <span style="font:600 18px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Value-shape vocabulary</span>
+    <span style="font:400 12.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">Sixteen shapes cover all 142 settings in <span style="font:400 12.5px/1.55 ui-monospace,Consolas,monospace">get_default_config()</span>. Each row shows the YAML on the left and the control the builder renders on the right.</span>
+  </div>
+  <div style="padding:16px 22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">boolean</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">63 settings</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">nodes_only: true</div>
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:19px;border-radius:10px;background:#F99D2A;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;box-sizing:border-box"><span style="width:15px;height:15px;border-radius:50%;background:#141414"></span></div><span style="font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">true</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">integer</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">12 settings</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">max_node_title_length: 255</div>
+      <div style="display:flex;align-items:center;border:1px solid #3a3a3a;border-radius:4px;background:#101010;overflow:hidden;width:fit-content"><span style="padding:7px 11px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#9a9a9a;border-right:1px solid #2b2b2b">−</span><span style="padding:7px 14px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#e8e8e8;min-width:44px;text-align:center">255</span><span style="padding:7px 11px;font:400 13px/1 ui-monospace,Consolas,monospace;color:#9a9a9a;border-left:1px solid #2b2b2b">+</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">string</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">free text</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">user_agent: Islandora Workbench</div>
+      <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Islandora Workbench</div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">single character</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">delimiters</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">subdelimiter: "|"</div>
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:44px;padding:7px 0;text-align:center;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 14px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">|</div><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Separates several values in one cell</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">enum</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">fixed choices</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">update_mode: replace</div>
+      <div style="display:flex;border:1px solid #3a3a3a;border-radius:4px;overflow:hidden;width:fit-content"><span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#F99D2A;color:#1a1a1a">replace</span><span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">append</span><span style="padding:7px 13px;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;background:#101010;color:#9a9a9a;border-left:1px solid #3a3a3a">delete</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">nullable enum</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">may be unset</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">fixity_algorithm: md5   # or null</div>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;width:fit-content"><span style="font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">md5</span><span style="font:400 10px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">▾</span></div>
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5a5a5a">Choices: not set · md5 · sha1 · sha256</span>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">file path</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">18 settings</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">input_csv: metadata.csv</div>
+      <div style="display:flex;gap:8px"><div style="flex:1;min-width:0;padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">metadata.csv</div><span style="padding:7px 12px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#d4d4d4">Browse…</span></div>
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Relative to the Workbench folder</span>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">URL</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">validated</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">media_use_tid: http://pcdm.org/use#Ori…</div>
+      <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">http://pcdm.org/use#OriginalFile</div>
+      <div style="display:flex;gap:7px"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#3FA06A">✓</span><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Found on the server as "Original File"</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">list of strings</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">order-free</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">ignore_csv_columns:
+  - machineName
+  - fileTitle</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px"><span style="display:flex;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">machineName<span style="color:#7d7d7d">✕</span></span><span style="display:flex;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">fileTitle<span style="color:#7d7d7d">✕</span></span><span style="padding:4px 9px;border:1px dashed #3a3a3a;border-radius:3px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+ Add</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">list of numbers</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">status codes</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">http_retry_on_status_codes:
+  - 500
+  - 502</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px"><span style="display:flex;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">500<span style="color:#7d7d7d">✕</span></span><span style="display:flex;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">502<span style="color:#7d7d7d">✕</span></span><span style="display:flex;gap:7px;padding:4px 8px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">503<span style="color:#7d7d7d">✕</span></span><span style="padding:4px 9px;border:1px dashed #3a3a3a;border-radius:3px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+ Add</span></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">list of one-key maps</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">ordered pairs</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">csv_field_templates:
+  - field_model: Image</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 22px;gap:6px;align-items:center"><div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">field_model</div><div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">Image</div><span style="text-align:center;font:400 12px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">✕</span></div>
+      <span style="padding:5px 10px;border:1px dashed #3a3a3a;border-radius:3px;font:400 12px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b;width:fit-content">+ Add row</span>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">map</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">keyed table</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">media_fields:
+  image: field_media_image
+  audio: field_media_audio_file</div>
+      <div style="display:flex;flex-direction:column;border:1px solid #3a3a3a;border-radius:4px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:100px 1fr;background:#1f1f1f"><span style="padding:6px 10px;font:600 9.5px/1.4 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#8b8b8b">Media type</span><span style="padding:6px 10px;font:600 9.5px/1.4 'Segoe UI',system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#8b8b8b">Drupal field</span></div>
+        <div style="display:grid;grid-template-columns:100px 1fr;border-top:1px solid #2b2b2b"><span style="padding:7px 10px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#9a9a9a">image</span><span style="padding:7px 10px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">field_media_image</span></div>
+        <div style="display:grid;grid-template-columns:100px 1fr;border-top:1px solid #2b2b2b"><span style="padding:7px 10px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#9a9a9a">audio</span><span style="padding:7px 10px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">field_media_audio_file</span></div>
+      </div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">map of lists</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">extensions</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">media_types:
+  - image: [png, gif, jpg]</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:74px;flex:none;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#9a9a9a">image</span><div style="display:flex;flex-wrap:wrap;gap:5px"><span style="display:flex;gap:6px;padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">png<span style="color:#7d7d7d">✕</span></span><span style="display:flex;gap:6px;padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">gif<span style="color:#7d7d7d">✕</span></span><span style="display:flex;gap:6px;padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">jpg<span style="color:#7d7d7d">✕</span></span><span style="padding:3px 8px;border:1px dashed #3a3a3a;border-radius:3px;font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:74px;flex:none;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#9a9a9a">audio</span><div style="display:flex;flex-wrap:wrap;gap:5px"><span style="display:flex;gap:6px;padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">mp3<span style="color:#7d7d7d">✕</span></span><span style="padding:3px 8px;border:1px dashed #3a3a3a;border-radius:3px;font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8b8b8b">+</span></div></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">command list</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">hooks</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">shutdown:
+  - uv run python ./g/scripts/…</div>
+      <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:8px;align-items:center"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#6a6a6a">1</span><div style="flex:1;min-width:0;padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">uv run python ./g/scripts/post_action_commit.py</div><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#7d7d7d">✕</span></div><div style="display:flex;gap:7px"><span style="font:400 11px/1.4 ui-monospace,Consolas,monospace;color:#F99D2A">!</span><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#c9a15a">Runs on your machine after the task finishes.</span></div></div>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">template string</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">tokens</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">rollback_config_filename_template:
+  rollback_${config_filename}.yml</div>
+      <div style="padding:7px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px;font:400 12.5px/1.2 ui-monospace,Consolas,monospace;color:#e8e8e8">rollback_<span style="color:#F99D2A">${config_filename}</span>.yml</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">Insert:</span><span style="padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11px/1.2 ui-monospace,Consolas,monospace;color:#F99D2A">${config_filename}</span><span style="padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11px/1.2 ui-monospace,Consolas,monospace;color:#F99D2A">$csv_value</span><span style="padding:3px 7px;background:#1f1f1f;border:1px solid #3a3a3a;border-radius:3px;font:400 11px/1.2 ui-monospace,Consolas,monospace;color:#F99D2A">$weight</span></div>
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Preview: rollback_main_batch_items.yml</span>
+    </div>
+
+    <div style="padding:13px 14px;background:#1a1a1a;border:1px solid #262626;border-radius:4px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:400 11px/1 ui-monospace,Consolas,monospace;color:#F99D2A">config reference</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6a6a6a">points at another file</span></div>
+      <div style="font:400 11.5px/1.6 ui-monospace,Consolas,monospace;color:#8b8b8b;white-space:pre">secondary_tasks:
+  - pages.yml</div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;background:#101010;border:1px solid #3a3a3a;border-radius:4px"><span style="font:400 12px/1 ui-monospace,Consolas,monospace;color:#F99D2A">↳</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:400 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8e8e8">Child pages</span><span style="font:400 11px/1.2 ui-monospace,Consolas,monospace;color:#6a6a6a">pages.yml</span></div><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#F99D2A">Open</span></div>
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#7d7d7d">Full treatment in <a href="#1d" style="color:#F99D2A;text-decoration:none">1d</a></span>
+    </div>
+  </div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "add a shape for nested maps of maps" · "show the error state for each shape" · "which shapes need a Browse button"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const rollback = [
+      { name: "timestamp_rollback", type: "boolean", glyph: "▢", def: "false", desc: "Stamp rollback files with the run time so runs don't overwrite each other." },
+      { name: "rollback_dir", type: "path", glyph: "/", def: "—", desc: "Folder where rollback CSVs are written." },
+      { name: "rollback_file_include_node_info", type: "boolean", glyph: "▢", def: "false", desc: "Include node IDs and titles in the rollback CSV." },
+      { name: "rollback_config_file_path", type: "path", glyph: "/", def: "—", desc: "Where the generated rollback config is saved." },
+      { name: "rollback_config_filename_template", type: "template", glyph: "ab", def: "rollback_…", desc: "Filename pattern for the rollback config. Accepts ${config_filename}." }
+    ];
+    const recovery = [
+      { name: "recovery_mode_starting_from_node_id", type: "integer", glyph: "12", def: "false", desc: "Resume an interrupted create task from a known node ID." },
+      { name: "check_lock_file_path", type: "path", glyph: "/", def: "—", desc: "Lock file that stops two runs starting at once." }
+    ];
+    const yamlLines = [
+      "task: create",
+      "allow_missing_files: true",
+      "adaptive_pause: 3",
+      "log_file_path: ./g/logs/workbench.log",
+      "timestamp_rollback: true",
+      "protected_vocabularies:",
+      "  - islandora_models",
+      "  - islandora_display",
+      "  - genre",
+      "  - copyright",
+      "csv_value_templates:",
+      "  - field_linked_agent: relators:cre:person:$csv_value",
+      "  - file: access/$csv_value",
+      "secondary_tasks:",
+      "  - pages.yml",
+      "  - ocr.yml",
+      "",
+      "# needs a value"
+    ].map((t, i) => ({ n: i + 1, t }));
+    const yamlLinesTail = [
+      "",
+      "# host, credentials_file_path and input_csv",
+      "# are written by the app at run time"
+    ].map((t, i) => ({ n: i + 20, t }));
+    return {
+      resultGroups: [
+        { name: "Rollback", count: "5 matches", items: rollback },
+        { name: "Recovery", count: "2 matches", items: recovery }
+      ],
+      yamlLines,
+      yamlLinesTail
+    };
+  }
+}
+</script>
+</body>
+</html>
