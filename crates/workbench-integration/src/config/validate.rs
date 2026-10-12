@@ -144,6 +144,18 @@ pub fn validate(draft: &ConfigDraft) -> Vec<Problem> {
             ));
             continue;
         };
+        // Null is "unset": the key is not written and Workbench uses its default (§04). Only a
+        // required setting has no default to fall back on.
+        if value.is_null() {
+            if def.required {
+                problems.push(Problem::new(
+                    key,
+                    Severity::Error,
+                    format!("{key} is required."),
+                ));
+            }
+            continue;
+        }
         problems.extend(check_shape(&def.key, def.shape, value));
         if !def.choices.is_empty()
             && let Some(found) = value.as_str()
@@ -337,6 +349,18 @@ mod tests {
         assert_eq!(errors(&draft), vec!["nodes_only".to_string()]);
 
         let draft = ConfigDraft::from_yaml("task: not_a_task\n").unwrap();
+        assert_eq!(errors(&draft), vec!["task".to_string()]);
+    }
+
+    /// P0-5: an integer cleared back to empty is unset, not a shape error, and is not written.
+    #[test]
+    fn an_unset_integer_is_not_an_error() {
+        let mut draft = ConfigDraft::from_yaml("task: create\n").unwrap();
+        draft.values.insert("adaptive_pause".into(), Value::Null);
+        assert_eq!(errors(&draft), Vec::<String>::new());
+
+        // A required setting has no default, so unset is still a problem.
+        draft.values.insert("task".into(), Value::Null);
         assert_eq!(errors(&draft), vec!["task".to_string()]);
     }
 

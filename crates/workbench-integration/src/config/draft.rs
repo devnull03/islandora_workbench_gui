@@ -49,13 +49,21 @@ impl ConfigDraft {
         })
     }
 
+    /// The YAML this draft writes.
+    ///
+    /// A `null` value means **unset** — a row the user added but left empty (an integer field
+    /// cleared back to "use the default", a nullable enum set to `none`). Unset keys are left
+    /// out, so Workbench applies its own default rather than reading an explicit null or a 0
+    /// (§04; plan 1.5, P0-5). The row stays in the builder; only the file omits it.
     pub fn to_yaml(&self) -> String {
+        let set: IndexMap<&String, &Value> =
+            self.values.iter().filter(|(_, v)| !v.is_null()).collect();
         // An empty draft serialises as `{}`, which is valid YAML but reads as noise in the
         // preview panel before anything has been added.
-        if self.values.is_empty() {
+        if set.is_empty() {
             return String::new();
         }
-        serde_yaml::to_string(&self.values).unwrap_or_default()
+        serde_yaml::to_string(&set).unwrap_or_default()
     }
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
@@ -178,6 +186,15 @@ mod tests {
         draft.mark_saved(&commented);
         assert!(!draft.source_has_comments);
         assert!(!ConfigDraft::load(&commented).unwrap().source_has_comments);
+    }
+
+    /// P0-5: an unset (null) value keeps its row but is not written.
+    #[test]
+    fn unset_values_are_left_out_of_the_yaml() {
+        let mut draft = ConfigDraft::from_yaml("task: create\n").unwrap();
+        draft.values.insert("adaptive_pause".into(), Value::Null);
+        assert!(draft.values.contains_key("adaptive_pause"));
+        assert_eq!(draft.to_yaml(), "task: create\n");
     }
 
     /// P0-4: relative entries follow Workbench (its directory), not the config's folder.

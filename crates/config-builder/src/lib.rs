@@ -597,6 +597,7 @@ impl ConfigBuilder {
         id: SharedString,
         setting_key: &str,
         seed: &str,
+        placeholder: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<InputState> {
@@ -604,8 +605,10 @@ impl ConfigBuilder {
             return existing.clone();
         }
         let seed = seed.to_string();
+        let placeholder = placeholder.to_string();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
+                .placeholder(placeholder)
                 .pattern(INTEGER_PATTERN.clone())
                 .default_value(seed)
                 .min(0.)

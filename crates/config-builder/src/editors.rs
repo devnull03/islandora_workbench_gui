@@ -40,7 +40,8 @@ use ui::{
 pub fn empty_value(shape: Shape) -> Value {
     match shape {
         Shape::Boolean => Value::Bool(false),
-        Shape::Integer => Value::Number(0.into()),
+        // Unset, not 0: §04 says an empty number means "use the default".
+        Shape::Integer => Value::Null,
         Shape::Map | Shape::MapOfLists => Value::Mapping(Mapping::new()),
         Shape::ListOfStrings
         | Shape::ListOfNumbers
@@ -119,6 +120,17 @@ fn scalar_text(value: &Value) -> String {
     }
 }
 
+/// An integer field's text as YAML. Never a string: empty (or a lone `-` mid-typing) is
+/// **unset** — `Value::Null`, which the draft does not write — so Workbench uses its default
+/// (§04; plan 1.5, P0-5). The field's pattern admits nothing but `-?\d*`, so the only other
+/// failure is a number too large for `i64`, which is unset too rather than a word in an
+/// integer setting.
+pub(crate) fn parse_integer(text: &str) -> Value {
+    text.trim()
+        .parse::<i64>()
+        .map_or(Value::Null, |n| Value::Number(n.into()))
+}
+
 /// Parse a typed cell back into YAML. Numbers stay numbers so `500` does not become `"500"`.
 fn parse_scalar(text: &str, numeric: bool) -> Value {
     if numeric {
@@ -141,10 +153,7 @@ impl ConfigBuilder {
 
         match def.shape {
             Shape::Boolean => None, // the checkbox writes straight through
-            Shape::Integer => {
-                let text = self.input_value(&field_id(&[key]), cx);
-                Some(parse_scalar(&text, true))
-            }
+            Shape::Integer => Some(parse_integer(&self.input_value(&field_id(&[key]), cx))),
             Shape::Enum | Shape::NullableEnum => match self.select_value(&field_id(&[key]), cx) {
                 Some(v) if v.is_empty() => Some(Value::Null),
                 Some(v) => Some(Value::String(v.to_string())),
@@ -395,7 +404,10 @@ impl ConfigBuilder {
             // digits-only pattern and a floor, which is what lets NumberInput step the value
             // itself — no Step event to subscribe to, and no second copy of the number.
             Shape::Integer => {
-                let input = self.number_input(id, &key, &scalar_text(&value), window, cx);
+                // The default is the placeholder, so an empty field shows what "unset" means.
+                let placeholder = scalar_text(&def.default);
+                let input =
+                    self.number_input(id, &key, &scalar_text(&value), &placeholder, window, cx);
                 h_flex()
                     .gap(GAP_MD)
                     .items_center()
@@ -1002,4 +1014,20 @@ fn normalise_to_mapping(value: &Value) -> Mapping {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Value, parse_integer};
+
+    /// P0-5: type then clear an integer ⇒ unset, never the string `""` that validation used to
+    /// reject as "Expected a whole number".
+    #[test]
+    fn an_integer_field_is_a_number_or_unset() {
+        assert_eq!(parse_integer("42"), Value::Number(42.into()));
+        assert_eq!(parse_integer("-3"), Value::Number((-3).into()));
+        for unset in ["", " ", "-", "99999999999999999999999"] {
+            assert_eq!(parse_integer(unset), Value::Null, "{unset:?}");
+        }
+    }
 }

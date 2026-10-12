@@ -297,3 +297,10 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   "relink it as create-items.config.yml" instead of treating it as healthy; and the run-time
   rewrite recursed without a visited set, so a hand-written loop overflowed the stack — it now
   stops with an error.
+- [x] **1.5 (P0-5)** "Unset" exists: `Value::Null` in the draft means the row is present but
+  the key is not written (`ConfigDraft::to_yaml` filters nulls), so Workbench applies its own
+  default. An integer field that is empty or a lone `-` reads back as unset
+  (`editors::parse_integer`, never a string); a new integer row with no upstream default starts
+  unset rather than `0`; the field's placeholder shows the default. Validation accepts null for
+  every non-required setting. This also makes a nullable enum's `none` really omit the key, as
+  its row always claimed.
