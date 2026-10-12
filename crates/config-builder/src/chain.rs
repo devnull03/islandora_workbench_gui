@@ -15,7 +15,7 @@ use ui::tokens::{CHEVRON_SLOT, GAP_MD, GAP_SM, INDENT_STEP};
 use ui::{Card, CardTone, app_button, app_tag, ghost_button};
 use workbench_integration::config::{self, chain::SecondaryConfigNode};
 
-use super::{BuilderChromeEvent, ConfigBuilder, open_config_builder_in_chain};
+use super::{BuilderChromeEvent, ConfigBuilder, open_config_builder_in_chain, workbench_dir};
 
 struct NodePosition {
     parent: Option<PathBuf>,
@@ -34,7 +34,8 @@ impl ConfigBuilder {
             .last_chain_scan
             .is_none_or(|last| now.duration_since(last) >= Duration::from_secs(2))
         {
-            self.chain_nodes = config::chain::child_nodes(&self.draft);
+            self.chain_nodes =
+                config::chain::child_nodes(&self.draft, workbench_dir(cx).as_deref());
             self.last_chain_scan = Some(now);
         }
 
@@ -394,8 +395,9 @@ impl ConfigBuilder {
                 cx.notify();
                 return;
             };
+            let base = workbench_dir(cx);
             let mut tasks = draft.secondary_tasks();
-            tasks.retain(|path| !same_path(&draft, path, &child));
+            tasks.retain(|path| !same_path(&draft, path, &child, base.as_deref()));
             draft.set_secondary_tasks(&tasks);
             if let Err(error) = draft.save(&parent) {
                 self.chrome.transition(BuilderChromeEvent::Failed {
@@ -404,8 +406,9 @@ impl ConfigBuilder {
                 });
             }
         } else {
+            let base = workbench_dir(cx);
             let mut tasks = self.draft.secondary_tasks();
-            tasks.retain(|path| !same_path(&self.draft, path, &child));
+            tasks.retain(|path| !same_path(&self.draft, path, &child, base.as_deref()));
             self.draft.set_secondary_tasks(&tasks);
             self.forget_widgets("secondary_tasks");
             self.revalidate(cx);
@@ -432,7 +435,8 @@ impl ConfigBuilder {
     }
 
     fn push_link(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        if let Some(error) = config::chain::link_error(&self.draft, &path) {
+        let base = workbench_dir(cx);
+        if let Some(error) = config::chain::link_error(&self.draft, &path, base.as_deref()) {
             self.chrome.transition(BuilderChromeEvent::Failed {
                 title: "Link failed".into(),
                 detail: error.into(),
@@ -440,11 +444,8 @@ impl ConfigBuilder {
             cx.notify();
             return;
         }
-        let mut tasks = self.draft.secondary_tasks();
-        if tasks
-            .iter()
-            .any(|existing| same_path(&self.draft, existing, &path))
-        {
+        // Stored absolute, like a link made by "Create a new one" (plan 1.4).
+        if !self.draft.link_secondary_task(&path, base.as_deref()) {
             self.chrome.transition(BuilderChromeEvent::Failed {
                 title: "Link blocked".into(),
                 detail: "That config already runs in this chain.".into(),
@@ -452,8 +453,6 @@ impl ConfigBuilder {
             cx.notify();
             return;
         }
-        tasks.push(path);
-        self.draft.set_secondary_tasks(&tasks);
         self.forget_widgets("secondary_tasks");
         self.last_chain_scan = None;
         self.revalidate(cx);
@@ -499,16 +498,13 @@ fn flattened_labels(nodes: &[SecondaryConfigNode]) -> Vec<String> {
     labels
 }
 
-fn same_path(owner: &config::ConfigDraft, left: &Path, right: &Path) -> bool {
-    let left = if left.is_absolute() {
-        left.to_path_buf()
-    } else {
-        owner
-            .path
-            .as_deref()
-            .and_then(Path::parent)
-            .map_or_else(|| left.to_path_buf(), |base| base.join(left))
-    };
-    std::fs::canonicalize(&left).unwrap_or(left)
-        == std::fs::canonicalize(right).unwrap_or_else(|_| right.to_path_buf())
+/// Does `owner`'s entry `left` name the file `right`? Resolved by the run-time rule.
+fn same_path(
+    owner: &config::ConfigDraft,
+    left: &Path,
+    right: &Path,
+    workbench_dir: Option<&Path>,
+) -> bool {
+    let left = config::resolve_secondary_task(left, owner.path.as_deref(), workbench_dir);
+    config::chain::same_path(&left, right)
 }

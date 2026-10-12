@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
-use super::patch;
+use std::collections::HashSet;
+
+use super::draft::resolve_secondary_task;
+use super::{chain, patch};
 
 // --- States ---
 pub struct Pending {
@@ -106,7 +109,12 @@ impl WorkbenchConfigHandler<Ready> {
                 self.state.file_path.display()
             );
         }
-        self.apply(overrides, overrides.input_csv, workbench_dir)
+        self.apply(
+            overrides,
+            overrides.input_csv,
+            workbench_dir,
+            &mut HashSet::new(),
+        )
     }
 
     /// Write host, credentials and (for the root only) `input_csv` into this file, then host
@@ -116,7 +124,16 @@ impl WorkbenchConfigHandler<Ready> {
         overrides: &RunOverrides<'_>,
         input_csv: Option<&Path>,
         workbench_dir: &Path,
+        visited: &mut HashSet<PathBuf>,
     ) -> anyhow::Result<()> {
+        // A hand-written chain can loop (the builder refuses to make one). Workbench would run
+        // it forever; the rewrite must at least terminate.
+        if !visited.insert(chain::identity(&self.state.file_path)) {
+            anyhow::bail!(
+                "{} runs itself through secondary_tasks; remove the loop before running.",
+                self.state.file_path.display()
+            );
+        }
         log::debug!(
             "[config] updating {:?}  host={:?}",
             self.state.file_path,
@@ -130,7 +147,10 @@ impl WorkbenchConfigHandler<Ready> {
             ("host", overrides.host.to_string()),
             (
                 "credentials_file_path",
-                overrides.credentials_file_path.to_string_lossy().into_owned(),
+                overrides
+                    .credentials_file_path
+                    .to_string_lossy()
+                    .into_owned(),
             ),
         ];
         if let Some(csv) = input_csv {
@@ -141,19 +161,21 @@ impl WorkbenchConfigHandler<Ready> {
 
         if let Some(secondary_tasks) = self.state.config.secondary_tasks.clone() {
             for task_path in secondary_tasks {
-                let resolved = if task_path.is_absolute() {
-                    task_path.clone()
-                } else {
-                    workbench_dir.join(&task_path)
-                };
+                let resolved = resolve_secondary_task(
+                    &task_path,
+                    Some(&self.state.file_path),
+                    Some(workbench_dir),
+                );
                 log::debug!(
                     "[config] secondary task raw={:?}  resolved={:?}",
                     task_path,
                     resolved
                 );
 
-                let mut handler = WorkbenchConfigHandler::new(resolved).load()?;
-                handler.apply(overrides, None, workbench_dir)?;
+                let mut handler = WorkbenchConfigHandler::new(resolved.clone())
+                    .load()
+                    .map_err(|e| anyhow::anyhow!("secondary config {}: {e}", resolved.display()))?;
+                handler.apply(overrides, None, workbench_dir, visited)?;
             }
         }
 
@@ -249,7 +271,10 @@ mod tests {
         let written = std::fs::read_to_string(&path).unwrap();
         let reloaded: IndexMap<String, Value> = serde_yaml::from_str(&written).unwrap();
         assert_eq!(reloaded["host"].as_str(), Some("https://islandora.dev"));
-        assert_eq!(reloaded["credentials_file_path"].as_str(), Some("/creds.yml"));
+        assert_eq!(
+            reloaded["credentials_file_path"].as_str(),
+            Some("/creds.yml")
+        );
         assert_eq!(reloaded["task"].as_str(), Some("create"));
         // Nothing the app did not supply appears out of nowhere.
         assert!(!reloaded.contains_key("secondary_tasks"));
@@ -310,6 +335,63 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
         assert_eq!(reloaded.input_csv(), Some(Path::new("a.csv")));
     }
 
+    /// P0-4: a chain linked in the builder — configs in a library folder, Workbench elsewhere —
+    /// must be found and patched at run time.
+    #[test]
+    fn a_chain_linked_by_the_builder_is_found_at_run_time() {
+        let tree = TempTree::new();
+        let workbench = tree.root.join("workbench");
+        std::fs::create_dir_all(&workbench).unwrap();
+        let child = tree.write("library/pages.yml", "task: add_media\n");
+        let root_path = tree.write("library/root.yml", "task: create\n");
+
+        let mut root = crate::config::ConfigDraft::load(&root_path).unwrap();
+        assert!(root.link_secondary_task(&child, Some(&workbench)));
+        root.save(&root_path).unwrap();
+
+        WorkbenchConfigHandler::new(root_path)
+            .load()
+            .unwrap()
+            .update_config_fields(
+                &RunOverrides {
+                    host: "https://islandora.dev",
+                    credentials_file_path: Path::new("/creds.yml"),
+                    input_csv: Some(Path::new("/wb/metadata.csv")),
+                },
+                &workbench,
+            )
+            .unwrap();
+        let child = WorkbenchConfigHandler::new(child).load().unwrap();
+        assert_eq!(child.host(), Some("https://islandora.dev"));
+    }
+
+    #[test]
+    fn a_looping_chain_is_an_error_not_a_stack_overflow() {
+        let tree = TempTree::new();
+        let a = tree.root.join("a.yml");
+        let b = tree.write(
+            "b.yml",
+            &format!("task: create\nsecondary_tasks: [{}]\n", a.display()),
+        );
+        tree.write(
+            "a.yml",
+            &format!("task: create\nsecondary_tasks: [{}]\n", b.display()),
+        );
+        let error = WorkbenchConfigHandler::new(a)
+            .load()
+            .unwrap()
+            .update_config_fields(
+                &RunOverrides {
+                    host: "https://h.org",
+                    credentials_file_path: Path::new("/c.yml"),
+                    input_csv: Some(Path::new("/m.csv")),
+                },
+                &tree.root,
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("runs itself"));
+    }
+
     /// Q2: the processed CSV goes into the root config only — a child keeps its own sheet.
     #[test]
     fn processed_csv_goes_to_the_root_and_not_to_children() {
@@ -356,7 +438,9 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
 
         let own = tree.write("own.yml", "task: create\ninput_csv: mine.csv\n");
         let mut handler = WorkbenchConfigHandler::new(own.clone()).load().unwrap();
-        handler.update_config_fields(&overrides, &tree.root).unwrap();
+        handler
+            .update_config_fields(&overrides, &tree.root)
+            .unwrap();
         let reloaded = WorkbenchConfigHandler::new(own).load().unwrap();
         assert_eq!(reloaded.input_csv(), Some(Path::new("mine.csv")));
 

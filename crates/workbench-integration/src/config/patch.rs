@@ -9,7 +9,6 @@
 //! `None` and the caller falls back to re-serializing. The caller also re-parses the result and
 //! compares it against the intent, so a document this misreads cannot be written.
 
-
 /// Return `text` with each `(key, value)` set as a top-level plain-string entry: an existing
 /// entry's line (and any indented continuation lines) is replaced in place; a missing key is
 /// appended. `None` when the document is not something this can patch safely.
@@ -136,7 +135,9 @@ fn is_safe_plain(value: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || "_./\\~:@+=?%-".contains(c));
     // Anything made only of digits and number punctuation might be read as a number (1.1
     // reads `1:20` as 80); a trailing `:` would read as a mapping key.
-    let numeric_looking = value.chars().all(|c| c.is_ascii_digit() || "._:+-eE".contains(c));
+    let numeric_looking = value
+        .chars()
+        .all(|c| c.is_ascii_digit() || "._:+-eE".contains(c));
     first_ok
         && rest_ok
         && !numeric_looking
@@ -203,7 +204,10 @@ log_file_path: logs/run.log
         let patched =
             set_top_level_scalars("task: create # main\nid_field: id", &[("input_csv", "yes")])
                 .unwrap();
-        assert_eq!(patched, "task: create # main\nid_field: id\ninput_csv: 'yes'\n");
+        assert_eq!(
+            patched,
+            "task: create # main\nid_field: id\ninput_csv: 'yes'\n"
+        );
     }
 
     #[test]

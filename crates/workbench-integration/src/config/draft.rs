@@ -104,22 +104,56 @@ impl ConfigDraft {
             .insert("secondary_tasks".into(), Value::Sequence(seq));
     }
 
-    /// [`Self::secondary_tasks`] with relative paths resolved against this config's own folder,
-    /// so the builder can tell a moved file from a merely relative one.
-    ///
-    /// Workbench itself resolves them against the *workbench* directory (see
-    /// [`super::WorkbenchConfigHandler::update_config_fields`]), which the builder does not know.
-    /// In practice a config and its children sit together, and this is only used to decide what
-    /// to show — the value written to YAML is always the path the user gave.
-    pub fn resolved_secondary_tasks(&self) -> Vec<PathBuf> {
-        let base = self.path.as_deref().and_then(Path::parent);
+    /// [`Self::secondary_tasks`] resolved the way Workbench will resolve them — see
+    /// [`resolve_secondary_task`].
+    pub fn resolved_secondary_tasks(&self, workbench_dir: Option<&Path>) -> Vec<PathBuf> {
         self.secondary_tasks()
             .into_iter()
-            .map(|p| match (&base, p.is_absolute()) {
-                (Some(base), false) => base.join(p),
-                _ => p,
-            })
+            .map(|p| resolve_secondary_task(&p, self.path.as_deref(), workbench_dir))
             .collect()
+    }
+
+    /// Run `child` after this config, unless it already does. Always stored **absolute**: a
+    /// relative entry means "relative to wherever Workbench runs", which is not where the
+    /// config lives, so a link the builder writes must not depend on it (plan 1.4, P0-4).
+    /// Returns whether anything changed.
+    pub fn link_secondary_task(&mut self, child: &Path, workbench_dir: Option<&Path>) -> bool {
+        let child = std::path::absolute(child).unwrap_or_else(|_| child.to_path_buf());
+        if self
+            .resolved_secondary_tasks(workbench_dir)
+            .iter()
+            .any(|existing| super::chain::same_path(existing, &child))
+        {
+            return false;
+        }
+        let mut tasks = self.secondary_tasks();
+        tasks.push(child);
+        self.set_secondary_tasks(&tasks);
+        true
+    }
+}
+
+/// Where a `secondary_tasks` entry points.
+///
+/// Workbench turns each entry into `os.path.abspath(entry)` in the process that runs the
+/// primary config, and the app always starts that process in the Workbench install directory —
+/// so a relative entry, at any depth of a chain, is relative to **the Workbench directory**, not
+/// to the config that names it. The run-time rewrite and the builder both resolve through this
+/// one function so they cannot disagree again.
+///
+/// When the Workbench directory is not known yet (Settings has no path), the config's own
+/// folder is the best available guess for display; Check/Run cannot happen in that state.
+pub fn resolve_secondary_task(
+    entry: &Path,
+    owner: Option<&Path>,
+    workbench_dir: Option<&Path>,
+) -> PathBuf {
+    if entry.is_absolute() {
+        return entry.to_path_buf();
+    }
+    match workbench_dir.or_else(|| owner.and_then(Path::parent)) {
+        Some(base) => base.join(entry),
+        None => entry.to_path_buf(),
     }
 }
 
@@ -144,5 +178,38 @@ mod tests {
         draft.mark_saved(&commented);
         assert!(!draft.source_has_comments);
         assert!(!ConfigDraft::load(&commented).unwrap().source_has_comments);
+    }
+
+    /// P0-4: relative entries follow Workbench (its directory), not the config's folder.
+    #[test]
+    fn relative_entries_resolve_against_the_workbench_directory() {
+        let owner = Path::new("/library/root.yml");
+        let workbench = Path::new("/opt/workbench");
+        assert_eq!(
+            resolve_secondary_task(Path::new("pages.yml"), Some(owner), Some(workbench)),
+            Path::new("/opt/workbench/pages.yml")
+        );
+        assert_eq!(
+            resolve_secondary_task(Path::new("/x/pages.yml"), Some(owner), Some(workbench)),
+            Path::new("/x/pages.yml")
+        );
+        // No Workbench directory configured: the config's folder is the display fallback.
+        assert_eq!(
+            resolve_secondary_task(Path::new("pages.yml"), Some(owner), None),
+            Path::new("/library/pages.yml")
+        );
+    }
+
+    #[test]
+    fn links_are_absolute_and_not_duplicated() {
+        let tree = TempTree::new();
+        let child = tree.write("lib/pages.yml", "task: create\n");
+        let mut root = ConfigDraft::from_yaml("task: create\n").unwrap();
+        root.path = Some(tree.root.join("lib/root.yml"));
+
+        assert!(root.link_secondary_task(&child, Some(&tree.root.join("wb"))));
+        assert!(!root.link_secondary_task(&child, Some(&tree.root.join("wb"))));
+        assert_eq!(root.secondary_tasks(), vec![child.clone()]);
+        assert!(root.secondary_tasks()[0].is_absolute());
     }
 }

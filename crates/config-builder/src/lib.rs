@@ -288,17 +288,26 @@ pub(crate) fn field_id(parts: &[&str]) -> SharedString {
     parts.join("#").into()
 }
 
-fn link_saved_child(parent: &std::path::Path, child: &std::path::Path) -> Result<(), String> {
+/// The Workbench install directory from Settings: the base relative `secondary_tasks` entries
+/// resolve against, because the app runs Workbench from there (plan 1.4, P0-4).
+pub(crate) fn workbench_dir(cx: &App) -> Option<PathBuf> {
+    AppSettings::get(cx)
+        .values
+        .get("workbench_path")
+        .map(|v| v.text().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Link a freshly saved child under `parent` on disk. The entry is absolute, the same as a
+/// link made with the file picker.
+fn link_saved_child(
+    parent: &std::path::Path,
+    child: &std::path::Path,
+    workbench_dir: Option<&std::path::Path>,
+) -> Result<(), String> {
     let mut draft = ConfigDraft::load(parent).map_err(|error| error.to_string())?;
-    let reference = child
-        .strip_prefix(parent.parent().unwrap_or_else(|| std::path::Path::new("")))
-        .unwrap_or(child)
-        .to_path_buf();
-    let existing = draft.secondary_tasks();
-    if !existing.iter().any(|item| item == &reference) {
-        let mut tasks = existing;
-        tasks.push(reference);
-        draft.set_secondary_tasks(&tasks);
+    if draft.link_secondary_task(child, workbench_dir) {
         draft.save(parent).map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -815,7 +824,7 @@ impl ConfigBuilder {
         let mut link_notice = None;
         if was_new
             && let Some(parent) = self.parent_path.clone()
-            && let Err(error) = link_saved_child(&parent, &path)
+            && let Err(error) = link_saved_child(&parent, &path, workbench_dir(cx).as_deref())
         {
             link_notice = Some(format!("Saved, but couldn't link child: {error}"));
         }

@@ -283,3 +283,17 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   minimum option: `ConfigDraft.source_has_comments` records that a loaded file has comments so
   the builder can ask before its first save drops them (the prompt lands with the confirm
   dialog in 1.7).
+- [x] **1.4 (P0-4)** One rule for `secondary_tasks` paths, verified against upstream Workbench:
+  it turns each entry into `os.path.abspath(entry)` in the primary process, and the app starts
+  that process in the Workbench directory, so a relative entry (at any depth) is relative to
+  **the Workbench directory**, not to the config naming it. `config::resolve_secondary_task` is
+  the one resolver; the run-time rewrite, `chain::{child_nodes, flattened_paths, link_error}`
+  and the builder all take the Workbench dir as a parameter (the builder reads
+  `workbench_path` from Settings; with none set, the config's folder is a display-only
+  fallback). Both link flows — "Create a new one" after first save, and "Link an existing
+  config" — now go through `ConfigDraft::link_secondary_task` and write **absolute** paths.
+  Also found: Workbench does not add `.yml` to an entry, so the chain's lenient
+  `create-items.config` → `create-items.config.yml` discovery now marks the node broken with
+  "relink it as create-items.config.yml" instead of treating it as healthy; and the run-time
+  rewrite recursed without a visited set, so a hand-written loop overflowed the stack — it now
+  stops with an error.
