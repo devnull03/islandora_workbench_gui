@@ -160,6 +160,9 @@ impl Workspace {
                         .label(if cancelling { "Stop now" } else { "Cancel" })
                         .tooltip(if cancelling {
                             "Stop Workbench immediately"
+                        } else if cfg!(windows) {
+                            // Windows has no ctrl-c to send a process without a console.
+                            "Stop Workbench and everything it started"
                         } else {
                             "Stop Workbench (its ctrl-c): it logs where it got to and exits"
                         })

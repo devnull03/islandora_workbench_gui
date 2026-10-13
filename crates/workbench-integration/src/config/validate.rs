@@ -412,7 +412,7 @@ fn check_path(
         resolved.parent().unwrap_or(&resolved)
     };
     match std::fs::metadata(dir) {
-        Ok(meta) if meta.is_dir() && meta.permissions().readonly() => Problem::new(
+        Ok(meta) if meta.is_dir() && !writable(dir) => Problem::new(
             key,
             Severity::Warn,
             format!(
@@ -456,20 +456,27 @@ fn retired_setting(key: &str) -> Option<&'static str> {
 
 /// `~` and `~/…` as Workbench's `os.path.expanduser` reads them.
 fn expand_home(raw: &str) -> std::path::PathBuf {
-    let home = || {
-        std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(std::path::PathBuf::from)
-    };
-    if raw == "~" {
-        return home().unwrap_or_else(|| raw.into());
-    }
-    if let Some(rest) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\"))
-        && let Some(home) = home()
+    crate::secrets::expand_home(raw)
+}
+
+/// Whether this process may create files in `dir`. Asked of the OS on Unix (permission bits
+/// and ownership); Windows' read-only attribute on a folder only marks it as customised
+/// (Documents, Desktop), so there it is not taken as an answer.
+fn writable(dir: &std::path::Path) -> bool {
+    #[cfg(unix)]
     {
-        return home.join(rest);
+        use std::os::unix::ffi::OsStrExt as _;
+        let Ok(path) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
+            return true;
+        };
+        // SAFETY: `path` is a valid NUL-terminated string for the duration of the call.
+        unsafe { libc::access(path.as_ptr(), libc::W_OK) == 0 }
     }
-    std::path::PathBuf::from(raw)
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        true
+    }
 }
 
 /// A URL setting holds a term URI (`http://pcdm.org/use#OriginalFile`) or a term ID (`17`).
@@ -792,7 +799,7 @@ mod tests {
         assert!(
             found
                 .message
-                .contains(&tree.root.join("in/meta.csv").display().to_string())
+                .contains(&tree.root.join("in").join("meta.csv").display().to_string())
         );
         let sheet = check_path(
             "input_csv",

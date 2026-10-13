@@ -29,8 +29,8 @@ use window_wrapper::{
 
 use crate::{
     app_menus::{
-        CopyDebugInfo, OpenLogsFolder, OpenProfiles, OpenSettings, Quit, REPO_URL, ReportIssue,
-        ToggleLog, app_menus,
+        CloseWindow, CopyDebugInfo, OpenLogsFolder, OpenProfiles, OpenSettings, Quit, REPO_URL,
+        ReportIssue, ToggleLog, app_menus,
     },
     app_settings::build_pages,
     dock::{LogDockButton, MainDock},
@@ -38,8 +38,8 @@ use crate::{
     workspace::{LogViewer, Workspace},
 };
 use config_builder::{
-    BuilderDock, ConfigBuilderWindows, OpenConfigBuilder, ToggleBuilderDock, install_builder_dock,
-    open_config_builder,
+    BuilderDock, ConfigBuilderWindows, OpenConfigBuilder, ToggleBuilderDock, close_builder_window,
+    install_builder_dock, open_config_builder,
 };
 
 pub struct App {
@@ -301,6 +301,13 @@ fn main() {
     logging::init();
 
     let app = gpui_platform::application().with_assets(gpui_component_assets::Assets);
+    // macOS keeps an app running with its windows closed; clicking it in the Dock brings the
+    // main window back.
+    app.on_reopen(|cx| {
+        if BuilderDock::main(cx).is_none() {
+            open_main_window(cx);
+        }
+    });
 
     app.run(move |cx| {
         gpui_component::init(cx);
@@ -311,7 +318,6 @@ fn main() {
         // Settings ------------------------------------
         let settings = load_app_settings().unwrap_or_default();
         cx.set_global(settings);
-        let (main_bounds, main_display) = AppSettings::get(cx).main_window_startup_placement(cx);
         cx.set_global(SettingsPersistence {
             writer: Some(SettingsWriter::start()),
         });
@@ -360,6 +366,8 @@ fn main() {
         // Quit asks the same questions as closing — deferred, because a menu dispatch runs while
         // the window it came from is being updated, and that window cannot be updated again.
         cx.on_action(|_: &Quit, cx| cx.defer(request_quit));
+        // Cmd+W: whichever window is in front, with the same questions as its close button.
+        cx.on_action(|_: &CloseWindow, cx| cx.defer(close_active_window));
 
         // Help ▸ … — the report path. Nothing is uploaded: both routes put the text in front of
         // the user (clipboard, or a prefilled issue form) before it leaves the machine.
@@ -380,23 +388,45 @@ fn main() {
             }
             None => log::error!("no local data dir, so there is no log folder to open"),
         });
-        let min_size = Size::new(ui::tokens::MIN_WINDOW_W, px(300.0));
+        open_main_window(cx);
+    });
+}
 
-        let window_options = WindowOptions {
-            titlebar: Some(TitleBar::title_bar_options()),
-            window_bounds: Some(WindowBounds::Windowed(main_bounds)),
-            display_id: main_display,
-            window_min_size: Some(min_size),
-            ..Default::default()
-        };
-
-        cx.spawn(async move |cx| {
-            cx.open_window(window_options, |window, cx| {
-                let view = cx.new(|cx| App::new(window, cx));
-                cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("Failed to open window");
+/// Open the main window where it was last left.
+fn open_main_window(cx: &mut gpui::App) {
+    let (main_bounds, main_display) = AppSettings::get(cx).main_window_startup_placement(cx);
+    let min_size = Size::new(ui::tokens::MIN_WINDOW_W, px(300.0));
+    let window_options = WindowOptions {
+        titlebar: Some(TitleBar::title_bar_options()),
+        window_bounds: Some(WindowBounds::Windowed(main_bounds)),
+        display_id: main_display,
+        window_min_size: Some(min_size),
+        ..Default::default()
+    };
+    cx.spawn(async move |cx| {
+        cx.open_window(window_options, |window, cx| {
+            let view = cx.new(|cx| App::new(window, cx));
+            cx.new(|cx| Root::new(view, window, cx))
         })
-        .detach();
+        .expect("Failed to open window");
+    })
+    .detach();
+}
+
+/// Close the window in front as its close button would: the main window and builders ask
+/// about unsaved edits (and the main window refuses during a run); others just close.
+fn close_active_window(cx: &mut gpui::App) {
+    let main = BuilderDock::main(cx).map(|(window, _)| window);
+    // No active window when no window has focus (a menu that took it, a bare X server).
+    let Some(active) = cx.active_window().or(main) else {
+        return;
+    };
+    if close_builder_window(active, cx) {
+        return;
+    }
+    let _ = active.update(cx, |_, window, cx| {
+        if main != Some(active) || may_close(window, cx, |window, _| window.remove_window()) {
+            window.remove_window();
+        }
     });
 }

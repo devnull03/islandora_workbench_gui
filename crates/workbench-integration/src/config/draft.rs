@@ -353,12 +353,14 @@ mod tests {
             Path::new("/b/two.yml"),
             None
         ));
+        // A new link is stored absolute — `C:\\b\\two.yml` on Windows.
+        let two = std::path::absolute("/b/two.yml").unwrap();
         assert_eq!(
             root.secondary_tasks(),
-            vec![PathBuf::from("/a/one.yml"), PathBuf::from("/b/two.yml")]
+            vec![PathBuf::from("/a/one.yml"), two.clone()]
         );
         assert!(root.move_secondary_task(1, true));
-        assert_eq!(root.secondary_tasks()[0], PathBuf::from("/b/two.yml"));
+        assert_eq!(root.secondary_tasks()[0], two);
         assert!(!root.move_secondary_task(0, true));
         assert!(!root.move_secondary_task(1, false));
     }

@@ -107,22 +107,27 @@ pub fn credentials_file_is_encrypted(path: &Path) -> bool {
 
 /// `path` as Workbench opens it: `~` expanded, relative to the Workbench folder.
 pub fn resolve(path: &str, workbench_dir: &Path) -> std::path::PathBuf {
-    // Python's `expanduser`: USERPROFILE on Windows, HOME elsewhere; `~/` and `~\`.
+    let expanded = expand_home(path);
+    if expanded.is_absolute() {
+        expanded
+    } else {
+        workbench_dir.join(expanded)
+    }
+}
+
+/// `~`, `~/…` and `~\…` as Python's `expanduser` reads them: USERPROFILE on Windows (Python
+/// ignores HOME there since 3.8), HOME elsewhere.
+pub(crate) fn expand_home(path: &str) -> std::path::PathBuf {
     let home = if cfg!(windows) {
         std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))
     } else {
         std::env::var_os("HOME")
     };
     let rest = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"));
-    let expanded = match (path, rest, home) {
+    match (path, rest, home) {
         ("~", _, Some(home)) => std::path::PathBuf::from(home),
         (_, Some(rest), Some(home)) => Path::new(&home).join(rest),
         _ => path.into(),
-    };
-    if expanded.is_absolute() {
-        expanded
-    } else {
-        workbench_dir.join(expanded)
     }
 }
 

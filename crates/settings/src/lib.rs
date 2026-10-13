@@ -13,9 +13,9 @@ pub const SETTINGS_SCHEMA_VERSION: u32 = 3;
 /// `AppSettings` value key for the Settings window's last size (a JSON [`MainWindowBounds`]).
 pub const SETTINGS_WINDOW_BOUNDS_KEY: &str = "settings_window_bounds";
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{collections::HashMap, env};
 
 use gpui::*;
 use gpui_component::{
@@ -367,7 +367,7 @@ pub fn picker_with_path_button(
     label: &'static str,
     description: &'static str,
     prompt: &'static str,
-    path_candidates: Vec<&'static str>,
+    find: fn() -> Option<PathBuf>,
 ) -> SettingItem {
     let prompt: SharedString = prompt.into();
     SettingItem::new(
@@ -402,7 +402,6 @@ pub fn picker_with_path_button(
 
             let on_pick_key = key;
             let on_path_key = key;
-            let path_candidates = path_candidates.clone();
 
             h_flex()
                 .gap_2()
@@ -423,7 +422,7 @@ pub fn picker_with_path_button(
                         .tooltip("Get from PATH")
                         .with_size(options.size())
                         .on_click(move |_, _, cx| {
-                            if let Some(p) = find_on_path(&path_candidates) {
+                            if let Some(p) = find() {
                                 AppSettings::set_text(
                                     on_path_key,
                                     p.to_string_lossy().to_string().into(),
@@ -794,17 +793,4 @@ pub fn profile_status(settings: &AppSettings) -> (SharedString, Option<bool>) {
         .and_then(|s| s.last_check.as_ref())
         .map(CheckResult::is_ok);
     (format!("Profile: {name}").into(), health)
-}
-
-pub fn find_on_path(candidates: &[&str]) -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-    for dir in env::split_paths(&path) {
-        for name in candidates {
-            let p = dir.join(name);
-            if p.is_file() {
-                return Some(p);
-            }
-        }
-    }
-    None
 }

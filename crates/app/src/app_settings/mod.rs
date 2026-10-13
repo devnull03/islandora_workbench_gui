@@ -21,21 +21,6 @@ use config_builder::{BUILDER_CHECK_PATHS_KEY, BUILDER_OPEN_DOCKED_KEY, BUILDER_W
 
 use custom_fields::{saved_configs_field, saved_servers_field};
 
-fn exe_candidates(base: &'static str) -> Vec<&'static str> {
-    if cfg!(windows) {
-        // Avoid concat! here because `base` is not a literal.
-        if base == "python" {
-            vec!["python.exe", "python"]
-        } else if base == "uv" {
-            vec!["uv.exe", "uv"]
-        } else {
-            vec![base]
-        }
-    } else {
-        vec![base]
-    }
-}
-
 pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
     vec![
         SettingPage::new("General").default_open(true).groups(vec![
@@ -83,20 +68,14 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
                         "Python Path",
                         "Path to the Python executable",
                         "Select Python executable",
-                        {
-                            let mut c = exe_candidates("python");
-                            if !cfg!(windows) {
-                                c.push("python3");
-                            }
-                            c
-                        },
+                        workbench_integration::programs::find_python,
                     ),
                     picker_with_path_button(
                         "uv_path",
                         "UV Path",
                         "Path to the UV package manager (optional)",
                         "Select UV executable",
-                        exe_candidates("uv"),
+                        workbench_integration::programs::find_uv,
                     ),
                     Setting::Switch {
                         key: "use_uv",
@@ -148,8 +127,13 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
                     Setting::Switch {
                         key: BUILDER_OPEN_DOCKED_KEY,
                         label: "Open the builder docked",
-                        description: "Open configs in the main window's right pane instead of a \
-                                      window of their own. Ctrl+\\ docks or floats it any time.",
+                        description: if cfg!(target_os = "macos") {
+                            "Open configs in the main window's right pane instead of a window \
+                             of their own. Cmd+\\ docks or floats it any time."
+                        } else {
+                            "Open configs in the main window's right pane instead of a window \
+                             of their own. Ctrl+\\ docks or floats it any time."
+                        },
                     }
                     .into(),
                     Setting::Switch {

@@ -695,8 +695,16 @@ fn slug(label: &str) -> String {
         }
     }
     let slug = slug.trim_matches(['_', '-']);
+    // Windows reserves these names in every folder (`con.yml` is the console), and a library
+    // folder may be shared with a Windows machine whatever this one runs.
+    let reserved = matches!(slug, "con" | "prn" | "aux" | "nul")
+        || (slug.len() == 4
+            && (slug.starts_with("com") || slug.starts_with("lpt"))
+            && slug.as_bytes()[3].is_ascii_digit());
     if slug.is_empty() {
         "new_config".to_string()
+    } else if reserved {
+        format!("{slug}_config")
     } else {
         slug.to_string()
     }
@@ -2035,6 +2043,25 @@ fn locked_source(key: &str, in_file: Option<&Value>) -> String {
 
 /// Whether a builder window may close now. With unsaved edits it asks first, and closes the
 /// window itself if the user agrees.
+/// Close `window` the way its close button would, if it is a builder window: asking first
+/// when it has unsaved edits. Returns whether `window` was a builder.
+pub fn close_builder_window(window: AnyWindowHandle, cx: &mut App) -> bool {
+    let Some(view) = cx
+        .global::<ConfigBuilderWindows>()
+        .live()
+        .find(|open| open.window == window)
+        .and_then(|open| open.view.upgrade())
+    else {
+        return false;
+    };
+    let _ = window.update(cx, |_, window, cx| {
+        if may_close_builder(&view, window, cx) {
+            window.remove_window();
+        }
+    });
+    true
+}
+
 fn may_close_builder(builder: &Entity<ConfigBuilder>, window: &mut Window, cx: &mut App) -> bool {
     if !builder.read(cx).chrome.is_dirty() {
         return true;
@@ -2261,6 +2288,9 @@ mod tests {
         assert_eq!(slug("  "), "new_config");
         assert_eq!(slug("Übersicht — pages"), "bersicht_pages");
         assert_eq!(slug("create-items_v2"), "create-items_v2");
+        assert_eq!(slug("CON"), "con_config");
+        assert_eq!(slug("com1"), "com1_config");
+        assert_eq!(slug("console"), "console");
     }
 
     /// P0-8: two new drafts with the same label get two files.

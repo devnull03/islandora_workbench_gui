@@ -89,14 +89,29 @@ impl ProcessControl {
     }
 
     /// Stop the run if it is still going — for when its owner goes away (the window closes or
-    /// the app quits). A run in its own process group no longer gets the terminal's SIGHUP, so
-    /// without this it would outlive the app.
+    /// the app quits, including a macOS Dock Quit or logout, which cannot be refused). A run in
+    /// its own process group no longer gets the terminal's SIGHUP, so without this it would
+    /// outlive the app. Where there is a ctrl-c to send, Workbench gets [`QUIT_GRACE`] to log
+    /// where it got to before it is killed.
     pub fn stop_if_running(&self) {
+        if self.has_exited() {
+            return;
+        }
+        if cfg!(unix) {
+            self.interrupt();
+            let deadline = std::time::Instant::now() + QUIT_GRACE;
+            while !self.has_exited() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
         if !self.has_exited() {
             self.kill();
         }
     }
 }
+
+/// How long a run being stopped by the app going away gets to act on its ctrl-c.
+const QUIT_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// How long the output readers get to drain after the child exits, before stragglers in its
 /// process group are stopped.

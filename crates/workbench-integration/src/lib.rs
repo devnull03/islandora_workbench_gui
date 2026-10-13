@@ -9,6 +9,7 @@ mod invocation;
 pub mod map_tool;
 pub mod outcome;
 mod preprocess;
+pub mod programs;
 mod provision;
 mod resolve;
 pub mod secrets;
@@ -37,8 +38,6 @@ pub fn read_credentials(path: &Path) -> anyhow::Result<Credentials> {
         password: c.password,
     })
 }
-
-use which::which;
 
 pub use util::{format_stream_line, language_url_from_server_base, run_command_capture_stdout};
 
@@ -79,16 +78,8 @@ impl WbInfo {
     ) -> Self {
         Self {
             install_path: workbench_path,
-            python_path: python_path.or_else(|| {
-                which("python").ok().or_else(|| {
-                    if cfg!(windows) {
-                        None
-                    } else {
-                        which("python3").ok()
-                    }
-                })
-            }),
-            uv_path: uv_path.or_else(|| which("uv").ok()),
+            python_path: python_path.or_else(programs::find_python),
+            uv_path: uv_path.or_else(programs::find_uv),
             use_uv,
         }
     }
@@ -96,7 +87,17 @@ impl WbInfo {
     /// The Python interpreter for this install, as a `Command` with the workbench directory as
     /// its working directory — so `uv run` picks up workbench's environment, and a preprocess
     /// script gets the same dependencies Workbench itself has.
+    ///
+    /// Python is put in UTF-8 mode: on Windows it would otherwise read the config and write
+    /// the log and its output in the ANSI code page, so a path like `C:\Users\José` in the
+    /// YAML is misread and a title outside that code page stops a run.
     pub fn python_command(&self) -> Command {
+        let mut c = self.interpreter();
+        c.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8");
+        c
+    }
+
+    fn interpreter(&self) -> Command {
         if self.use_uv {
             let uv = self
                 .uv_path
@@ -118,6 +119,7 @@ impl WbInfo {
                     "python3"
                 });
             let mut c = Command::new(python);
+            c.args(programs::launcher_args(Path::new(python)));
             c.arg("-u");
             c.current_dir(&self.install_path);
             c

@@ -7,6 +7,27 @@ use std::process::Command;
 use gpui::App;
 use settings::AppSettings;
 
+/// Start a desktop helper (file manager, opener, terminal) without waiting for it. Its exit is
+/// collected on a thread of its own, so each use does not leave a zombie process behind.
+trait Launch {
+    fn launch(&mut self) -> std::io::Result<()>;
+}
+
+impl Launch for Command {
+    fn launch(&mut self) -> std::io::Result<()> {
+        let mut child = self.spawn()?;
+        std::thread::spawn(move || child.wait());
+        Ok(())
+    }
+}
+
+/// A path as Windows' own tools want it: backslashes throughout (explorer does not take a
+/// `C:/wb` it was typed as).
+#[cfg(windows)]
+fn native(path: &Path) -> PathBuf {
+    path.components().collect()
+}
+
 /// `{workbench_path}/input_data` from the `workbench_path` setting, or `None` when it's empty.
 pub fn workbench_input_data_dir(cx: &App) -> Option<PathBuf> {
     let path = AppSettings::get(cx)
@@ -78,16 +99,19 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
 
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt as _;
+        // `/select,"<path>"` verbatim: Rust's own quoting would wrap the whole argument, flag
+        // and all, which explorer reads as a path and opens Documents instead.
         Command::new("explorer")
-            .arg(format!("/select,{}", path.display()))
-            .spawn()?;
+            .raw_arg(format!("/select,\"{}\"", native(path).display()))
+            .launch()?;
     }
 
     #[cfg(target_os = "macos")]
     {
         Command::new("open")
             .args(["-R", &path.to_string_lossy()])
-            .spawn()?;
+            .launch()?;
     }
 
     #[cfg(target_os = "linux")]
@@ -98,7 +122,7 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
         } else {
             path.parent().unwrap_or(path)
         };
-        Command::new("xdg-open").arg(folder).spawn()?;
+        Command::new("xdg-open").arg(folder).launch()?;
     }
 
     Ok(())
@@ -117,15 +141,15 @@ pub fn open_file(path: &Path) -> std::io::Result<()> {
     {
         // Explorer opens a file with its associated application. Not `cmd /C start`: cmd
         // re-parses the path, so `&` or `^` in a folder name would be run as syntax.
-        Command::new("explorer").arg(path).spawn()?;
+        Command::new("explorer").arg(native(path)).launch()?;
     }
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").arg(path).spawn()?;
+        Command::new("open").arg(path).launch()?;
     }
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open").arg(path).spawn()?;
+        Command::new("xdg-open").arg(path).launch()?;
     }
     Ok(())
 }
@@ -154,7 +178,7 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
         if !command.trim().is_empty() {
             wt.args(["cmd", "/k", command]);
         }
-        if wt.spawn().is_ok() {
+        if wt.launch().is_ok() {
             return Ok(());
         }
 
@@ -165,7 +189,7 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
             script = command.to_string();
             args.extend_from_slice(&["/k", &script]);
         }
-        Command::new("cmd").args(&args).spawn()?;
+        Command::new("cmd").args(&args).launch()?;
     }
 
     #[cfg(target_os = "macos")]
@@ -179,13 +203,13 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
                     r#"tell application "iTerm" to create window with default profile command "cd \"{}\"" "#,
                     escaped
                 );
-                Command::new("osascript").args(["-e", &osa]).spawn()?;
+                Command::new("osascript").args(["-e", &osa]).launch()?;
             } else {
                 // Terminal.app accepts a directory argument directly.
                 Command::new("open")
                     .args(["-a", "Terminal"])
                     .arg(cwd)
-                    .spawn()?;
+                    .launch()?;
             }
         } else {
             let script = format!("cd \"{}\" && {}", cwd.display(), command);
@@ -196,7 +220,7 @@ pub fn spawn_terminal_at(cwd: &Path, command: &str) -> std::io::Result<()> {
                 "Terminal"
             };
             let osa = format!(r#"tell application "{}" to do script "{}""#, app, escaped);
-            Command::new("osascript").args(["-e", &osa]).spawn()?;
+            Command::new("osascript").args(["-e", &osa]).launch()?;
         }
     }
 
@@ -239,7 +263,7 @@ fn spawn_linux_terminal(cwd: &Path, command: &str) -> std::io::Result<()> {
             }
         }
 
-        match terminal.spawn() {
+        match terminal.launch() {
             Ok(_) => return Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 last_not_found = Some(error);

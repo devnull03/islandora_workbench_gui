@@ -4,7 +4,10 @@ use window_wrapper::OpenBrowser;
 
 use config_builder::{OpenConfigBuilder, ToggleBuilderDock};
 
-actions!(nav, [OpenSettings, OpenProfiles, ToggleLog, Quit]);
+actions!(
+    nav,
+    [OpenSettings, OpenProfiles, ToggleLog, CloseWindow, Quit]
+);
 actions!(help, [CopyDebugInfo, OpenLogsFolder, ReportIssue]);
 
 pub const REPO_URL: &str = "https://github.com/devnull03/islandora_workbench_gui";
@@ -20,6 +23,7 @@ pub fn app_menus() -> Vec<Menu> {
                 MenuItem::action("Dock or Float the Builder", ToggleBuilderDock),
                 MenuItem::action("Toggle Log", ToggleLog),
                 MenuItem::Separator,
+                MenuItem::action("Close Window", CloseWindow),
                 MenuItem::action("Quit", Quit),
             ],
         },
