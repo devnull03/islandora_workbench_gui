@@ -181,6 +181,25 @@ pub fn addable() -> impl Iterator<Item = &'static SettingDef> {
     catalog().iter().filter(|s| !s.locked)
 }
 
+/// Lists that hold media use terms by ID, URI or name. Workbench compares an ID with Drupal's
+/// integer `target_id`, so a typed `17` must be written as the number 17 — the quoted `"17"`
+/// silently matches nothing.
+pub fn holds_term_ids(key: &str) -> bool {
+    matches!(
+        key,
+        "delete_media_by_node_media_use_tids" | "update_media_by_node_media_use_tids"
+    )
+}
+
+/// Tasks that take their input from somewhere other than an input CSV: files in `input_dir`,
+/// or a Drupal View. Checking or running them needs no processed sheet.
+pub fn task_reads_csv(task: Option<&str>) -> bool {
+    !matches!(
+        task,
+        Some("create_from_files" | "get_data_from_view" | "get_media_report_from_view")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

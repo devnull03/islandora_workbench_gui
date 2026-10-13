@@ -88,12 +88,47 @@ fn acquire(source: InputSource<'_>, output_dir: &Path) -> Result<PathBuf> {
             Ok(path.to_path_buf())
         }
         InputSource::GoogleSheet(url) => {
-            let csv = CsvModifier::fetch_google_sheets_csv(url)?;
+            let csv = fetch_sheet(url)?;
             let dest = output_dir.join("source.csv");
             std::fs::write(&dest, csv).with_context(|| format!("write {}", dest.display()))?;
             Ok(dest)
         }
     }
+}
+
+/// The sheet's CSV export, for the worksheet the URL names. Workbench's `google_sheets_gid`
+/// picks a worksheet; here the link does, the way Google writes it (`#gid=…` or `?gid=…`) —
+/// without it the export is always the first worksheet.
+fn fetch_sheet(url: &str) -> Result<String> {
+    let export = sheet_export_url(url)?;
+    let response = ureq::get(&export)
+        .timeout(std::time::Duration::from_secs(60))
+        .call()
+        .with_context(|| format!("Couldn't fetch the sheet from {export}"))?;
+    response
+        .into_string()
+        .context("The sheet's CSV could not be read as text")
+}
+
+fn sheet_export_url(url: &str) -> Result<String> {
+    let base = CsvModifier::google_sheets_to_csv_url(url)?;
+    Ok(match sheet_gid(url) {
+        Some(gid) => format!("{base}&gid={gid}"),
+        None => base,
+    })
+}
+
+/// The worksheet id in a sheet link: `gid=` in the query or the fragment.
+fn sheet_gid(url: &str) -> Option<String> {
+    url.split(['?', '#', '&'])
+        .skip(1)
+        .find_map(|part| part.strip_prefix("gid="))
+        .map(|gid| {
+            gid.chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+        })
+        .filter(|gid| !gid.is_empty())
 }
 
 fn builtin(source_csv: &Path, output_dir: &Path, language_url: &str) -> Result<PreprocessResult> {
@@ -198,6 +233,23 @@ fn capture(mut cmd: Command) -> Result<String> {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_sheet_link_keeps_its_worksheet() {
+        let base = "https://docs.google.com/spreadsheets/d/abc123/edit";
+        assert_eq!(
+            super::sheet_export_url(&format!("{base}#gid=1867618389")).unwrap(),
+            "https://docs.google.com/spreadsheets/d/abc123/export?format=csv&gid=1867618389"
+        );
+        assert_eq!(
+            super::sheet_export_url(&format!("{base}?usp=sharing&gid=7")).unwrap(),
+            "https://docs.google.com/spreadsheets/d/abc123/export?format=csv&gid=7"
+        );
+        assert_eq!(
+            super::sheet_export_url(base).unwrap(),
+            "https://docs.google.com/spreadsheets/d/abc123/export?format=csv"
+        );
+    }
+
     use super::*;
 
     /// The two branches that touch no network: a local CSV through `None` must land as

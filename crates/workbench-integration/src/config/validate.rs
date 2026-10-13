@@ -297,6 +297,14 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
         Shape::NullableEnum => (!value.is_string() && !value.is_null())
             .then(|| wrong("text, or nothing"))
             .flatten(),
+        Shape::ListOfStrings if catalog::holds_term_ids(key) => match value {
+            Value::Sequence(items)
+                if items.iter().all(|v| v.is_string() || v.is_i64() || v.is_u64()) =>
+            {
+                None
+            }
+            _ => wrong("a list of term IDs, URIs or names"),
+        },
         Shape::ListOfStrings | Shape::CommandList | Shape::ConfigRef => match value {
             Value::Sequence(items) if items.iter().all(Value::is_string) => None,
             // Workbench accepts a bare string where a one-item list is meant.
@@ -763,6 +771,16 @@ mod tests {
         let default_dir = check_path("input_csv", "meta.csv", Some(&tree.root), None);
         assert_eq!(default_dir.severity, Severity::Warn);
         assert!(default_dir.message.contains("input_data"));
+    }
+
+    /// The docs write media use terms as `[17, 1]`; those are numbers, and stay numbers.
+    #[test]
+    fn media_use_term_lists_take_ids() {
+        let draft = ConfigDraft::from_yaml(
+            "task: delete_media_by_node\ndelete_media_by_node_media_use_tids: [17, 1, http://pcdm.org/use#OriginalFile]\n",
+        )
+        .unwrap();
+        assert!(errors(&draft).is_empty());
     }
 
     #[test]

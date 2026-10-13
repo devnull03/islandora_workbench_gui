@@ -218,3 +218,22 @@ Windows `open_file` uses Explorer rather than `cmd /C start` (cmd re-parses `&`/
   config file is written — by a builder or by a run's rewrite. A builder whose profile was
   renamed or deleted files its config in the active profile. A failed settings backup no longer
   makes settings load as defaults.
+
+**Docs parity pass (October 2026).** A page-by-page comparison with the Workbench docs (61
+pages, 12 not applicable to a front end) measured 88% and listed the gaps; these are closed:
+- *Secrets.* Workbench asks for a password, or for the key to an encrypted credentials file,
+  through `getpass`, which talks to a terminal the app cannot see — the run just hung. Before
+  launching, the app now follows `WorkbenchConfig.get_password` (`secrets::secret_needed`): when
+  Workbench would ask, a masked dialog asks instead and the answer goes to Workbench in
+  `ISLANDORA_WORKBENCH_PASSWORD` / `ISLANDORA_WORKBENCH_ENCRYPTION_KEY` for that run only —
+  never saved, never logged. The server Test reports an encrypted credentials file as "not
+  tested" instead of a parse failure.
+- *Task-aware input.* `create_from_files`, `get_data_from_view` and `get_media_report_from_view`
+  read no CSV, so Check and Run no longer demand a processed sheet for them.
+- *Google Sheets worksheets.* The sheet link's `gid` (`#gid=…` or `?gid=…`) is kept in the CSV
+  export URL; before, every sheet was read from its first worksheet.
+- *Media use terms.* `delete_media_by_node_media_use_tids` and
+  `update_media_by_node_media_use_tids` take IDs, URIs or names; a typed ID is written as a YAML
+  number, which is what Workbench compares with Drupal's `target_id` (a quoted "17" matched
+  nothing).
+- *Exports.* After an export task the last-run strip opens `export_csv_file_path`.

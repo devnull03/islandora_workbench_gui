@@ -10,8 +10,17 @@ use workbench_integration::{
     config::{Ready, RunOverrides, WorkbenchConfigHandler},
     outcome::{self, RunReport},
     provision_workbench, run_workbench,
+    secrets::{Secret, secret_needed},
 };
 
+use gpui_component::{
+    ActiveTheme as _, Sizable as _, WindowExt as _,
+    button::ButtonVariants as _,
+    h_flex,
+    input::{Input, InputState},
+    label::Label,
+    v_flex,
+};
 use settings::AppSettings;
 use window_wrapper::WindowLock;
 
@@ -207,6 +216,9 @@ impl Workspace {
         // Preparing writes host, credentials and input_csv into the config file.
         config_builder::ConfigFilesChanged::bump(cx);
         match prepared {
+            Ok(prepared) if prepared.secret.is_some() => {
+                self.ask_secret(action, prepared, window, cx)
+            }
             Ok(prepared) => self.launch(action, prepared, window, cx),
             Err(error) => {
                 self.append_log(&format!("[ERROR] {error}"), window, cx);
@@ -263,11 +275,14 @@ impl Workspace {
         } else {
             None
         };
+        // `create_from_files` reads `input_dir`, and the View tasks read Drupal: no CSV needed.
+        let needs_csv =
+            workbench_integration::config::catalog::task_reads_csv(handler.text_setting("task"));
         let overrides = RunOverrides {
             host: &server_url,
             credentials_file_path: &credentials_file,
             input_csv: processed,
-            require_input_csv: reads_rows,
+            require_input_csv: reads_rows && needs_csv,
         };
         handler
             .update_config_fields(&overrides, &wb_info.install_path)
@@ -278,7 +293,17 @@ impl Workspace {
         // With `log_file_mode: w` Workbench truncates the log at start, so this run's lines
         // begin at 0 whatever the file's length was before.
         let log_rewritten = handler.text_setting("log_file_mode") == Some("w");
-        let output_csv = handler.text_setting("output_csv").map(|p| {
+        // What the run writes for the user to open: a create's output CSV, or an export's CSV.
+        let exports = matches!(
+            handler.text_setting("task"),
+            Some("export_csv" | "get_data_from_view" | "get_media_report_from_view")
+        );
+        let written = if exports {
+            handler.text_setting("export_csv_file_path")
+        } else {
+            handler.text_setting("output_csv")
+        };
+        let output_csv = written.map(|p| {
             let path = PathBuf::from(p);
             if path.is_absolute() {
                 path
@@ -295,6 +320,17 @@ impl Workspace {
         if confirms && action.is_destructive() {
             options.skip_user_prompts = false;
         }
+        let secret = secret_needed(
+            |key| match key {
+                // A typed field of the loaded config, not one of its other settings.
+                "credentials_file_path" => handler
+                    .credentials_file_path()
+                    .map(|p| p.display().to_string())
+                    .filter(|p| !p.is_empty()),
+                _ => handler.text_setting(key).map(str::to_owned),
+            },
+            |var| std::env::var_os(var).is_some(),
+        );
         Ok(PreparedRun {
             wb_info,
             handler,
@@ -306,7 +342,80 @@ impl Workspace {
             log,
             output_csv,
             confirms,
+            secret,
+            secret_value: None,
         })
+    }
+
+    /// Ask for the password or key Workbench would otherwise ask a terminal for, then launch
+    /// with it in the environment. Cancel starts nothing.
+    fn ask_secret(
+        &mut self,
+        action: WorkbenchAction,
+        prepared: PreparedRun,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(secret) = prepared.secret.clone() else {
+            return;
+        };
+        self.pending_secret_run = Some((action, prepared));
+        let input = cx.new(|cx| InputState::new(window, cx).masked(true));
+        let workspace = cx.entity().downgrade();
+        window.open_dialog(cx, move |dialog, window, cx| {
+            input.update(cx, |state, cx| state.focus(window, cx));
+            let submit = {
+                let (input, workspace) = (input.clone(), workspace.clone());
+                move |window: &mut Window, cx: &mut App| {
+                    let value = input.read(cx).value().to_string();
+                    window.close_dialog(cx);
+                    workspace
+                        .update(cx, |this, cx| {
+                            if let Some((action, mut prepared)) = this.pending_secret_run.take() {
+                                prepared.secret_value = Some(value);
+                                this.launch(action, prepared, window, cx);
+                            }
+                        })
+                        .ok();
+                }
+            };
+            let cancel = workspace.clone();
+            dialog
+                .title(secret.question())
+                .overlay(true)
+                .keyboard(false)
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(Input::new(&input).with_size(ui::APP_CONTROL_SIZE))
+                        .child(
+                            Label::new(
+                                "Used for this run only, passed to Workbench in its environment. \
+                                 It is not saved.",
+                            )
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground),
+                        ),
+                )
+                .footer(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            ui::app_button("secret-run")
+                                .primary()
+                                .label("Run")
+                                .on_click(move |_, window, cx| submit(window, cx)),
+                        )
+                        .child(ui::app_button("secret-cancel").label("Cancel").on_click(
+                            move |_, window, cx| {
+                                window.close_dialog(cx);
+                                cancel
+                                    .update(cx, |this, _| this.pending_secret_run = None)
+                                    .ok();
+                            },
+                        )),
+                )
+        });
     }
 
     /// Is `config_path` the last run's rollback config? Its own `input_csv` must stand.
@@ -337,13 +446,16 @@ impl Workspace {
             log,
             output_csv,
             confirms,
+            secret,
+            secret_value,
         } = prepared;
         let log_offset = if log_rewritten {
             0
         } else {
             outcome::log_offset(&log)
         };
-        let process = match run_workbench(&wb_info, &handler, &action, &options) {
+        let secret = secret.as_ref().zip(secret_value.as_deref());
+        let process = match run_workbench(&wb_info, &handler, &action, &options, secret) {
             Ok(process) => process,
             Err(e) => {
                 self.append_log(
@@ -547,7 +659,7 @@ impl Workspace {
 }
 
 /// A run with everything resolved, ready to spawn.
-struct PreparedRun {
+pub(super) struct PreparedRun {
     wb_info: WbInfo,
     handler: WorkbenchConfigHandler<Ready>,
     options: RunOptions,
@@ -558,6 +670,9 @@ struct PreparedRun {
     log: PathBuf,
     output_csv: Option<PathBuf>,
     confirms: bool,
+    /// A password or key Workbench would ask the terminal for; asked here instead.
+    secret: Option<Secret>,
+    secret_value: Option<String>,
 }
 
 /// What a finished run's files say, read off the UI thread.

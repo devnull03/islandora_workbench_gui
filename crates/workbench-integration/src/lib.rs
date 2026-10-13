@@ -10,6 +10,7 @@ pub mod outcome;
 mod preprocess;
 mod provision;
 mod resolve;
+pub mod secrets;
 mod stream;
 mod util;
 
@@ -140,9 +141,14 @@ pub fn run_workbench(
     config_file: &WorkbenchConfigHandler<Ready>,
     action: &WorkbenchAction,
     options: &RunOptions,
+    secret: Option<(&secrets::Secret, &str)>,
 ) -> anyhow::Result<StreamingProcess> {
     let mut cmd = build_workbench_command(workbench_info, config_file)?;
     cmd.args(invocation::workbench_args(action, options));
+    // Set for this child only; the command line logged below does not show it.
+    if let Some((secret, value)) = secret {
+        cmd.env(secret.env_var(), value);
+    }
     log::info!(
         "[workbench] cwd: {:?}\n[workbench] cmd: {} {}",
         cmd.get_current_dir(),

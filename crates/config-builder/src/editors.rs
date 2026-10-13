@@ -925,9 +925,12 @@ impl ConfigBuilder {
             return Vec::new();
         };
         let numeric = def.shape == Shape::ListOfNumbers;
+        let term_ids = workbench_integration::config::catalog::holds_term_ids(key);
         let mut refused = Vec::new();
         for text in parts.into_iter().map(str::trim).filter(|t| !t.is_empty()) {
-            let chip = parse_scalar(text, numeric);
+            // A term ID is a number to Workbench; a URI or a name stays text.
+            let as_id = term_ids && text.chars().all(|c| c.is_ascii_digit());
+            let chip = parse_scalar(text, numeric || as_id);
             if numeric && !chip.is_number() {
                 refused.push(text.to_string());
                 continue;

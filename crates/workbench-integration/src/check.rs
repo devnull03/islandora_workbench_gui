@@ -64,6 +64,14 @@ pub fn check_server(url: &str, credentials_file: Option<&Path>) -> ServerCheck {
         };
     };
 
+    // Encrypted (one line): only Workbench, with the key, can read it.
+    if crate::secrets::credentials_file_is_encrypted(path) {
+        return ServerCheck {
+            reachable: true,
+            credentials_ok: None,
+            message: "Reachable. The credentials file is encrypted, so it was not tested.".into(),
+        };
+    }
     let creds = match read_credentials(path) {
         Ok(c) => c,
         Err(e) => {

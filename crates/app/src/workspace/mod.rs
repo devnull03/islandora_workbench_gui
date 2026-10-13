@@ -70,6 +70,8 @@ pub struct Workspace {
     /// A run's outcome waiting to be shown as a toast; pushed from `render`, which is where the
     /// window is.
     pending_toast: Option<gpui_component::notification::Notification>,
+    /// A prepared run waiting for the password or key its dialog asks for.
+    pending_secret_run: Option<(workbench_integration::WorkbenchAction, run::PreparedRun)>,
     /// The Workbench process running now, if any.
     running: Option<run::RunSession>,
     /// What the last finished run left behind (rollback config, contact sheet, first node…).
@@ -300,6 +302,7 @@ impl Workspace {
             processed_csv: None,
             processed_at: SharedString::default(),
             pending_toast: None,
+            pending_secret_run: None,
             running: None,
             last_run: None,
             options_open: false,
