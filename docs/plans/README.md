@@ -19,7 +19,7 @@ it is stable across canvas edits. Read the canvas with the `claude_design` MCP
 
 | Stage | File | Mockups | Status |
 |-------|------|---------|--------|
-| 1 | [stage-1-config-builder.md](stage-1-config-builder.md) | `1a` `1b` `1c` `1d` | **built** — see its notes section |
+| 1 | [stage-1-config-builder.md](stage-1-config-builder.md) | `1a` `1b` `1c` `1d` | **built**; the October 2026 audit's blockers (P0-1…P0-11) are fixed and a builder-made config now passes the Check exit gate — see its Phase 1 section |
 | 2 | [stage-2-main-window.md](stage-2-main-window.md) | `2c` | **built** — see its notes section |
 | 3 | [stage-3-settings.md](stage-3-settings.md) | `3a` → `3b` | **built** — see its notes section |
 | Q | [ui-quality-pass.md](ui-quality-pass.md) | `1a` `1b` `1d` `2a` | **active** — required before docking |
