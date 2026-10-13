@@ -28,8 +28,10 @@ use gpui_component::{
 };
 use serde::{Deserialize, Serialize};
 
+use gpui_component::ActiveTheme as _;
 use ui::AppFont as _;
 use ui::PathField;
+use ui::tokens::{SIDEBAR_W, STATUS_DOT, TITLE_BAR_H};
 
 // --- Setting Field Enum ---
 
@@ -40,6 +42,12 @@ pub enum Setting {
         description: &'static str,
     },
     Switch {
+        key: &'static str,
+        label: &'static str,
+        description: &'static str,
+    },
+    /// A switch that reads as on until the user turns it off.
+    SwitchDefaultOn {
         key: &'static str,
         label: &'static str,
         description: &'static str,
@@ -88,6 +96,20 @@ impl From<Setting> for SettingItem {
             )
             .description(description),
 
+            Setting::SwitchDefaultOn {
+                key,
+                label,
+                description,
+            } => SettingItem::new(
+                label,
+                SettingField::switch(
+                    move |cx: &App| AppSettings::bool_or(key, true, cx),
+                    move |val: bool, cx: &mut App| {
+                        AppSettings::set_bool(key, val, cx);
+                    },
+                ),
+            )
+            .description(description),
             Setting::Switch {
                 key,
                 label,
@@ -504,6 +526,20 @@ impl AppSettings {
         r
     }
 
+    /// A switch's value, or `default` when it has never been set.
+    pub fn bool_or(key: &str, default: bool, cx: &App) -> bool {
+        Self::get(cx)
+            .values
+            .get(key)
+            .map(|v| v.bool())
+            .unwrap_or(default)
+    }
+
+    /// The name of the profile in use. One implicit profile until profiles exist (Stage 5).
+    pub fn active_profile_name(&self) -> SharedString {
+        "Default".into()
+    }
+
     pub fn set_text(key: &'static str, val: SharedString, cx: &mut App) {
         Self::update(cx, |s| {
             s.values.insert(key.into(), Val::Text(val));
@@ -635,9 +671,10 @@ impl SettingsWindow {
     /// Where to open the Settings window: the size it was last left at, centred on the display
     /// the main window is on. Falls back to a sensible default the first time.
     pub fn startup_placement(cx: &App) -> (Bounds<Pixels>, Option<Size<Pixels>>) {
+        // Component Spec §02: 846×470, no smaller than 720×420.
         const MIN: Size<Pixels> = Size {
-            width: px(600.0),
-            height: px(400.0),
+            width: px(720.0),
+            height: px(420.0),
         };
         let saved = AppSettings::get(cx)
             .values
@@ -653,7 +690,7 @@ impl SettingsWindow {
                     && px(b.height) >= MIN.height
             })
             .map(|b| size(px(b.width), px(b.height)))
-            .unwrap_or_else(|| size(px(1000.0), px(800.0)));
+            .unwrap_or_else(|| size(px(846.0), px(470.0)));
         (Bounds::centered(None, saved, cx), Some(MIN))
     }
 }
@@ -673,9 +710,64 @@ impl Render for SettingsWindow {
                     // its resizable sidebar an auto-height parent, so the search field can latch
                     // a collapsed width on the first frame and only recover while resizing.
                     .min_h_0()
-                    .child(Settings::new("app-settings").pages((self.build_pages)(cx))),
+                    .child(
+                        Settings::new("app-settings")
+                            // §00: one sidebar width, 176, in both windows.
+                            .sidebar_width(SIDEBAR_W)
+                            .pages((self.build_pages)(cx)),
+                    ),
+            )
+            .child(self.render_footer(cx))
+    }
+}
+
+impl SettingsWindow {
+    /// §02's sidebar footer: which profile these settings belong to, and whether its server
+    /// answered last time. gpui-component's `Settings` has no footer slot in its sidebar, so the
+    /// line runs along the window's bottom edge instead.
+    fn render_footer(&self, cx: &Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let (label, health) = profile_status(AppSettings::get(cx));
+        let dot = match health {
+            Some(true) => colors.success,
+            Some(false) => colors.danger,
+            None => colors.muted_foreground,
+        };
+        h_flex()
+            .w_full()
+            .h(TITLE_BAR_H)
+            .px_3()
+            .gap_2()
+            .items_center()
+            .border_t_1()
+            .border_color(colors.border)
+            .child(div().size(STATUS_DOT).rounded_full().bg(dot))
+            .child(
+                Label::new(label)
+                    .text_xs()
+                    .text_color(colors.muted_foreground),
             )
     }
+}
+
+/// The footer's profile line and the health of its default server: `Some(true)` when its last
+/// Test passed, `Some(false)` when it failed, `None` when it was never tested or there is none.
+pub fn profile_status(settings: &AppSettings) -> (SharedString, Option<bool>) {
+    let name = settings.active_profile_name();
+    let server = settings
+        .default_server
+        .as_ref()
+        .and_then(|url| {
+            settings
+                .server_configs
+                .iter()
+                .find(|s| &s.server_url == url)
+        })
+        .or_else(|| settings.server_configs.first());
+    let health = server
+        .and_then(|s| s.last_check.as_ref())
+        .map(CheckResult::is_ok);
+    (format!("Profile: {name}").into(), health)
 }
 
 pub fn find_on_path(candidates: &[&str]) -> Option<PathBuf> {

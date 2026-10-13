@@ -47,6 +47,12 @@ pub struct ValidationContext<'a> {
     /// The Workbench install directory: what relative `secondary_tasks` entries resolve
     /// against at run time (see [`resolve_secondary_task`]). `None` until Settings has one.
     pub workbench_dir: Option<&'a Path>,
+    /// Settings → Config builder → "Check paths as you type". Off skips the file-system
+    /// look-ups behind path rows (for slow network drives).
+    pub skip_path_checks: bool,
+    /// Settings → Config builder → "Warn about settings that clash". Off drops the cross-field
+    /// *warnings*; cross-field errors (a run that cannot work) are always reported.
+    pub skip_clash_warnings: bool,
 }
 
 /// A cross-field rule: settings only make sense together, so some problems have no single
@@ -225,6 +231,7 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
             ));
         }
         if def.shape == Shape::FilePath
+            && !cx.skip_path_checks
             && let Some(raw) = value.as_str().filter(|s| !s.is_empty())
         {
             problems.push(check_path(key, raw, cx.workbench_dir));
@@ -243,7 +250,12 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
         }
     }
 
-    problems.extend(RULES.iter().filter_map(|rule| rule(draft, cx)));
+    problems.extend(
+        RULES
+            .iter()
+            .filter_map(|rule| rule(draft, cx))
+            .filter(|p| !(cx.skip_clash_warnings && p.severity == Severity::Warn)),
+    );
     problems.sort_by_key(|p| std::cmp::Reverse(p.severity));
     problems
 }
@@ -535,10 +547,12 @@ mod tests {
         draft.set_secondary_tasks(&[std::path::PathBuf::from("main.yml")]);
         let wb = ValidationContext {
             workbench_dir: mine.parent(),
+            ..Default::default()
         };
         assert_eq!(errors_in(&draft, &wb), vec!["secondary_tasks".to_string()]);
         let elsewhere = ValidationContext {
             workbench_dir: other.parent(),
+            ..Default::default()
         };
         assert_eq!(errors_in(&draft, &elsewhere), Vec::<String>::new());
     }
@@ -603,6 +617,38 @@ mod tests {
         assert_eq!(errors(&mapping), vec!["media_types".to_string()]);
         let list = ConfigDraft::from_yaml("task: create\nmedia_types: [{image: [png]}]\n").unwrap();
         assert_eq!(errors(&list), Vec::<String>::new());
+    }
+
+    /// The two Settings switches gate what they name, and only that.
+    #[test]
+    fn settings_gate_path_checks_and_clash_warnings() {
+        let draft = ConfigDraft::from_yaml(
+            "task: create\nallow_missing_files: true\nlog_file_path: /x/y.log\n\
+             timestamp_rollback: true\n",
+        )
+        .unwrap();
+        let quiet = ValidationContext {
+            skip_path_checks: true,
+            skip_clash_warnings: true,
+            ..Default::default()
+        };
+        let problems = validate(&draft, &quiet);
+        assert!(
+            problems
+                .iter()
+                .all(|p| p.key.as_deref() != Some("log_file_path"))
+        );
+        assert!(
+            problems
+                .iter()
+                .all(|p| p.key.as_deref() != Some("allow_missing_files"))
+        );
+        // The rollback folder is an error, so it stays.
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.key.as_deref() == Some("rollback_dir"))
+        );
     }
 
     #[test]

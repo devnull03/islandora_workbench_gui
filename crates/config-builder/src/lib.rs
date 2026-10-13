@@ -66,6 +66,10 @@ static DECIMAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^-?\d*\.?\d*$").expect("a literal that is checked by the tests below")
 });
 
+/// Settings → Config builder switches (default on) that gate validation.
+pub const BUILDER_CHECK_PATHS_KEY: &str = "builder_check_paths";
+pub const BUILDER_WARN_CLASHES_KEY: &str = "builder_warn_clashes";
+
 /// Component Spec §05: from this many options a dropdown gets a search field.
 const SEARCHABLE_SELECT_MIN: usize = 12;
 
@@ -418,6 +422,8 @@ fn validate_draft(draft: &ConfigDraft, cx: &App) -> Vec<Problem> {
         draft,
         &ValidationContext {
             workbench_dir: workbench_dir.as_deref(),
+            skip_path_checks: !AppSettings::bool_or(BUILDER_CHECK_PATHS_KEY, true, cx),
+            skip_clash_warnings: !AppSettings::bool_or(BUILDER_WARN_CLASHES_KEY, true, cx),
         },
     )
 }

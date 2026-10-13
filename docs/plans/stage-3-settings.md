@@ -119,3 +119,21 @@ Both open questions were put to the user and answered:
 **Deliberately not built:** the Profiles page and the active-profile footer (Stage 5 owns both,
 and there is nothing to switch between until profiles exist). `AppSettings` is now split the way
 Stage 5 needs — *Workbench & Python* is machine facts, everything else is institutional.
+
+## Phase 3 conformance (October 2026)
+
+- **Config builder page** gains *Check paths as you type* and *Warn about settings that clash*
+  (both on by default, `Setting::SwitchDefaultOn`). They gate `ValidationContext`: the first
+  skips the file-system look-ups behind path rows (slow network drives), the second drops the
+  cross-field *warnings* — cross-field errors that would stop a run are always shown. This
+  restores note 8's cut `builder_check_paths` with an observable effect. *Open the builder
+  docked* waits for Stage 4; *Read vocabularies from* waits for a server vocabulary fetch, which
+  nothing in the app has yet.
+- **Appearance** is its own page after Config builder (§10); the theme list grows in the
+  themes phase.
+- **Sidebar** is 176px (§00) via `Settings::sidebar_width`. At that width "Workbench & Python"
+  truncates; shortening the page name is a design call left open.
+- **Footer**: "Profile: Default" with the default server's health dot (success / danger / muted
+  for never tested). gpui-component's `Settings` has no sidebar-footer slot, so it runs along
+  the window's bottom edge. The profile name becomes real with Stage 5.
+- **Window**: opens 846×470, minimum 720×420 (§02).

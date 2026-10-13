@@ -16,6 +16,8 @@ use gpui_component::setting::{SettingGroup, SettingPage};
 
 use settings::{Setting, picker_with_path_button};
 
+use config_builder::{BUILDER_CHECK_PATHS_KEY, BUILDER_WARN_CLASHES_KEY};
+
 use custom_fields::{saved_configs_field, saved_servers_field};
 
 fn exe_candidates(base: &'static str) -> Vec<&'static str> {
@@ -36,9 +38,6 @@ fn exe_candidates(base: &'static str) -> Vec<&'static str> {
 pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
     vec![
         SettingPage::new("General").default_open(true).groups(vec![
-            SettingGroup::new()
-                .title("Appearance")
-                .items(vec![crate::theming::appearance_setting()]),
             SettingGroup::new().title("Runs").items(vec![
                 Setting::Switch {
                     key: "auto_accept_prompts",
@@ -151,6 +150,28 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
                         description: "Open the builder with the read-only YAML preview visible",
                     }
                     .into(),
+                    Setting::SwitchDefaultOn {
+                        key: BUILDER_CHECK_PATHS_KEY,
+                        label: "Check paths as you type",
+                        description: "Say where each path setting resolves and whether its \
+                                      folder exists. Turn off for paths on slow network drives.",
+                    }
+                    .into(),
+                    Setting::SwitchDefaultOn {
+                        key: BUILDER_WARN_CLASHES_KEY,
+                        label: "Warn about settings that clash",
+                        description: "Point out combinations that run but probably are not \
+                                      what you meant. Problems that stop a run are always shown.",
+                    }
+                    .into(),
                 ])]),
+        // §10: its own page, after Config builder.
+        SettingPage::new("Appearance")
+            .default_open(true)
+            .groups(vec![
+                SettingGroup::new()
+                    .title("Theme")
+                    .items(vec![crate::theming::appearance_setting()]),
+            ]),
     ]
 }
