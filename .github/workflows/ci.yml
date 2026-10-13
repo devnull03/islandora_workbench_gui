@@ -61,6 +61,11 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@v22
 
+      # The non-Qrate palettes are generated from the Qrate pair; a hand edit to one of them,
+      # or a Qrate change without regenerating, fails here.
+      - name: Generated themes are current
+        run: python3 scripts/gen-themes.py --check
+
       - name: Format check
         run: nix develop --command cargo fmt --all --check
 
