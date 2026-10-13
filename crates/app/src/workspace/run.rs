@@ -211,10 +211,12 @@ impl Workspace {
             auto_accept,
             window,
             cx,
-            move |this, cx| {
+            move |this, succeeded, cx| {
                 this.op = Operation::None;
                 WindowLock::set(false, cx);
-                this.stage = if check {
+                // Only a Check Workbench passed (exit 0) unlocks Run Ingest. A run, passed or
+                // not, needs a fresh Check before the next one.
+                this.stage = if check && succeeded {
                     WorkflowStage::CheckPassed
                 } else {
                     WorkflowStage::Ready

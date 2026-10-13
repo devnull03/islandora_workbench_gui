@@ -23,10 +23,11 @@ pub fn spawn_stream_to_log(
     auto_accept: bool,
     window: &mut Window,
     cx: &mut Context<Workspace>,
-    on_complete: impl FnOnce(&mut Workspace, &mut Context<Workspace>) + Send + 'static,
+    on_complete: impl FnOnce(&mut Workspace, bool, &mut Context<Workspace>) + Send + 'static,
 ) {
     let rx = Arc::new(Mutex::new(rx));
     cx.spawn_in(window, async move |_, cx| {
+        let mut succeeded = false;
         loop {
             let rx2 = rx.clone();
             let line = cx
@@ -99,6 +100,7 @@ pub fn spawn_stream_to_log(
                 }
                 _ => {
                     let should_break = matches!(&line, StreamLine::Done(_) | StreamLine::Error(_));
+                    succeeded = exited_cleanly(&line);
                     let msg = format_stream_line(&line);
                     log::trace!("stream: received {msg}");
 
@@ -125,10 +127,30 @@ pub fn spawn_stream_to_log(
         log::debug!("stream: loop exited, calling on_complete");
         cx.update(|_, cx| {
             workspace.update(cx, |this, cx| {
-                on_complete(this, cx);
+                on_complete(this, succeeded, cx);
             });
         })
         .ok();
     })
     .detach();
+}
+
+/// Whether the stream ended with Workbench exiting 0. Anything else — a non-zero exit, a spawn
+/// or read error, a stream that just stopped — is a failure: a Check that unlocks Run Ingest
+/// must have actually passed.
+fn exited_cleanly(last: &StreamLine) -> bool {
+    matches!(last, StreamLine::Done(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StreamLine, exited_cleanly};
+
+    #[test]
+    fn only_a_zero_exit_is_success() {
+        assert!(exited_cleanly(&StreamLine::Done(0)));
+        assert!(!exited_cleanly(&StreamLine::Done(1)));
+        assert!(!exited_cleanly(&StreamLine::Done(-1)));
+        assert!(!exited_cleanly(&StreamLine::Error("spawn failed".into())));
+    }
 }

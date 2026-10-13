@@ -338,3 +338,18 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   entry, so only its identity check is reused. App-supplied keys found in a loaded file are no
   longer a footer warning with no row to click: the locked band says "set in file — replaced
   by the ingest server" (or, for `input_csv`, "used unless step 1 processes a source").
+- [x] **Found during the exit gate (not in the audit):** a failed Check still unlocked Run
+  Ingest. The stream's completion callback ignored Workbench's exit code, so a Check that
+  could not reach the server (exit 1) set the stage to `CheckPassed`. It now passes only on
+  `Done(0)`; any other ending, and any run, returns to `Ready`.
+
+**Exit gate (13 October 2026), run in the GUI under Xvfb + Mesa llvmpipe:** New → "Create
+nodes" template → named and saved (`main_batch_items.yml`) → added `secondary_tasks` → "Create
+a new one" → "Add media" template → saved (`child_pages.yml`), which linked it into the root's
+*open* draft by absolute path → saved the root → main window: picked the config and the
+server, Process (local CSV, no preprocessor) → Check. Workbench started in its own directory,
+loaded the root with the app's `host`, `credentials_file_path` and processed `input_csv`
+patched in (every other line untouched; the child got host and credentials only), and stopped
+at its first network request because no Islandora server was running. Before Phase 1 the same
+file failed in the app with ``missing field `host` ``, and Workbench itself fails a bare builder
+config with `KeyError: 'host'`.
