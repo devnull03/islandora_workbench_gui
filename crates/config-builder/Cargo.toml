@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 gpui.workspace = true
 gpui-component.workspace = true
+# Local wall-clock time for "Saved 12:04" (§02). Already in the lock through gpui.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 regex = "1.13.1"
 serde_yaml = "0.9"
 settings = { path = "../settings" }

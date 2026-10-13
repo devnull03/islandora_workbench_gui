@@ -444,7 +444,7 @@ impl ConfigBuilder {
                     Label::new(if added {
                         "added".to_string()
                     } else {
-                        default_preview(&def.default)
+                        super::editors::short_value(&def.default)
                     })
                     .text_xs()
                     .text_color(muted)
@@ -522,20 +522,6 @@ impl ConfigBuilder {
             }
         }
         self.revalidate(cx);
-    }
-}
-
-/// The default, short enough to sit at the end of a search row.
-fn default_preview(value: &Value) -> String {
-    match value {
-        Value::Null => "—".to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Number(n) => n.to_string(),
-        Value::String(s) if s.len() <= 24 => s.clone(),
-        Value::String(s) => format!("{}…", &s[..24]),
-        Value::Sequence(items) => format!("{} items", items.len()),
-        Value::Mapping(m) => format!("{} entries", m.len()),
-        _ => String::new(),
     }
 }
 

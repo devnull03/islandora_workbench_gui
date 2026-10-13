@@ -19,7 +19,10 @@ use gpui::*;
 use gpui_component::{ActiveTheme, StyledExt as _, h_flex, label::Label, v_flex};
 
 use crate::InlineMessage;
-use crate::tokens::{GAP_MD, GAP_XL, GAP_XS, LABEL_COL_W, ROW_PAD_Y, TYPE_COL_W};
+use crate::tokens::{GAP_MD, GAP_XL, GAP_XS, LABEL_COL_W, MODIFIED_MARK_W, ROW_PAD_Y, TYPE_COL_W};
+
+/// The hover group a row's reset button reveals itself against.
+const ROW_GROUP: &str = "setting-row";
 
 #[derive(IntoElement)]
 pub struct SettingRow {
@@ -40,6 +43,15 @@ pub struct SettingRow {
     control: AnyElement,
     /// Actions that belong to the control column's right edge: a reset, a remove.
     trailing: Vec<AnyElement>,
+    /// §03 ModifiedMark: the value differs from the default. A 2px primary bar at the label's
+    /// left edge.
+    modified: bool,
+    /// §03 DefaultHint: `default: <value>`, under the control. The caller decides when (only when
+    /// the value differs from the default, or when the row inherits it).
+    default_hint: Option<SharedString>,
+    /// §03 reset button: shown on row hover only, so a page of modified rows is not a column of
+    /// buttons.
+    reset: Option<AnyElement>,
 }
 
 impl SettingRow {
@@ -54,7 +66,26 @@ impl SettingRow {
             align_center: false,
             control: control.into_any_element(),
             trailing: Vec::new(),
+            modified: false,
+            default_hint: None,
+            reset: None,
         }
+    }
+
+    pub fn modified(mut self, modified: bool) -> Self {
+        self.modified = modified;
+        self
+    }
+
+    pub fn default_hint(mut self, hint: impl Into<Option<SharedString>>) -> Self {
+        self.default_hint = hint.into();
+        self
+    }
+
+    /// The reset control (an icon-only ghost button). Revealed on row hover.
+    pub fn reset(mut self, reset: impl IntoElement) -> Self {
+        self.reset = Some(reset.into_any_element());
+        self
     }
 
     /// Optional, and most rows omit it — a row must not grow taller than it needs.
@@ -103,8 +134,10 @@ impl RenderOnce for SettingRow {
         let muted = colors.muted_foreground;
         let mono = cx.theme().mono_font_family.clone();
         let align_center = self.align_center;
+        let modified = self.modified;
 
         h_flex()
+            .group(ROW_GROUP)
             .w_full()
             .py(ROW_PAD_Y)
             .gap(GAP_XL)
@@ -119,6 +152,17 @@ impl RenderOnce for SettingRow {
                 h_flex()
                     .w(LABEL_COL_W)
                     .flex_none()
+                    .gap(GAP_MD)
+                    .when(modified, |col| {
+                        col.child(
+                            div()
+                                .w(MODIFIED_MARK_W)
+                                .flex_none()
+                                .self_stretch()
+                                .rounded(MODIFIED_MARK_W / 2.)
+                                .bg(colors.primary),
+                        )
+                    })
                     // §00: "Long keys wrap to two lines; the column does not grow." Without
                     // the clip a key like `rollback_file_include_node_id` runs straight over
                     // the control beside it, which is what the screenshots showed.
@@ -183,7 +227,18 @@ impl RenderOnce for SettingRow {
                                     .overflow_hidden()
                                     .child(self.control),
                             )
+                            .children(self.reset.map(|reset| {
+                                div()
+                                    .flex_none()
+                                    .opacity(0.)
+                                    .group_hover(ROW_GROUP, |style| style.opacity(1.))
+                                    .child(reset)
+                            }))
                             .children(self.trailing),
+                    )
+                    .children(
+                        self.default_hint
+                            .map(|hint| Label::new(hint).text_xs().text_color(muted)),
                     )
                     .children(self.note),
             )

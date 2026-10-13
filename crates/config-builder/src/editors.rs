@@ -120,6 +120,43 @@ fn scalar_text(value: &Value) -> String {
     }
 }
 
+/// A value in a few characters: a search row's default, a row's `default: …` hint.
+/// Truncates by character, never by byte — a multibyte default must not panic.
+pub(crate) fn short_value(value: &Value) -> String {
+    const MAX: usize = 24;
+    match value {
+        Value::Null => "—".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) if s.is_empty() => "''".to_string(),
+        Value::String(s) if s.chars().count() <= MAX => s.clone(),
+        Value::String(s) => format!("{}…", s.chars().take(MAX).collect::<String>()),
+        Value::Sequence(items) if items.is_empty() => "[]".to_string(),
+        Value::Sequence(items) => format!("{} items", items.len()),
+        Value::Mapping(m) if m.is_empty() => "{}".to_string(),
+        Value::Mapping(m) => format!("{} entries", m.len()),
+        _ => String::new(),
+    }
+}
+
+/// How a row's value relates to Workbench's default (§03): `modified` draws the ModifiedMark
+/// and offers a reset; `hint` is the DefaultHint. A setting with no upstream default has
+/// neither — there is nothing to differ from.
+pub(crate) fn default_state(def: &SettingDef, value: &Value) -> (bool, Option<String>) {
+    if def.default.is_null() {
+        return (false, None);
+    }
+    let hint = format!("default: {}", short_value(&def.default));
+    if value.is_null() {
+        // Inherited: not written, so Workbench uses its default.
+        (false, Some(format!("{hint} · inherited")))
+    } else if *value != def.default {
+        (true, Some(hint))
+    } else {
+        (false, None)
+    }
+}
+
 /// An integer field's text as YAML. Never a string: empty (or a lone `-` mid-typing) is
 /// **unset** — `Value::Null`, which the draft does not write — so Workbench uses its default
 /// (§04; plan 1.5, P0-5). The field's pattern admits nothing but `-?\d*`, so the only other
@@ -333,6 +370,9 @@ impl ConfigBuilder {
         // A boolean is one short control, so its label centres against it rather than sitting
         // at the top of a row that is only 19px tall (§05).
         let align_center = def.shape == Shape::Boolean;
+        let value = self.draft.values.get(key).cloned().unwrap_or(Value::Null);
+        let (modified, hint) = default_state(def, &value);
+        let reset_key = key.to_string();
         SettingRow::new(def.key.clone(), control)
             // The label in the builder is the literal YAML key, so it is set in mono; in the
             // settings window the same component labels prose and is not.
@@ -344,6 +384,18 @@ impl ConfigBuilder {
                 row.description(def.description.clone())
             })
             .note(note)
+            .modified(modified)
+            .default_hint(hint.map(SharedString::from))
+            .when(modified, |row| {
+                row.reset(
+                    ghost_button(SharedString::from(format!("reset-{}", def.key)))
+                        .icon(IconName::Undo2)
+                        .tooltip("Reset to default")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.reset_setting(&reset_key, cx);
+                        })),
+                )
+            })
             .when(!def.required, |row| {
                 row.child(
                     ghost_button(SharedString::from(format!("remove-{}", def.key)))
@@ -396,9 +448,12 @@ impl ConfigBuilder {
             // §05: a YAML boolean is always a Switch. The Checkbox is reserved for run-time
             // options like Auto-accept, which are not written to the file.
             Shape::Boolean => {
-                let checked = value.as_bool().unwrap_or(false);
+                // Unset (inherited) shows what Workbench will use.
+                let checked = value
+                    .as_bool()
+                    .or_else(|| def.default.as_bool())
+                    .unwrap_or(false);
                 let owned = key.clone();
-                let default = def.default.as_bool();
                 h_flex()
                     .gap(GAP_MD)
                     .items_center()
@@ -426,13 +481,6 @@ impl ConfigBuilder {
                                 }
                             }),
                     )
-                    .when_some(default.filter(|d| *d != checked), |this, default| {
-                        this.child(
-                            Label::new(format!("default: {default}"))
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                    })
                     .into_any_element()
             }
 
@@ -464,16 +512,21 @@ impl ConfigBuilder {
 
             Shape::Enum | Shape::NullableEnum => {
                 let nullable = def.shape == Shape::NullableEnum;
-                let mut items: Vec<DetailSelectItem> = Vec::new();
+                let mut items: Vec<DetailSelectItem> = def
+                    .choices
+                    .iter()
+                    .map(|c| DetailSelectItem::from_choice(c.value.clone(), &c.label))
+                    .collect();
                 if nullable {
-                    // §05: `none` is a real row, and selecting it omits the key from the
-                    // YAML. Mono like the values it sits above, because it stands for one.
-                    items.push(DetailSelectItem::code("", "none").subtitle("leave this unset"));
+                    // §05: `none` is a real row — selecting it omits the key from the YAML —
+                    // and it goes last, below a rule, so the real values come first. Mono like
+                    // the values above it, because it stands for one.
+                    items.push(
+                        DetailSelectItem::code("", "none")
+                            .subtitle("leave this unset")
+                            .divider_above(true),
+                    );
                 }
-                items.extend(def.choices.iter().enumerate().map(|(i, c)| {
-                    DetailSelectItem::from_choice(c.value.clone(), &c.label)
-                        .divider_above(nullable && i == 0)
-                }));
                 let selected = value.as_str().map(|s| SharedString::from(s.to_string()));
                 let state = self.select(
                     id.clone(),
@@ -566,7 +619,8 @@ impl ConfigBuilder {
             }
 
             Shape::String | Shape::Url => {
-                let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
+                let placeholder = scalar_text(&def.default);
+                let input = self.input(id, &key, &scalar_text(&value), &placeholder, window, cx);
                 Input::new(&input).w_full().into_any_element()
             }
 
@@ -1092,7 +1146,41 @@ fn normalise_to_mapping(value: &Value) -> Mapping {
 
 #[cfg(test)]
 mod tests {
-    use super::{Value, parse_decimal, parse_integer, parse_text_keeping_numbers};
+    use super::{
+        Value, default_state, parse_decimal, parse_integer, parse_text_keeping_numbers, short_value,
+    };
+    use workbench_integration::config::catalog;
+
+    #[test]
+    fn short_values_truncate_by_character() {
+        assert_eq!(
+            short_value(&Value::String("é".repeat(30))),
+            format!("{}…", "é".repeat(24))
+        );
+        assert_eq!(short_value(&Value::String(String::new())), "''");
+        assert_eq!(short_value(&Value::Null), "—");
+    }
+
+    /// §03: the mark and hint appear only when the value differs from a real default.
+    #[test]
+    fn modified_and_inherited_rows() {
+        let def = catalog::find("allow_missing_files").unwrap();
+        assert_eq!(def.default, Value::Bool(false));
+        assert_eq!(default_state(def, &Value::Bool(false)), (false, None));
+        assert_eq!(
+            default_state(def, &Value::Bool(true)),
+            (true, Some("default: false".into()))
+        );
+        assert_eq!(
+            default_state(def, &Value::Null),
+            (false, Some("default: false · inherited".into()))
+        );
+        let no_default = catalog::find("media_type").unwrap();
+        assert_eq!(
+            default_state(no_default, &Value::String("x".into())),
+            (false, None)
+        );
+    }
 
     #[test]
     fn decimals_keep_integers_whole_and_reject_words() {

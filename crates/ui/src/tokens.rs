@@ -90,5 +90,8 @@ pub const GLYPH_COL_W: Pixels = px(14.);
 /// clipping; three call sites used to spell it out independently.
 pub const MIN_WINDOW_W: Pixels = px(520.);
 
+/// §03 ModifiedMark: the bar beside a label whose value differs from the default.
+pub const MODIFIED_MARK_W: Pixels = px(2.);
+
 /// ConfirmDialog width (§09).
 pub const CONFIRM_DIALOG_W: Pixels = px(420.);

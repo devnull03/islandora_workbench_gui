@@ -31,7 +31,7 @@ use gpui_component::{
     input::{Input, InputEvent, InputState, TextareaState},
     label::Label,
     scroll::ScrollableElement,
-    select::{SelectEvent, SelectState},
+    select::{SearchableVec, SelectEvent, SelectState},
     status_bar::StatusBar as StatusBarElement,
     v_flex,
 };
@@ -65,6 +65,9 @@ static INTEGER_PATTERN: LazyLock<Regex> =
 static DECIMAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^-?\d*\.?\d*$").expect("a literal that is checked by the tests below")
 });
+
+/// Component Spec §05: from this many options a dropdown gets a search field.
+const SEARCHABLE_SELECT_MIN: usize = 12;
 
 /// Open windows, keyed by the config they are editing (`None` for an unsaved new config), so a
 /// second Edit on the same file focuses the window that already has it rather than opening a
@@ -208,7 +211,7 @@ pub struct ConfigBuilder {
     /// Text inputs by field id — see [`field_id`] for the encoding.
     inputs: HashMap<SharedString, Entity<InputState>>,
     /// Dropdowns, keyed the same way.
-    selects: HashMap<SharedString, Entity<SelectState<Vec<DetailSelectItem>>>>,
+    selects: HashMap<SharedString, Entity<SelectState<SearchableVec<DetailSelectItem>>>>,
     /// Multi-line YAML editors (`Shape::Yaml`), keyed the same way.
     textareas: HashMap<SharedString, Entity<TextareaState>>,
     /// Text in a YAML editor that does not parse, by setting key. The draft keeps the last good
@@ -226,6 +229,11 @@ pub struct ConfigBuilder {
     pub(crate) search_scroll: ScrollHandle,
     pub(crate) yaml_editor: Entity<EditorState>,
     pub(crate) yaml_text: String,
+    /// Bumped on every change to the draft or its problems; the YAML preview and its markers
+    /// are rebuilt only when it moves.
+    pub(crate) draft_revision: u64,
+    pub(crate) yaml_revision: Option<u64>,
+    pub(crate) yaml_markers: Vec<(usize, Severity)>,
     pub(crate) search_open: bool,
     pub(crate) chrome: BuilderChromeState,
 
@@ -255,7 +263,8 @@ enum BuilderTitleSaveState {
     #[default]
     Clean,
     Dirty,
-    Saved,
+    /// Saved at this local time, `HH:MM`.
+    Saved(SharedString),
     Error(SharedString),
 }
 
@@ -276,6 +285,8 @@ pub(crate) enum BuilderChromeEvent {
     Edited,
     ToggleYaml,
     Saved {
+        /// Local time of the save, `HH:MM`.
+        at: SharedString,
         notice: Option<SharedString>,
     },
     Failed {
@@ -305,8 +316,8 @@ impl BuilderChromeState {
                     BuilderYamlState::Visible => BuilderYamlState::Hidden,
                 };
             }
-            BuilderChromeEvent::Saved { notice } => {
-                self.save = BuilderTitleSaveState::Saved;
+            BuilderChromeEvent::Saved { at, notice } => {
+                self.save = BuilderTitleSaveState::Saved(at);
                 self.notice = notice;
             }
             BuilderChromeEvent::Failed { title, detail } => {
@@ -589,6 +600,9 @@ impl ConfigBuilder {
             search_scroll: ScrollHandle::new(),
             yaml_editor,
             yaml_text,
+            draft_revision: 0,
+            yaml_revision: None,
+            yaml_markers: Vec::new(),
             search_open: false,
             // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is the
             // thing that makes the editors legible to someone who knows the YAML already.
@@ -877,18 +891,22 @@ impl ConfigBuilder {
         selected: Option<SharedString>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Entity<SelectState<Vec<DetailSelectItem>>> {
+    ) -> Entity<SelectState<SearchableVec<DetailSelectItem>>> {
         if let Some(existing) = self.selects.get(&id) {
             return existing.clone();
         }
-        let state = cx.new(|cx| SelectState::new(choices, None, window, cx));
+        // §05: a dropdown of twelve or more values gets a search field — `task` has eighteen.
+        let searchable = choices.len() >= SEARCHABLE_SELECT_MIN;
+        let state = cx.new(|cx| {
+            SelectState::new(SearchableVec::new(choices), None, window, cx).searchable(searchable)
+        });
         if let Some(value) = selected {
             state.update(cx, |s, cx| s.set_selected_value(&value, window, cx));
         }
         let key = setting_key.to_string();
         self._subscriptions.push(cx.subscribe(
             &state,
-            move |this, _, _: &SelectEvent<Vec<DetailSelectItem>>, cx| {
+            move |this, _, _: &SelectEvent<SearchableVec<DetailSelectItem>>, cx| {
                 this.commit(&key, cx);
             },
         ));
@@ -937,6 +955,7 @@ impl ConfigBuilder {
     }
 
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
+        self.draft_revision += 1;
         self.problems = validate_draft(&self.draft, cx);
         for (key, error) in &self.yaml_errors {
             self.problems.insert(
@@ -966,6 +985,14 @@ impl ConfigBuilder {
         self.draft.values.insert(def.key.clone(), seed);
         self.forget_widgets(&def.key);
         self.search_open = false;
+        self.revalidate(cx);
+    }
+
+    /// Back to Workbench's default: the row stays, the key is no longer written (§03 "reset
+    /// removes the override").
+    pub(crate) fn reset_setting(&mut self, key: &str, cx: &mut Context<Self>) {
+        self.draft.values.insert(key.to_string(), Value::Null);
+        self.forget_widgets(key);
         self.revalidate(cx);
     }
 
@@ -1078,6 +1105,7 @@ impl ConfigBuilder {
                 self.yaml_errors.clear();
                 self.last_chain_scan = None;
                 self.problems = validate_draft(&self.draft, cx);
+                self.draft_revision += 1;
                 self.chrome = BuilderChromeState {
                     yaml: self.chrome.yaml,
                     ..Default::default()
@@ -1175,6 +1203,7 @@ impl ConfigBuilder {
         }
         self.draft.label = label;
         self.chrome.transition(BuilderChromeEvent::Saved {
+            at: chrono::Local::now().format("%H:%M").to_string().into(),
             notice: link_notice.map(Into::into),
         });
         cx.notify();
@@ -1280,7 +1309,8 @@ impl ConfigBuilder {
         let save = match state.save {
             BuilderTitleSaveState::Clean => None,
             BuilderTitleSaveState::Dirty => Some(("Edited".into(), muted)),
-            BuilderTitleSaveState::Saved => Some(("Saved".into(), muted)),
+            // §02: "Draft saved 12:04" — when, not just that.
+            BuilderTitleSaveState::Saved(at) => Some((format!("Saved {at}").into(), muted)),
             BuilderTitleSaveState::Error(message) => Some((message, cx.theme().colors.danger)),
         };
 
@@ -1441,11 +1471,7 @@ impl ConfigBuilder {
                     // §06: disabled by errors only. A warning is something to know, not a
                     // veto — blocking on one teaches people to write configs that say less.
                     .disabled(errors > 0)
-                    .tooltip(if errors > 0 {
-                        "Fix the problems above first"
-                    } else {
-                        "Write the YAML and add it to the config library"
-                    })
+                    .tooltip(save_tooltip(&self.problems))
                     .on_click(cx.listener(|this, _, window, cx| this.request_save(window, cx))),
             );
 
@@ -1458,6 +1484,17 @@ impl ConfigBuilder {
             .text_color(cx.theme().colors.foreground)
             .left(left)
             .right(right)
+    }
+}
+
+/// §06: a disabled button says why. Save names the first thing blocking it.
+fn save_tooltip(problems: &[Problem]) -> SharedString {
+    match problems.iter().find(|p| p.severity == Severity::Error) {
+        Some(problem) => match &problem.key {
+            Some(key) => format!("Fix first — {key}: {}", problem.message).into(),
+            None => format!("Fix first — {}", problem.message).into(),
+        },
+        None => "Write the YAML and add it to the config library".into(),
     }
 }
 
@@ -1511,9 +1548,35 @@ mod tests {
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
         DECIMAL_PATTERN, INTEGER_PATTERN, discarded_draft, edit_config_file,
-        ensure_required_settings, locked_source, new_config_path, parse_yaml_value, slug,
+        ensure_required_settings, locked_source, new_config_path, parse_yaml_value, save_tooltip,
+        slug,
     };
     use serde_yaml::Value;
+    use workbench_integration::config::validate::{Problem, Severity};
+
+    #[test]
+    fn the_save_tooltip_names_the_first_blocker() {
+        let problems = vec![
+            Problem {
+                key: Some("adaptive_pause".into()),
+                severity: Severity::Warn,
+                message: "slow".into(),
+            },
+            Problem {
+                key: Some("rollback_dir".into()),
+                severity: Severity::Error,
+                message: "A folder is needed.".into(),
+            },
+        ];
+        assert_eq!(
+            save_tooltip(&problems).as_ref(),
+            "Fix first — rollback_dir: A folder is needed."
+        );
+        assert_eq!(
+            save_tooltip(&problems[..1]).as_ref(),
+            "Write the YAML and add it to the config library"
+        );
+    }
 
     /// The pattern is what stands between a typo and a YAML integer field holding a word.
     /// Empty has to pass — §04 says an empty numeric field means "use the default", not zero —
@@ -1562,8 +1625,13 @@ mod tests {
         assert!(matches!(chrome.save, BuilderTitleSaveState::Dirty));
         assert!(chrome.notice.is_none());
 
-        chrome.transition(BuilderChromeEvent::Saved { notice: None });
-        assert!(matches!(chrome.save, BuilderTitleSaveState::Saved));
+        chrome.transition(BuilderChromeEvent::Saved {
+            at: "12:04".into(),
+            notice: None,
+        });
+        assert!(
+            matches!(chrome.save, BuilderTitleSaveState::Saved(ref at) if at.as_ref() == "12:04")
+        );
         assert!(chrome.notice.is_none());
     }
 

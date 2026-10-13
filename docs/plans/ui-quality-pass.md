@@ -224,3 +224,22 @@ grep -rnE '\.h\(px\(' crates/*/src --include=*.rs         # only a 1px divider a
 Everything from the previous pass, plus: that the picker panel is not clipped by the scroll
 container when the window is short, and that a twelve-choice enum (`task`) reads well as three
 segments plus `+9` rather than as a truncation.
+
+## Phase 2 — builder conformance to the Component Spec (October 2026)
+
+- [x] **2A row anatomy.** `ui::SettingRow` has §03's `modified` (2px primary ModifiedMark at the
+  label's left edge), `default_hint` (`default: …` under the control, for every shape — it used
+  to exist only on booleans) and a hover-revealed icon-only **reset** (`Reset to default`).
+  Reset makes the setting *inherited*: the row stays, the key is no longer written, and the row
+  says `default: … · inherited`; booleans show the default's state, text fields show it as the
+  placeholder. Focus-within label colour is not built (gpui has no focus-within style).
+- [x] **2E enums.** Dropdowns of 12+ values are searchable (`task` has 18) via the library's
+  `SearchableVec`; a nullable enum's `none` is last, below a rule. The `+N` overflow segment is
+  not built: with 18 tasks a searchable dropdown serves better than "3 + +15".
+- [x] **2I YAML preview.** The YAML and its line markers are rebuilt only when the draft changes
+  (`draft_revision`), not every frame. Markers are coloured by level; "Copy YAML" added.
+  Per-line tint and click-to-focus remain library-limited (no editor decoration API used yet).
+- [x] **2J chrome.** Title says "Saved 12:04"; the disabled Save tooltip names the first blocking
+  problem. Click-a-counter-to-scroll is not built yet.
+- The search row's default preview truncated by byte (`&s[..24]`) and could panic on multibyte
+  text; it now truncates by character.
