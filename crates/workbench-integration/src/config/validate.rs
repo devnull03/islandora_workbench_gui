@@ -68,9 +68,15 @@ const RULES: &[Rule] = &[
 /// "Check for presence of required config keys, which varies by task"). `host`, `username`
 /// and `password` are there too; the app supplies those.
 const TASK_REQUIRES: &[(&[&str], &str)] = &[
-    (&["add_media", "update_media", "update_media_by_node"], "media_type"),
+    (
+        &["add_media", "update_media", "update_media_by_node"],
+        "media_type",
+    ),
     (&["create_terms", "update_terms"], "vocab_id"),
-    (&["get_data_from_view", "get_media_report_from_view"], "view_path"),
+    (
+        &["get_data_from_view", "get_media_report_from_view"],
+        "view_path",
+    ),
 ];
 
 /// Workbench's `--check` exits with "required configuration option … missing" for these; say it
@@ -194,7 +200,15 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
             continue;
         }
         problems.extend(check_shape(&def.key, def.shape, value));
-        if !def.choices.is_empty()
+        // Nothing picked yet is one short instruction, not a list of every legal value — for
+        // `task` that list is eighteen long and reads like a wall of errors.
+        if !def.choices.is_empty() && value.as_str() == Some("") {
+            problems.push(Problem::new(
+                key,
+                Severity::Error,
+                format!("Choose a {}.", key.replace('_', " ")),
+            ));
+        } else if !def.choices.is_empty()
             && let Some(found) = value.as_str()
             && !def.choices.iter().any(|c| c.value == found)
         {
@@ -372,6 +386,14 @@ mod tests {
     fn sample_config_has_no_errors() {
         let draft = ConfigDraft::from_yaml(include_str!("../../test.config.yml")).unwrap();
         assert_eq!(errors(&draft), Vec::<String>::new());
+    }
+
+    #[test]
+    fn an_empty_choice_asks_rather_than_lists() {
+        let draft = ConfigDraft::from_yaml("task: ''\n").unwrap();
+        let problems = validate(&draft, &ValidationContext::default());
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].message, "Choose a task.");
     }
 
     #[test]

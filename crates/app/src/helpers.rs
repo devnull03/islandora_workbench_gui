@@ -104,6 +104,35 @@ pub fn reveal_in_folder(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Opens `path` with the desktop's default application — a contact sheet in the browser, a CSV
+/// in the spreadsheet app.
+pub fn open_file(path: &Path) -> std::io::Result<()> {
+    if !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("path does not exist: {}", path.display()),
+        ));
+    }
+    #[cfg(windows)]
+    {
+        // `start` is a cmd built-in; the empty title argument stops it reading a quoted path
+        // as the window title.
+        Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(path)
+            .spawn()?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn()?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(path).spawn()?;
+    }
+    Ok(())
+}
+
 /// Opens a terminal at `cwd`. If `command` is non-empty it is executed after `cd`.
 ///
 /// Windows: tries Windows Terminal (`wt`) first, falls back to `cmd.exe`.

@@ -1,6 +1,7 @@
 mod log_viewer;
 mod preprocess_log;
 mod run;
+mod run_controls;
 mod sources;
 mod steps;
 mod streaming;
@@ -39,8 +40,8 @@ use crate::helpers::workbench_input_data_dir;
 enum Operation {
     None,
     Preprocessing,
-    CheckRunning,
-    IngestRunning,
+    /// A Workbench process is running; [`Workspace::running`] says which and for what.
+    Workbench,
 }
 
 /// How far through the workflow the user has progressed. Drives which actions are unlocked.
@@ -60,6 +61,21 @@ pub struct Workspace {
     /// what "Open processed" reveals. Cleared when the source or processor changes, because
     /// the file no longer reflects them; changing the config or server does not clear it.
     processed_csv: Option<PathBuf>,
+    /// The Workbench process running now, if any.
+    running: Option<run::RunSession>,
+    /// What the last finished run left behind (rollback config, contact sheet, first node…).
+    last_run: Option<run::LastRun>,
+
+    /// Run options (step 3, "Options"): per-session, never written into the config.
+    options_open: bool,
+    start_row: Entity<InputState>,
+    stop_row: Entity<InputState>,
+    skip_user_prompts: bool,
+    contact_sheet: bool,
+    /// Set by "Resume in recovery mode"; applies to the next Run only.
+    recovery_from_node: Option<u64>,
+    /// The URL field in the quick-delete dialog, kept so a mistyped URL survives reopening it.
+    quick_delete_url: Entity<InputState>,
     /// The log lives in the bottom dock now, not in this view — this handle is only how run
     /// output reaches it. Owned by `main` and handed to both, so the panel and the writer are
     /// the same log.
@@ -100,6 +116,10 @@ impl Workspace {
             cx.new(|cx| InputState::new(window, cx).placeholder("Directory for ingest files..."));
 
         let saved_config_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
+        let start_row = cx.new(|cx| InputState::new(window, cx).placeholder("first"));
+        let stop_row = cx.new(|cx| InputState::new(window, cx).placeholder("last"));
+        let quick_delete_url =
+            cx.new(|cx| InputState::new(window, cx).placeholder("https://…/node/123"));
 
         let server_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
         let input_source_select =
@@ -228,6 +248,15 @@ impl Workspace {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
             processed_csv: None,
+            running: None,
+            last_run: None,
+            options_open: false,
+            start_row,
+            stop_row,
+            skip_user_prompts: false,
+            contact_sheet: false,
+            recovery_from_node: None,
+            quick_delete_url,
             log_viewer,
             focus_handle: cx.focus_handle(),
             gdrive_link,
@@ -303,8 +332,8 @@ impl Workspace {
         workbench_input_data_dir(cx).is_some()
     }
 
-    /// Check / Run Ingest need a local ingest dir plus both selects chosen.
-    fn ingest_ready(&self, cx: &App) -> bool {
+    /// Any Workbench action needs a local ingest dir plus both selects chosen.
+    fn workbench_ready(&self, cx: &App) -> bool {
         let dir_ok = !self.ingest_files_dir.read(cx).value().trim().is_empty();
         let task_ok = self.saved_config_select.read(cx).selected_value().is_some();
         let server_ok = self.server_select.read(cx).selected_value().is_some();

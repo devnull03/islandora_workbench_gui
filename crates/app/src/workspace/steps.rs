@@ -8,14 +8,14 @@ use std::path::PathBuf;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, Sizable, button::ButtonVariants, checkbox::Checkbox,
-    h_flex, input::Input, label::Label,
+    ActiveTheme, Disableable, IconName, Sizable, checkbox::Checkbox, h_flex, input::Input,
+    label::Label,
 };
 use settings::AppSettings;
 use ui::{Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
 
 use super::sources::SOURCE_CSV;
-use super::{Operation, WorkflowStage, Workspace};
+use super::{Operation, Workspace};
 use crate::helpers::reveal_in_folder;
 use config_builder::open_config_builder;
 
@@ -192,13 +192,9 @@ impl Workspace {
             )
     }
 
-    /// Step 3 — target server, plus the two actions that actually talk to it.
+    /// Step 3 — target server, the actions that talk to it, and what the last one left.
     pub(super) fn render_server(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let idle = self.is_idle();
-        let check_loading = self.op == Operation::CheckRunning;
-        let run_loading = self.op == Operation::IngestRunning;
-        let actions_disabled = !idle || !self.ingest_ready(cx);
-        let run_enabled = idle && self.stage == WorkflowStage::CheckPassed;
         let auto_accept = AppSettings::get(cx)
             .values
             .get("auto_accept_prompts")
@@ -227,6 +223,7 @@ impl Workspace {
                     .w_full()
                     .items_center()
                     .gap_2()
+                    .flex_wrap()
                     .child(
                         Checkbox::new("auto-accept-prompts")
                             .small()
@@ -239,26 +236,9 @@ impl Workspace {
                             })),
                     )
                     .child(div().flex_1())
-                    .child(
-                        app_button("check")
-                            .outline()
-                            .label("Check")
-                            .loading(check_loading)
-                            .disabled(actions_disabled || check_loading || run_loading)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.run_ingest(true, window, cx);
-                            })),
-                    )
-                    .child(
-                        app_button("run-ingest")
-                            .primary()
-                            .label("Run Ingest")
-                            .loading(run_loading)
-                            .disabled(!run_enabled || run_loading)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.run_ingest(false, window, cx);
-                            })),
-                    ),
+                    .child(self.render_run_actions(cx)),
             )
+            .children(self.render_run_options(cx))
+            .children(self.render_last_run(cx))
     }
 }

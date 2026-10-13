@@ -5,6 +5,8 @@
 
 mod check;
 pub mod config;
+mod invocation;
+pub mod outcome;
 mod preprocess;
 mod provision;
 mod resolve;
@@ -14,7 +16,6 @@ mod util;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::mpsc::Receiver;
 
 pub struct Credentials {
     pub username: String,
@@ -39,7 +40,10 @@ use which::which;
 
 pub use util::{format_stream_line, language_url_from_server_base, run_command_capture_stdout};
 
-pub use stream::{StdinSink, StreamLine, spawn_command_streaming};
+pub use invocation::{RunOptions, WorkbenchAction, workbench_args};
+pub use stream::{
+    ProcessControl, StdinSink, StreamLine, StreamingProcess, spawn_command_streaming,
+};
 
 pub use config::{APP_SUPPLIED, ConfigDraft, WorkbenchConfigHandler};
 
@@ -130,15 +134,15 @@ pub fn build_workbench_command(
 
     Ok(cmd)
 }
-pub fn run_ingest_streaming(
+/// Start Workbench on `config_file` for `action`, streaming its output.
+pub fn run_workbench(
     workbench_info: &WbInfo,
     config_file: &WorkbenchConfigHandler<Ready>,
-    is_check: bool,
-) -> anyhow::Result<(Receiver<StreamLine>, StdinSink)> {
+    action: &WorkbenchAction,
+    options: &RunOptions,
+) -> anyhow::Result<StreamingProcess> {
     let mut cmd = build_workbench_command(workbench_info, config_file)?;
-    if is_check {
-        cmd.arg("--check");
-    }
+    cmd.args(invocation::workbench_args(action, options));
     log::info!(
         "[workbench] cwd: {:?}\n[workbench] cmd: {} {}",
         cmd.get_current_dir(),

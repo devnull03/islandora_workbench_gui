@@ -19,3 +19,7 @@ indexmap = { version = "2.0", features = ["serde"] }
 ureq.workspace = true
 base64.workspace = true
 zip = "2"
+
+[target.'cfg(unix)'.dependencies]
+# SIGINT to a run's process group: Cancel is Workbench's documented ctrl-c.
+libc = "0.2"

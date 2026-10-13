@@ -9101,6 +9101,7 @@ dependencies = [
  "anyhow",
  "base64",
  "indexmap",
+ "libc",
  "log",
  "schemars",
  "serde",

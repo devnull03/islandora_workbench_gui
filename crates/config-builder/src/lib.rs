@@ -846,8 +846,9 @@ impl ConfigBuilder {
                 .default_value(seed)
         });
         let key = setting_key.to_string();
-        self._subscriptions.push(
-            cx.subscribe(&state, move |this, state, event: &InputEvent, cx| {
+        self._subscriptions.push(cx.subscribe(
+            &state,
+            move |this, state, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     let text = state.read(cx).value().to_string();
                     match parse_yaml_value(&text) {
@@ -861,8 +862,8 @@ impl ConfigBuilder {
                     }
                     this.revalidate(cx);
                 }
-            }),
-        );
+            },
+        ));
         self.textareas.insert(id, state.clone());
         state
     }
@@ -1509,8 +1510,8 @@ mod tests {
     // shadow the one this needs.
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
-        DECIMAL_PATTERN, INTEGER_PATTERN, parse_yaml_value, discarded_draft, edit_config_file, ensure_required_settings,
-        locked_source, new_config_path, slug,
+        DECIMAL_PATTERN, INTEGER_PATTERN, discarded_draft, edit_config_file,
+        ensure_required_settings, locked_source, new_config_path, parse_yaml_value, slug,
     };
     use serde_yaml::Value;
 

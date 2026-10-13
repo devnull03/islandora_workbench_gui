@@ -145,3 +145,32 @@ hidden until a second profile exists anyway).
 processor reported. The workspace keeps the reported path for the session, supplies it to the
 root config as `input_csv` at Check/Run, and forgets it when the source or processor changes.
 See stage 1's Phase 1 notes for the full rule.
+
+## Workbench's command-line surface in step 3 (October 2026)
+
+Mockup `2c` draws only Check and Run Ingest. Workbench's CLI (`./workbench --help`) does more,
+and parity means all of it is reachable without a terminal. Step 3 now has:
+
+- **Cancel** while anything runs. The first press is Workbench's documented ctrl-c: SIGINT to
+  the run's process group (so `uv run` and the Python under it both get it); Workbench logs it
+  and exits. A second press ("Stop now") kills the group. Windows has no console SIGINT for a
+  windowless child, so there Cancel kills (`taskkill /T /F`). The child's SIGINT disposition is
+  reset before exec: an app started as a background job inherits SIGINT ignored, and a Python
+  started that way never raises KeyboardInterrupt — found while testing under Xvfb.
+- **Options** (folds away): `--csv_start_row` / `--csv_stop_row`, `--skip_user_prompts`, and
+  `--contactsheet` on Check. Per session; never written into the config.
+- **More** menu: Get CSV template (`--get_csv_template`), Print effective config
+  (`--print_config`), Quick delete a node / a media (`--quick_delete_node|media <url>`, behind
+  a dialog), Open the Workbench folder.
+- **Last run strip**: how it ended in words ("Check passed", "Run cancelled · 2 nodes
+  created"), and the follow-ups it makes possible — Open contact sheet, Open CSV template,
+  Open output CSV, **Roll back…** (runs the rollback config Workbench wrote, read from this
+  run's part of its log, after a confirm), **Resume from node N…** (recovery mode,
+  `--recovery_mode_starting_from_node_id`, offered when a `create` stopped after creating
+  node N), Open log.
+
+The argument mapping lives in `workbench_integration::invocation` and the output parsing in
+`workbench_integration::outcome`, both unit-tested against the exact strings upstream prints.
+Rollback, recovery, contact sheet, CSV template and quick delete need a live Islandora to
+exercise end to end; in the cloud container they are covered at the argument and parsing level,
+and Check, Print config and Cancel were exercised in the GUI against real Workbench.

@@ -1,5 +1,7 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 
@@ -34,14 +36,89 @@ fn is_yn_prompt(s: &str) -> bool {
         || lower.contains("(y/n):")
 }
 
+/// Stops a running child. Cloneable, so the UI can hold one while the stream is drained.
+#[derive(Clone, Debug)]
+pub struct ProcessControl {
+    pid: u32,
+    exited: Arc<AtomicBool>,
+}
+
+impl ProcessControl {
+    /// Ask the run to stop the way Workbench documents ("press ctrl-c"): SIGINT to the whole
+    /// process group, so `uv run` and the Python it started both get it, and Workbench logs
+    /// "exiting after receiving ctrl c" and leaves its rollback/map files consistent.
+    ///
+    /// Windows has no SIGINT for a console-less child, so there it is [`Self::kill`].
+    pub fn interrupt(&self) {
+        if self.exited.load(Ordering::SeqCst) {
+            return;
+        }
+        #[cfg(unix)]
+        // SAFETY: `kill` takes plain integers; a negative pid addresses the process group the
+        // child leads (it was spawned with `process_group(0)`).
+        unsafe {
+            libc::kill(-(self.pid as i32), libc::SIGINT);
+        }
+        #[cfg(not(unix))]
+        self.kill();
+    }
+
+    /// Stop the run now — for a second press of Cancel, when SIGINT was not enough.
+    pub fn kill(&self) {
+        if self.exited.load(Ordering::SeqCst) {
+            return;
+        }
+        #[cfg(unix)]
+        // SAFETY: as in `interrupt`.
+        unsafe {
+            libc::kill(-(self.pid as i32), libc::SIGKILL);
+        }
+        #[cfg(not(unix))]
+        {
+            let mut taskkill = Command::new("taskkill");
+            taskkill.args(["/PID", &self.pid.to_string(), "/T", "/F"]);
+            crate::util::apply_no_window(&mut taskkill);
+            let _ = taskkill.status();
+        }
+    }
+
+    /// Whether the child has exited.
+    pub fn has_exited(&self) -> bool {
+        self.exited.load(Ordering::SeqCst)
+    }
+}
+
+/// A child being streamed: its output, its stdin, and the means to stop it.
+pub struct StreamingProcess {
+    pub lines: Receiver<StreamLine>,
+    pub stdin: StdinSink,
+    pub control: ProcessControl,
+}
+
 /// Spawns a pre-built command and returns a receiver that streams stdout/stderr lines,
 /// plus a [`StdinSink`] to write answers back to the child process.
-pub fn spawn_command_streaming(
-    mut cmd: Command,
-) -> std::io::Result<(Receiver<StreamLine>, StdinSink)> {
+pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<StreamingProcess> {
     // Stop a blank console window flashing on Windows when the GUI spawns workbench (we already
     // pipe stdin/stdout/stderr, so the child never needs a console of its own).
     crate::util::apply_no_window(&mut cmd);
+    // Its own process group, so Cancel can signal `uv` and the Python under it together.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+        // A signal ignored in this process stays ignored in the child, and the app is often
+        // started that way (a background job of a non-interactive shell, some launchers). A
+        // Python started with SIGINT ignored never installs its KeyboardInterrupt handler, so
+        // Cancel would do nothing. Restore the default in the child before it execs.
+        //
+        // SAFETY: `signal` is async-signal-safe, which is all `pre_exec` requires.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::signal(libc::SIGINT, libc::SIG_DFL);
+                Ok(())
+            });
+        }
+    }
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -83,9 +160,8 @@ pub fn spawn_command_streaming(
                     } else {
                         buf.push(byte[0]);
                         let s = String::from_utf8_lossy(&buf);
-                        // eprintln!("[stdout-partial] {:?}", s);
                         if is_yn_prompt(&s) {
-                            eprintln!("\n[PROMPT DETECTED] {:?}", s);
+                            log::debug!("[stream] prompt detected: {s:?}");
                             if tx_stdout
                                 .send(StreamLine::InputRequired(s.into_owned()))
                                 .is_err()
@@ -123,9 +199,16 @@ pub fn spawn_command_streaming(
         }
     });
 
+    let exited = Arc::new(AtomicBool::new(false));
+    let control = ProcessControl {
+        pid: child.id(),
+        exited: exited.clone(),
+    };
+
     // Wait thread: sends Done/Error when the child process exits.
     thread::spawn(move || {
         let status = child.wait();
+        exited.store(true, Ordering::SeqCst);
         match status {
             Ok(s) => {
                 let _ = tx.send(StreamLine::Done(s.code().unwrap_or(-1)));
@@ -146,5 +229,77 @@ pub fn spawn_command_streaming(
         }
     });
 
-    Ok((rx, StdinSink { tx: stdin_tx }))
+    Ok(StreamingProcess {
+        lines: rx,
+        stdin: StdinSink { tx: stdin_tx },
+        control,
+    })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// Cancel sends SIGINT to the run's process group; a shell that traps it proves it arrived
+    /// and that the run ends with its own exit code rather than being killed.
+    /// The app may itself have SIGINT ignored (started in the background); the child must not
+    /// inherit that, or Cancel does nothing.
+    #[test]
+    fn interrupt_works_even_when_this_process_ignores_sigint() {
+        // SAFETY: process-wide, but nothing in the test harness relies on SIGINT, and it is
+        // restored before the assertion.
+        let previous = unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "echo ready; exec sleep 30"]);
+        let process = spawn_command_streaming(cmd);
+        unsafe {
+            libc::signal(libc::SIGINT, previous);
+        }
+        let process = process.unwrap();
+        assert!(matches!(
+            process.lines.recv_timeout(Duration::from_secs(5)),
+            Ok(StreamLine::Stdout(_))
+        ));
+        process.control.interrupt();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut code = None;
+        while Instant::now() < deadline && code.is_none() {
+            if let Ok(StreamLine::Done(c)) = process.lines.recv_timeout(Duration::from_secs(5)) {
+                code = Some(c);
+            }
+        }
+        // Killed by SIGINT: no exit code, which the stream reports as -1.
+        assert_eq!(code, Some(-1));
+    }
+
+    #[test]
+    fn interrupt_reaches_the_child_and_it_exits() {
+        let mut cmd = Command::new("sh");
+        cmd.args([
+            "-c",
+            "trap 'echo interrupted; exit 130' INT; echo ready; while :; do sleep 0.05; done",
+        ]);
+        let process = spawn_command_streaming(cmd).unwrap();
+        // Wait until the trap is installed.
+        match process.lines.recv_timeout(Duration::from_secs(5)).unwrap() {
+            StreamLine::Stdout(line) => assert_eq!(line, "ready"),
+            _ => panic!("expected the ready line"),
+        }
+        process.control.interrupt();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut saw_trap = false;
+        let mut code = None;
+        while Instant::now() < deadline && code.is_none() {
+            match process.lines.recv_timeout(Duration::from_secs(5)) {
+                Ok(StreamLine::Stdout(line)) if line == "interrupted" => saw_trap = true,
+                Ok(StreamLine::Done(c)) => code = Some(c),
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+        assert!(saw_trap);
+        assert_eq!(code, Some(130));
+        assert!(process.control.has_exited());
+    }
 }

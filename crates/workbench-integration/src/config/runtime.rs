@@ -84,6 +84,10 @@ pub struct RunOverrides<'a> {
     /// only: a secondary config runs against its own `input_csv` (typically a different sheet,
     /// such as pages or media), so overwriting it with the root's would be wrong.
     pub input_csv: Option<&'a Path>,
+    /// Refuse when neither the processed CSV nor the file supplies `input_csv` (plan Q2). True
+    /// for Check and Run; false for modes that never read the rows (a CSV template, quick
+    /// delete, print config), where Workbench's own default is harmless.
+    pub require_input_csv: bool,
 }
 
 impl WorkbenchConfigHandler<Ready> {
@@ -103,7 +107,10 @@ impl WorkbenchConfigHandler<Ready> {
         overrides: &RunOverrides<'_>,
         workbench_dir: &Path,
     ) -> anyhow::Result<()> {
-        if overrides.input_csv.is_none() && self.state.config.input_csv.is_none() {
+        if overrides.require_input_csv
+            && overrides.input_csv.is_none()
+            && self.state.config.input_csv.is_none()
+        {
             anyhow::bail!(
                 "No input CSV: process a source in step 1, or set input_csv in {}.",
                 self.state.file_path.display()
@@ -208,6 +215,19 @@ impl WorkbenchConfigHandler<Ready> {
         Ok(())
     }
 
+    /// Any other top-level setting, as loaded (`task`, `log_file_path`, `output_csv`, …).
+    pub fn setting(&self, key: &str) -> Option<&Value> {
+        self.state.config.other.get(key)
+    }
+
+    /// A text setting, trimmed; `None` when absent, empty or not text.
+    pub fn text_setting(&self, key: &str) -> Option<&str> {
+        self.setting(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+
     /// The CSV this config will read, if it names one.
     pub fn input_csv(&self) -> Option<&Path> {
         self.state.config.input_csv.as_deref()
@@ -263,6 +283,7 @@ mod tests {
                     host: "https://islandora.dev",
                     credentials_file_path: Path::new("/creds.yml"),
                     input_csv: Some(Path::new("/wb/input_data/metadata.csv")),
+                    require_input_csv: true,
                 },
                 &tree.root,
             )
@@ -301,6 +322,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
                     host: "https://new.example.org",
                     credentials_file_path: Path::new("/creds.yml"),
                     input_csv: Some(Path::new("/wb/input_data/metadata.csv")),
+                    require_input_csv: true,
                 },
                 &tree.root,
             )
@@ -326,6 +348,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
                     host: "https://h.org",
                     credentials_file_path: Path::new("/c.yml"),
                     input_csv: None,
+                    require_input_csv: true,
                 },
                 &tree.root,
             )
@@ -357,6 +380,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
                     host: "https://islandora.dev",
                     credentials_file_path: Path::new("/creds.yml"),
                     input_csv: Some(Path::new("/wb/metadata.csv")),
+                    require_input_csv: true,
                 },
                 &workbench,
             )
@@ -385,6 +409,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
                     host: "https://h.org",
                     credentials_file_path: Path::new("/c.yml"),
                     input_csv: Some(Path::new("/m.csv")),
+                    require_input_csv: true,
                 },
                 &tree.root,
             )
@@ -413,6 +438,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
                     host: "https://islandora.dev",
                     credentials_file_path: Path::new("/creds.yml"),
                     input_csv: Some(&processed),
+                    require_input_csv: true,
                 },
                 &workbench,
             )
@@ -434,6 +460,7 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
             host: "https://islandora.dev",
             credentials_file_path: Path::new("/creds.yml"),
             input_csv: None,
+            require_input_csv: true,
         };
 
         let own = tree.write("own.yml", "task: create\ninput_csv: mine.csv\n");
@@ -450,6 +477,21 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
             .update_config_fields(&overrides, &tree.root)
             .unwrap_err();
         assert!(error.to_string().contains("No input CSV"));
-        assert_eq!(std::fs::read_to_string(bare).unwrap(), "task: create\n");
+        assert_eq!(std::fs::read_to_string(&bare).unwrap(), "task: create\n");
+
+        // A mode that never reads the rows does not need one.
+        let mut handler = WorkbenchConfigHandler::new(bare.clone()).load().unwrap();
+        handler
+            .update_config_fields(
+                &RunOverrides {
+                    require_input_csv: false,
+                    ..overrides
+                },
+                &tree.root,
+            )
+            .unwrap();
+        let reloaded = WorkbenchConfigHandler::new(bare).load().unwrap();
+        assert_eq!(reloaded.host(), Some("https://islandora.dev"));
+        assert_eq!(reloaded.input_csv(), None);
     }
 }

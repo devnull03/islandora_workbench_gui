@@ -107,6 +107,11 @@ pub fn spawn_stream_to_log(
                     if cx
                         .update(|window, cx| {
                             workspace.update(cx, |this, cx| {
+                                if let StreamLine::Stdout(text) = &line
+                                    && let Some(session) = this.running.as_mut()
+                                {
+                                    session.report.observe(text);
+                                }
                                 this.append_log(&msg, window, cx);
                                 cx.notify();
                             });
