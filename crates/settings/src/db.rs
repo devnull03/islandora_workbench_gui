@@ -85,6 +85,14 @@ struct PersistSettings {
     default_task_config: Option<String>,
     #[serde(default)]
     default_server: Option<String>,
+    /// Added in schema v3 (profiles). A v2 file has neither, which reads as one profile
+    /// called "Default" holding everything it already had — the whole migration.
+    #[serde(default)]
+    active_profile: Option<String>,
+    #[serde(default)]
+    profiles: Vec<crate::profiles::Profile>,
+    #[serde(default)]
+    active_profile_index: usize,
 }
 
 impl From<&AppSettings> for PersistSettings {
@@ -137,6 +145,9 @@ impl From<&AppSettings> for PersistSettings {
             main_window_bounds: s.main_window_bounds.clone(),
             default_task_config: s.default_task_config.as_ref().map(|v| v.to_string()),
             default_server: s.default_server.as_ref().map(|v| v.to_string()),
+            active_profile: Some(s.active_profile.clone()),
+            profiles: s.profiles.clone(),
+            active_profile_index: s.active_profile_index,
         }
     }
 }
@@ -190,6 +201,12 @@ impl From<PersistSettings> for AppSettings {
             main_window_bounds: p.main_window_bounds,
             default_task_config: p.default_task_config.map(SharedString::from),
             default_server: p.default_server.map(SharedString::from),
+            active_profile: p
+                .active_profile
+                .unwrap_or_else(|| crate::profiles::DEFAULT_PROFILE.to_string()),
+            profiles: p.profiles,
+            active_profile_index: p.active_profile_index,
+            profile_generation: 0,
             settings_schema_version: p.settings_version,
         }
     }
@@ -304,5 +321,33 @@ impl SettingsWriter {
 
     pub fn enqueue_save(&self, settings: &AppSettings) {
         let _ = self.tx.send(PersistSettings::from(settings));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A schema-2 file (before profiles) loads as one profile, "Default", holding everything it
+    /// had, and writes back as schema 3.
+    #[test]
+    fn a_v2_file_becomes_the_default_profile() {
+        let v2 = r#"{
+            "settings_version": 2,
+            "values": {"input_source": {"Text": "csv-file"}, "workbench_path": {"Text": "/wb"}},
+            "task_configs": [{"label": "Main", "task_name": "create", "file_path": "/l/main.yml"}],
+            "server_configs": [{"label": "dev", "server_url": "https://dev", "credentials_file": "/c.yml"}],
+            "default_server": "https://dev"
+        }"#;
+        let persisted: PersistSettings = serde_json::from_str(v2).unwrap();
+        let settings = AppSettings::from(persisted);
+        assert_eq!(settings.active_profile, "Default");
+        assert!(settings.profiles.is_empty());
+        assert_eq!(settings.server_configs.len(), 1);
+        assert_eq!(settings.snapshot_profile().configs.len(), 1);
+
+        let again = PersistSettings::from(&settings);
+        assert_eq!(again.settings_version, SETTINGS_SCHEMA_VERSION);
+        assert_eq!(again.active_profile.as_deref(), Some("Default"));
     }
 }

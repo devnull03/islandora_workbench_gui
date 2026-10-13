@@ -70,6 +70,12 @@ pub struct Workspace {
     /// Bumped per finished run, so a late background scan of an older run is dropped.
     last_run_generation: u64,
 
+    /// The profile bar (mockup `3c`/`2c`): shown only when there is more than one profile.
+    profile_select: Entity<SelectState<Vec<DetailSelectItem>>>,
+    synced_profile_names: Vec<String>,
+    /// `AppSettings::profile_generation` this view was last seeded from; a switch re-seeds.
+    seen_profile_generation: u64,
+
     /// Run options (step 3, "Options"): per-session, never written into the config.
     options_open: bool,
     start_row: Entity<InputState>,
@@ -118,6 +124,7 @@ impl Workspace {
             cx.new(|cx| InputState::new(window, cx).placeholder("Directory for ingest files..."));
 
         let saved_config_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
+        let profile_select = cx.new(|cx| SelectState::new(vec![], None, window, cx));
         let start_row = cx.new(|cx| InputState::new(window, cx).placeholder("first"));
         let stop_row = cx.new(|cx| InputState::new(window, cx).placeholder("last"));
         let quick_delete_url =
@@ -238,6 +245,23 @@ impl Workspace {
             },
         ));
         _subscriptions.push(cx.subscribe(
+            &profile_select,
+            |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
+                let SelectEvent::Confirm(Some(name)) = event else {
+                    return;
+                };
+                // Never under a running Workbench: it was started with this profile's server.
+                if !this.is_idle() {
+                    return;
+                }
+                let name = name.to_string();
+                if let Err(e) = AppSettings::update(cx, |s| s.switch_profile(&name)) {
+                    log::warn!("[profiles] {e}");
+                }
+                cx.notify();
+            },
+        ));
+        _subscriptions.push(cx.subscribe(
             &server_select,
             |this, _, event: &SelectEvent<Vec<DetailSelectItem>>, cx| {
                 let SelectEvent::Confirm(value) = event;
@@ -260,6 +284,9 @@ impl Workspace {
             skip_user_prompts: false,
             contact_sheet: false,
             last_run_generation: 0,
+            profile_select,
+            synced_profile_names: Vec::new(),
+            seen_profile_generation: AppSettings::get(cx).profile_generation,
             quick_delete_url,
             log_viewer,
             focus_handle: cx.focus_handle(),
@@ -351,7 +378,75 @@ impl Workspace {
         dir_ok && task_ok && server_ok
     }
 
+    /// A different profile is active: re-seed every field and list from it, and drop what
+    /// belonged to the old one (its processed CSV, its last run).
+    fn apply_profile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = |key: &str, cx: &App| {
+            AppSettings::get(cx)
+                .values
+                .get(key)
+                .map(|v| v.text().to_string())
+                .unwrap_or_default()
+        };
+        for (state, key) in [
+            (self.gdrive_link.clone(), "gdrive_link"),
+            (self.source_csv.clone(), "source_csv"),
+            (self.ingest_files_dir.clone(), "ingest_files_dir"),
+        ] {
+            let value = text(key, cx);
+            state.update(cx, |s, cx| s.set_value(value, window, cx));
+        }
+        let source = Some(text("input_source", cx))
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| SOURCE_SHEET.to_string());
+        let processor = Some(text("preprocessor", cx))
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| sources::PROCESSOR_BUILTIN.to_string());
+        self.input_source_select.update(cx, |state, cx| {
+            state.set_selected_value(&SharedString::from(source), window, cx);
+        });
+        self.processor_select.update(cx, |state, cx| {
+            state.set_selected_value(&SharedString::from(processor), window, cx);
+        });
+        // Force the config and server lists to repopulate, applying the profile's defaults.
+        for select in [&self.saved_config_select, &self.server_select] {
+            select.update(cx, |state, cx| state.set_selected_index(None, window, cx));
+        }
+        self.synced_task_labels.clear();
+        self.synced_server_labels.clear();
+        self.summarised_config = None;
+        self.config_summary = None;
+        self.processed_csv = None;
+        self.last_run = None;
+        self.stage = WorkflowStage::Unfilled;
+    }
+
     fn sync_select_items(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let generation = AppSettings::get(cx).profile_generation;
+        if generation != self.seen_profile_generation && self.is_idle() {
+            self.seen_profile_generation = generation;
+            self.apply_profile(window, cx);
+        }
+        let names = AppSettings::get(cx).profile_names();
+        if names != self.synced_profile_names {
+            self.synced_profile_names = names.clone();
+            let active: SharedString = AppSettings::get(cx).active_profile_name();
+            let items = names
+                .iter()
+                .map(|n| DetailSelectItem::new(n.clone(), n.clone()))
+                .collect();
+            self.profile_select.update(cx, |state, cx| {
+                state.set_items(items, window, cx);
+                state.set_selected_value(&active, window, cx);
+            });
+        } else {
+            let active = AppSettings::get(cx).active_profile_name();
+            if self.profile_select.read(cx).selected_value() != Some(&active) {
+                self.profile_select.update(cx, |state, cx| {
+                    state.set_selected_value(&active, window, cx);
+                });
+            }
+        }
         let settings = AppSettings::get(cx);
         let task_configs = settings.task_configs.clone();
         let server_configs = settings.server_configs.clone();
@@ -544,6 +639,7 @@ impl Render for Workspace {
                     .min_h(relative(1.))
                     .p_4()
                     .gap_4()
+                    .children(self.render_profile_bar(cx))
                     .child(self.render_input_source(cx))
                     .child(self.render_config(cx))
                     .child(self.render_server(cx)),

@@ -65,3 +65,32 @@ importing it supplies their own credentials file. This replaces the setup docume
 **Answer this before building:** does the **config library** belong to the profile or to the
 machine? The mockup draws it as institutional (in the profile). But if the user keeps one folder
 of YAML shared across profiles, it should move out. The canvas flags this as unresolved.
+
+## Built (October 2026)
+
+Q1 answered with the plan's recommended default: a profile holds a *pointer* to a config
+library folder (`config_library_dir`) and its config list; the YAML files stay machine files.
+
+- **Model** (`settings::profiles`): the active profile *is* `AppSettings`'s ordinary fields, so
+  no reader changed; other profiles are `Profile` snapshots. `PROFILE_KEYS` lists what is
+  institutional (input source and values, ingest folder, preprocessor and scripts folder,
+  library folder, auto-accept, builder switches) plus servers, configs and their defaults;
+  everything else (Workbench/Python/uv, theme, window sizes, update checks) stays with the
+  machine. Switching snapshots the outgoing profile and loads the incoming one; the list keeps
+  its order (`active_profile_index`).
+- **Migration**: settings schema 2 → 3. A v2 file has no profiles and loads as one profile,
+  "Default", holding everything it had (fixture test in `db.rs`).
+- **Settings → Profiles**: a card per profile (name, `active` tag, "2 servers · 6 configs ·
+  source: CSV file") with Switch to · Rename · Duplicate · Export… · ✕ (confirm dialog; the
+  active profile cannot be deleted), New profile, Import…, the In the profile / On this machine
+  explainer and one note about export. The Settings window now renders a dialog layer, which
+  it lacked.
+- **Export/Import** `.profile.yml`: servers carry their credentials *file path*, never its
+  contents (tested); machine keys are never exported, and unknown keys are dropped on import.
+- **Profile bar** above step 1: hidden while there is one profile; a dropdown and Manage
+  profiles. Switching re-seeds every step field and list and drops the old profile's processed
+  CSV and last run. It is refused while a run is in progress (a run never changes profile under
+  it) rather than letting the run keep a stale profile id.
+- The Settings footer names the active profile.
+- Also: the config-library add row in Settings offered 10 hard-coded tasks; it now uses the
+  catalogue's 18.

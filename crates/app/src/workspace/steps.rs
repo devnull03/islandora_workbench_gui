@@ -48,6 +48,35 @@ impl Workspace {
         )
     }
 
+    /// The profile bar above step 1 (`2c`, `3c`): eyebrow, dropdown, Manage profiles. Hidden
+    /// while exactly one profile exists — a choice of one is noise.
+    pub(super) fn render_profile_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.synced_profile_names.len() < 2 {
+            return None;
+        }
+        let muted = cx.theme().colors.muted_foreground;
+        Some(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .child(Label::new("Profile").text_xs().text_color(muted))
+                .child(
+                    div().flex_1().child(
+                        ui::app_select(&self.profile_select)
+                            .with_size(ui::APP_CONTROL_SIZE_SM)
+                            .disabled(!self.is_idle()),
+                    ),
+                )
+                .child(
+                    ui::ghost_button("manage-profiles")
+                        .label("Manage profiles")
+                        .on_click(|_, _, cx| cx.dispatch_action(&crate::app_menus::OpenSettings)),
+                )
+                .into_any_element(),
+        )
+    }
+
     /// Step 1 — where the metadata CSV comes from. Optional: a config that already points at a
     /// prepared CSV can skip straight to step 2.
     pub(super) fn render_input_source(&self, cx: &mut Context<Self>) -> impl IntoElement {

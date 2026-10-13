@@ -34,25 +34,6 @@ use workbench_integration::check_server;
 use config_builder::open_config_builder;
 use ui::DetailSelectItem;
 
-pub const TASK_OPTIONS: &[(&str, &str)] = &[
-    ("create", "create - Create new nodes"),
-    ("create_from_files", "create_from_files - Create from files"),
-    ("update", "update - Update existing nodes"),
-    ("delete", "delete - Delete nodes"),
-    ("add_media", "add_media - Add media to nodes"),
-    ("update_media", "update_media - Update existing media"),
-    ("delete_media", "delete_media - Delete media"),
-    (
-        "delete_media_by_node",
-        "delete_media_by_node - Delete media by node",
-    ),
-    ("export_csv", "export_csv - Export content to CSV"),
-    (
-        "get_data_from_view",
-        "get_data_from_view - Get data from view",
-    ),
-];
-
 /// Which row is expanded, if any. `None` in the map means the add row.
 #[derive(Default)]
 struct OpenRow(Option<Option<usize>>);
@@ -172,12 +153,17 @@ fn config_row(
             SharedString::from(format!("cfg-task-{id}")),
             cx,
             move |window, cx| {
-                let items: Vec<DetailSelectItem> = TASK_OPTIONS
+                // The catalogue's `task` choices — all eighteen Workbench accepts — rather than a
+                // second, shorter list kept by hand here.
+                let choices = workbench_integration::config::catalog::find("task")
+                    .map(|def| def.choices.clone())
+                    .unwrap_or_default();
+                let items: Vec<DetailSelectItem> = choices
                     .iter()
                     .enumerate()
-                    .map(|(i, (value, label))| {
-                        DetailSelectItem::code(*value, *value)
-                            .subtitle(*label)
+                    .map(|(i, choice)| {
+                        DetailSelectItem::code(choice.value.clone(), choice.value.clone())
+                            .subtitle(choice.label.clone())
                             .divider_above(i > 0)
                     })
                     .collect();

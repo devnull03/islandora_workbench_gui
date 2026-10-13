@@ -4,10 +4,11 @@
 mod db;
 
 pub use db::{SettingsWriter, data_dir, load_app_settings};
+pub mod profiles;
 use gpui_component::Sizable;
 
 /// Increment when the persisted SQLite JSON schema (`db::PersistSettings`) changes.
-pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 3;
 
 /// `AppSettings` value key for the Settings window's last size (a JSON [`MainWindowBounds`]).
 pub const SETTINGS_WINDOW_BOUNDS_KEY: &str = "settings_window_bounds";
@@ -443,6 +444,14 @@ pub struct AppSettings {
     pub main_window_bounds: Option<MainWindowBounds>,
     pub default_task_config: Option<SharedString>,
     pub default_server: Option<SharedString>,
+    /// The profile the fields above belong to (Stage 5). See [`profiles`].
+    pub active_profile: String,
+    /// Every *other* profile, as a snapshot.
+    pub profiles: Vec<profiles::Profile>,
+    /// Where the active profile sits among them in the list the user sees.
+    pub active_profile_index: usize,
+    /// Bumped on every profile switch, so views seeded from settings know to re-seed.
+    pub profile_generation: u64,
     /// Schema version last read from disk (`settings_version` in JSON). See [`SETTINGS_SCHEMA_VERSION`].
     #[allow(dead_code)] // migrations / future UI; written on each save via `db`
     pub settings_schema_version: u32,
@@ -457,6 +466,10 @@ impl Default for AppSettings {
             main_window_bounds: None,
             default_task_config: None,
             default_server: None,
+            active_profile: profiles::DEFAULT_PROFILE.to_string(),
+            profiles: Vec::new(),
+            active_profile_index: 0,
+            profile_generation: 0,
             settings_schema_version: SETTINGS_SCHEMA_VERSION,
         }
     }
@@ -535,9 +548,9 @@ impl AppSettings {
             .unwrap_or(default)
     }
 
-    /// The name of the profile in use. One implicit profile until profiles exist (Stage 5).
+    /// The name of the profile in use.
     pub fn active_profile_name(&self) -> SharedString {
-        "Default".into()
+        self.active_profile.clone().into()
     }
 
     pub fn set_text(key: &'static str, val: SharedString, cx: &mut App) {
@@ -696,7 +709,7 @@ impl SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .app_font(cx)
@@ -718,6 +731,8 @@ impl Render for SettingsWindow {
                     ),
             )
             .child(self.render_footer(cx))
+            // Confirm dialogs (deleting a profile, …) render in this layer.
+            .children(gpui_component::Root::render_dialog_layer(window, cx))
     }
 }
 

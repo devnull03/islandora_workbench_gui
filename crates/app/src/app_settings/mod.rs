@@ -11,6 +11,7 @@
 //! behaviour for a list that is not a single setting.
 
 mod custom_fields;
+mod profiles_field;
 
 use gpui_component::setting::{SettingGroup, SettingPage};
 
@@ -165,6 +166,11 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
                     }
                     .into(),
                 ])]),
+        SettingPage::new("Profiles").default_open(true).groups(vec![
+            SettingGroup::new()
+                .title("Profiles")
+                .items(vec![profiles_field::profiles_field()]),
+        ]),
         // §10: its own page, after Config builder.
         SettingPage::new("Appearance")
             .default_open(true)
