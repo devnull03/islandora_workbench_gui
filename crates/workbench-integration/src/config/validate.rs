@@ -11,7 +11,7 @@ use std::path::Path;
 use serde_yaml::Value;
 
 use super::catalog::{self, Shape};
-use super::{ConfigDraft, chain, draft::resolve_secondary_task};
+use super::{ConfigDraft, chain, draft::resolve_secondary_task, template};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
@@ -165,6 +165,7 @@ fn secondary_task_cannot_be_self(draft: &ConfigDraft, cx: &ValidationContext) ->
 /// Every problem in the draft, most severe first.
 pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
     let mut problems = Vec::new();
+    let task = draft.values.get("task").and_then(Value::as_str);
 
     for def in catalog::catalog().iter().filter(|d| d.required) {
         if !draft.values.contains_key(&def.key) {
@@ -226,7 +227,19 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
         if def.shape == Shape::FilePath
             && let Some(raw) = value.as_str().filter(|s| !s.is_empty())
         {
-            problems.push(check_path(key, raw));
+            problems.push(check_path(key, raw, cx.workbench_dir));
+        }
+        if def.shape == Shape::Url
+            && let Some(raw) = value.as_str()
+        {
+            problems.extend(check_url(key, raw));
+        }
+        if def.shape == Shape::TemplateString
+            && let Some(raw) = value.as_str()
+            && let Some(allowed) = template::allowed_placeholders(key, task)
+            && let Some(message) = template::check(raw, allowed)
+        {
+            problems.push(Problem::new(key, Severity::Error, message));
         }
     }
 
@@ -308,34 +321,99 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
     }
 }
 
-/// Mockup `1b` shows a resolved path and whether its folder exists. A path that does not
-/// resolve yet is a warning, not an error — Workbench creates some of them itself, and the
-/// path may be relative to a workbench directory this crate does not know here.
-fn check_path(key: &str, raw: &str) -> Problem {
-    let path = Path::new(raw);
-    let dir = if raw.ends_with(['/', '\\']) {
-        Some(path)
+/// Mockup `1b` / spec §03: "Resolves to …\g\logs\workbench.log — folder exists, writable."
+/// Relative paths resolve the way Workbench resolves them — against its own folder, where the
+/// app runs it — and `~` is expanded as Workbench's `expanduser` does. A folder that does not
+/// exist yet is a warning, not an error: Workbench creates some of them itself.
+fn check_path(key: &str, raw: &str, workbench_dir: Option<&Path>) -> Problem {
+    let expanded = expand_home(raw);
+    let resolved = if expanded.is_absolute() {
+        expanded
+    } else if let Some(base) = workbench_dir {
+        base.join(expanded)
     } else {
-        path.parent().filter(|p| !p.as_os_str().is_empty())
+        return Problem::new(
+            key,
+            Severity::Ok,
+            "Relative to the Workbench folder (set it in Settings to check this path).",
+        );
     };
-
-    match dir {
-        Some(dir) if dir.is_dir() => Problem::new(
-            key,
-            Severity::Ok,
-            format!("Folder {} exists.", dir.display()),
-        ),
-        Some(dir) if path.is_relative() => Problem::new(
-            key,
-            Severity::Ok,
-            format!("Relative to the Workbench folder: {}", dir.display()),
-        ),
-        Some(dir) => Problem::new(
+    let dir = if raw.ends_with(['/', '\\']) {
+        resolved.as_path()
+    } else {
+        resolved.parent().unwrap_or(&resolved)
+    };
+    match std::fs::metadata(dir) {
+        Ok(meta) if meta.is_dir() && meta.permissions().readonly() => Problem::new(
             key,
             Severity::Warn,
-            format!("Folder {} doesn't exist yet.", dir.display()),
+            format!(
+                "Resolves to {} — the folder is read-only.",
+                resolved.display()
+            ),
         ),
-        None => Problem::new(key, Severity::Ok, "Relative to the Workbench folder."),
+        Ok(meta) if meta.is_dir() => Problem::new(
+            key,
+            Severity::Ok,
+            format!(
+                "Resolves to {} — folder exists, writable.",
+                resolved.display()
+            ),
+        ),
+        _ => Problem::new(
+            key,
+            Severity::Warn,
+            format!(
+                "Resolves to {} — folder {} doesn't exist yet.",
+                resolved.display(),
+                dir.display()
+            ),
+        ),
+    }
+}
+
+/// `~` and `~/…` as Workbench's `os.path.expanduser` reads them.
+fn expand_home(raw: &str) -> std::path::PathBuf {
+    let home = || {
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(std::path::PathBuf::from)
+    };
+    if raw == "~" {
+        return home().unwrap_or_else(|| raw.into());
+    }
+    if let Some(rest) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\"))
+        && let Some(home) = home()
+    {
+        return home.join(rest);
+    }
+    std::path::PathBuf::from(raw)
+}
+
+/// A URL setting holds a term URI (`http://pcdm.org/use#OriginalFile`) or a term ID (`17`).
+/// Anything else will not resolve.
+fn check_url(key: &str, raw: &str) -> Option<Problem> {
+    let raw = raw.trim();
+    if raw.is_empty() || raw.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let rest = raw
+        .strip_prefix("http://")
+        .or_else(|| raw.strip_prefix("https://"));
+    match rest {
+        Some(rest)
+            if rest
+                .split(['/', '#', '?'])
+                .next()
+                .is_some_and(|h| !h.is_empty()) =>
+        {
+            None
+        }
+        _ => Some(Problem::new(
+            key,
+            Severity::Error,
+            "Expected an http(s) URL or a numeric term ID.",
+        )),
     }
 }
 
@@ -525,6 +603,54 @@ mod tests {
         assert_eq!(errors(&mapping), vec!["media_types".to_string()]);
         let list = ConfigDraft::from_yaml("task: create\nmedia_types: [{image: [png]}]\n").unwrap();
         assert_eq!(errors(&list), Vec::<String>::new());
+    }
+
+    #[test]
+    fn urls_are_uris_or_term_ids() {
+        for ok in ["http://pcdm.org/use#OriginalFile", "https://x.org", "17"] {
+            assert!(check_url("media_use_tid", ok).is_none(), "{ok}");
+        }
+        for bad in ["pcdm.org/use", "http://", "ftp://x.org", "seventeen"] {
+            assert!(check_url("media_use_tid", bad).is_some(), "{bad}");
+        }
+    }
+
+    /// The rollback template pitfall from the docs is caught on the row.
+    #[test]
+    fn rollback_templates_are_checked_like_python() {
+        let draft = ConfigDraft::from_yaml(
+            "task: create\nrollback_config_filename_template: x_$config_filename_$input_csv_filename\n",
+        )
+        .unwrap();
+        assert_eq!(
+            errors(&draft),
+            vec!["rollback_config_filename_template".to_string()]
+        );
+        let draft = ConfigDraft::from_yaml(
+            "task: create_from_files\nrollback_csv_filename_template: ${input_csv_filename}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            errors(&draft),
+            vec!["rollback_csv_filename_template".to_string()]
+        );
+    }
+
+    #[test]
+    fn paths_resolve_against_the_workbench_folder() {
+        let tree = crate::config::test_support::TempTree::new();
+        std::fs::create_dir_all(tree.root.join("logs")).unwrap();
+        let ok = check_path("log_file_path", "logs/wb.log", Some(&tree.root));
+        assert_eq!(ok.severity, Severity::Ok);
+        assert!(ok.message.contains("folder exists, writable"));
+        assert!(
+            ok.message
+                .contains(&tree.root.join("logs/wb.log").display().to_string())
+        );
+        let missing = check_path("log_file_path", "nope/wb.log", Some(&tree.root));
+        assert_eq!(missing.severity, Severity::Warn);
+        let unknown = check_path("log_file_path", "x/wb.log", None);
+        assert_eq!(unknown.severity, Severity::Ok);
     }
 
     #[test]

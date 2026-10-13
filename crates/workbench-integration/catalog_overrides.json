@@ -359,7 +359,7 @@
     },
     "rollback_config_filename_template": {
       "shape": "template_string",
-      "tokens": ["${config_filename}"],
+      "tokens": ["${config_filename}", "${input_csv_filename}", "${csv_start_row}", "${csv_stop_row}"],
       "group": "Rollback",
       "default": null,
       "description": "Names the rollback config so runs don't overwrite each other."
@@ -372,7 +372,7 @@
     },
     "rollback_csv_filename_template": {
       "shape": "template_string",
-      "tokens": ["${config_filename}"],
+      "tokens": ["${config_filename}", "${input_csv_filename}", "${csv_start_row}", "${csv_stop_row}"],
       "group": "Rollback",
       "default": null
     },

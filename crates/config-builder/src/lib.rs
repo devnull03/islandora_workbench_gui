@@ -46,7 +46,7 @@ use workbench_integration::config::{
 };
 
 use ui::AppFont as _;
-use ui::tokens::{GAP_2XL, GAP_MD, GAP_SM, GAP_XS, MIN_WINDOW_W, PAD_PAGE};
+use ui::tokens::{GAP_2XL, GAP_MD, GAP_SM, GAP_XS, PAD_PAGE};
 use ui::{
     APP_CONTROL_SIZE, DetailSelectItem, LockedBand, ProblemSummary, ghost_button, status_bar_button,
 };
@@ -112,10 +112,15 @@ impl ConfigBuilderWindows {
 /// as the sum, and grows and shrinks by the panel's width when it is shown or hidden — the panel
 /// appearing must not squeeze the editors it exists to explain.
 pub(crate) const YAML_PANEL_WIDTH: Pixels = px(400.);
-const FALLBACK_EDITOR_WIDTH: Pixels = px(600.);
+/// Component Spec §02: the builder opens 800×760 and goes no smaller than 640×520.
+const DEFAULT_EDITOR_WIDTH: Pixels = px(800.);
+const DEFAULT_EDITOR_HEIGHT: Pixels = px(760.);
+const MIN_BUILDER_WIDTH: Pixels = px(640.);
+const MIN_BUILDER_HEIGHT: Pixels = px(520.);
+/// Settings key holding the editor side's last size, `"<width>x<height>"`.
+const BUILDER_SIZE_KEY: &str = "builder_editor_size";
 /// How far each chain level's window is offset from its parent's.
 const CASCADE_STEP: Pixels = px(24.);
-const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
 pub fn open_config_builder(path: Option<PathBuf>, cx: &mut App) {
@@ -162,19 +167,14 @@ fn open_config_builder_with_ancestors(
         .get("builder_show_yaml")
         .map(|v| v.bool())
         .unwrap_or(true);
-    // The editable side opens at the main window's last/current size. YAML is an additional
-    // right-hand surface, never width stolen from the form the user is trying to edit.
+    // The editable side opens at the size the user last left a builder at, else the spec's
+    // 800×760 (§02). YAML is an additional right-hand surface, never width stolen from the
+    // form the user is trying to edit.
     let editor_size = AppSettings::get(cx)
-        .main_window_bounds
-        .as_ref()
-        .filter(|bounds| {
-            bounds.width.is_finite()
-                && bounds.height.is_finite()
-                && px(bounds.width) >= MIN_WINDOW_W
-                && bounds.height >= 420.
-        })
-        .map(|bounds| size(px(bounds.width), px(bounds.height)))
-        .unwrap_or_else(|| size(FALLBACK_EDITOR_WIDTH, FALLBACK_EDITOR_HEIGHT));
+        .values
+        .get(BUILDER_SIZE_KEY)
+        .and_then(|v| parse_size(&v.text()))
+        .unwrap_or_else(|| size(DEFAULT_EDITOR_WIDTH, DEFAULT_EDITOR_HEIGHT));
     let width = if with_yaml {
         editor_size.width + YAML_PANEL_WIDTH
     } else {
@@ -190,7 +190,7 @@ fn open_config_builder_with_ancestors(
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
-        window_min_size: Some(Size::new(MIN_WINDOW_W, px(420.0))),
+        window_min_size: Some(Size::new(MIN_BUILDER_WIDTH, MIN_BUILDER_HEIGHT)),
         ..Default::default()
     };
 
@@ -231,9 +231,10 @@ pub struct ConfigBuilder {
     selects: HashMap<SharedString, Entity<SelectState<SearchableVec<DetailSelectItem>>>>,
     /// Multi-line YAML editors (`Shape::Yaml`), keyed the same way.
     textareas: HashMap<SharedString, Entity<TextareaState>>,
-    /// Text in a YAML editor that does not parse, by setting key. The draft keeps the last good
-    /// value; this is what the row says instead.
-    yaml_errors: HashMap<String, String>,
+    /// What a widget could not turn into a value, by setting key: YAML that does not parse, a
+    /// word typed into a list of numbers. The draft keeps the last good value; this is what the
+    /// row says instead, and it blocks Save.
+    pub(crate) widget_errors: HashMap<String, String>,
     /// Text and URL settings whose value was a number when the config was loaded, so they are
     /// written back as numbers (see `editors::parse_text_keeping_numbers`).
     loaded_numbers: HashSet<String>,
@@ -391,6 +392,15 @@ fn numeric_keys(draft: &ConfigDraft) -> HashSet<String> {
         .filter(|(_, value)| value.is_number())
         .map(|(key, _)| key.clone())
         .collect()
+}
+
+/// `"800x760"` as a size, refusing anything below the minimum (a corrupt or tiny value must not
+/// open an unusable window).
+fn parse_size(text: &str) -> Option<Size<Pixels>> {
+    let (w, h) = text.split_once('x')?;
+    let (w, h) = (w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?);
+    (w.is_finite() && h.is_finite() && px(w) >= MIN_BUILDER_WIDTH && px(h) >= MIN_BUILDER_HEIGHT)
+        .then(|| size(px(w), px(h)))
 }
 
 /// A YAML editor's text as a value: empty is unset, anything else must parse.
@@ -599,16 +609,41 @@ impl ConfigBuilder {
         let yaml_text = draft.to_yaml();
         let yaml_editor =
             cx.new(|cx| EditorState::new(window, cx).default_value(yaml_text.clone()));
-        let _subscriptions = vec![cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change | InputEvent::Focus) {
-                let query = this.search.read(cx).value().trim().to_string();
-                this.search_open = !query.is_empty();
-                if matches!(event, InputEvent::Change) {
-                    this.search_selected = None;
-                }
-                cx.notify();
+        // Remember the editor side's size (the window less the YAML panel) for the next builder.
+        // Only a change is written, so a drag is a handful of writes, not one per frame.
+        let size_sub = cx.observe_window_bounds(window, |this, window, cx| {
+            let bounds = window.bounds().size;
+            let editor_width = if this.chrome.yaml_visible() {
+                bounds.width - YAML_PANEL_WIDTH
+            } else {
+                bounds.width
+            };
+            let text = format!(
+                "{}x{}",
+                f32::from(editor_width).round(),
+                f32::from(bounds.height).round()
+            );
+            let stored = AppSettings::get(cx)
+                .values
+                .get(BUILDER_SIZE_KEY)
+                .map(|v| v.text().to_string());
+            if parse_size(&text).is_some() && stored.as_deref() != Some(text.as_str()) {
+                AppSettings::set_text(BUILDER_SIZE_KEY, text.into(), cx);
             }
-        })];
+        });
+        let _subscriptions = vec![
+            size_sub,
+            cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change | InputEvent::Focus) {
+                    let query = this.search.read(cx).value().trim().to_string();
+                    this.search_open = !query.is_empty();
+                    if matches!(event, InputEvent::Change) {
+                        this.search_selected = None;
+                    }
+                    cx.notify();
+                }
+            }),
+        ];
 
         // The library is the only place the description exists, so a draft opened from a file
         // has to go and find it. A file the library has never seen simply has none.
@@ -628,7 +663,7 @@ impl ConfigBuilder {
             inputs: HashMap::new(),
             selects: HashMap::new(),
             textareas: HashMap::new(),
-            yaml_errors: HashMap::new(),
+            widget_errors: HashMap::new(),
             loaded_numbers,
             search,
             search_selected: None,
@@ -789,15 +824,29 @@ impl ConfigBuilder {
             &input,
             window,
             move |this, state, event: &InputEvent, window, cx| {
-                if !matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
-                    return;
-                }
                 let text = state.read(cx).value().to_string();
-                if text.trim().is_empty() {
+                // §05: a comma commits too, so a pasted `tif, jp2, png` becomes three chips.
+                // Enter and blur commit whatever is left.
+                let (complete, rest) = match event {
+                    InputEvent::Change if text.contains(',') => {
+                        let (done, rest) = text.rsplit_once(',').unwrap_or((&text, ""));
+                        (done.to_string(), rest.to_string())
+                    }
+                    InputEvent::PressEnter { .. } | InputEvent::Blur => (text, String::new()),
+                    _ => return,
+                };
+                if complete.trim().is_empty() {
                     return;
                 }
-                this.push_chip(&key, &text, cx);
-                state.update(cx, |state, cx| state.set_value("", window, cx));
+                let mut refused = None;
+                for part in complete.split(',') {
+                    if let Err(bad) = this.push_chip(&key, part, cx) {
+                        refused = Some(bad);
+                    }
+                }
+                // A refused value stays in the field to be corrected, not silently dropped.
+                let keep = refused.unwrap_or(rest);
+                state.update(cx, |state, cx| state.set_value(keep, window, cx));
             },
         ));
         self.inputs.insert(id, input.clone());
@@ -877,7 +926,7 @@ impl ConfigBuilder {
     }
 
     /// A multi-line YAML editor for `id`. Each change is parsed: good YAML replaces the value
-    /// (empty means unset), bad YAML is recorded in `yaml_errors` and leaves the draft alone.
+    /// (empty means unset), bad YAML is recorded in `widget_errors` and leaves the draft alone.
     pub(crate) fn yaml_input(
         &mut self,
         id: SharedString,
@@ -903,11 +952,12 @@ impl ConfigBuilder {
                     let text = state.read(cx).value().to_string();
                     match parse_yaml_value(&text) {
                         Ok(value) => {
-                            this.yaml_errors.remove(&key);
+                            this.widget_errors.remove(&key);
                             this.draft.values.insert(key.clone(), value);
                         }
                         Err(error) => {
-                            this.yaml_errors.insert(key.clone(), error);
+                            this.widget_errors
+                                .insert(key.clone(), format!("Not valid YAML: {error}"));
                         }
                     }
                     this.revalidate(cx);
@@ -973,7 +1023,7 @@ impl ConfigBuilder {
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
         self.textareas
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
-        self.yaml_errors.remove(key);
+        self.widget_errors.remove(key);
     }
 
     // --- draft mutation --------------------------------------------------------------
@@ -984,8 +1034,15 @@ impl ConfigBuilder {
         let Some(def) = catalog::find(key) else {
             return;
         };
-        if let Some(value) = self.read_widgets(def, cx) {
-            self.draft.values.insert(key.to_string(), value);
+        match self.read_widgets(def, cx) {
+            Ok(Some(value)) => {
+                self.widget_errors.remove(key);
+                self.draft.values.insert(key.to_string(), value);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                self.widget_errors.insert(key.to_string(), error);
+            }
         }
         self.revalidate(cx);
     }
@@ -994,14 +1051,14 @@ impl ConfigBuilder {
         self.draft_revision += 1;
         self.problems = validate_draft(&self.draft, cx);
         // Sorted, so the footer and the "first blocker" are the same on every render.
-        let mut yaml_errors: Vec<_> = self.yaml_errors.iter().collect();
-        yaml_errors.sort();
-        let yaml_problems = yaml_errors.into_iter().map(|(key, error)| Problem {
+        let mut widget_errors: Vec<_> = self.widget_errors.iter().collect();
+        widget_errors.sort();
+        let widget_problems = widget_errors.into_iter().map(|(key, error)| Problem {
             key: Some(key.clone()),
             severity: Severity::Error,
-            message: format!("Not valid YAML: {error}"),
+            message: error.clone(),
         });
-        self.problems.splice(0..0, yaml_problems);
+        self.problems.splice(0..0, widget_problems);
         self.chrome.transition(BuilderChromeEvent::Edited);
         cx.notify();
     }
@@ -1137,7 +1194,7 @@ impl ConfigBuilder {
                 self.inputs.clear();
                 self.selects.clear();
                 self.textareas.clear();
-                self.yaml_errors.clear();
+                self.widget_errors.clear();
                 self.loaded_numbers = numeric_keys(&self.draft);
                 self.last_chain_scan = None;
                 self.problems = validate_draft(&self.draft, cx);
@@ -1573,7 +1630,7 @@ impl ConfigBuilder {
         } else {
             current.width - YAML_PANEL_WIDTH
         };
-        window.resize(size(target.max(MIN_WINDOW_W), current.height));
+        window.resize(size(target.max(MIN_BUILDER_WIDTH), current.height));
     }
 }
 
@@ -1584,8 +1641,8 @@ mod tests {
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
         DECIMAL_PATTERN, INTEGER_PATTERN, discarded_draft, edit_config_file,
-        ensure_required_settings, locked_source, new_config_path, parse_yaml_value, save_tooltip,
-        slug,
+        ensure_required_settings, locked_source, new_config_path, parse_size, parse_yaml_value,
+        save_tooltip, slug,
     };
     use serde_yaml::Value;
     use workbench_integration::config::validate::{Problem, Severity};
@@ -1625,6 +1682,15 @@ mod tests {
         for bad in ["abc", "1.5", "1e3", "1 ", "--1", "1-"] {
             assert!(!INTEGER_PATTERN.is_match(bad), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn stored_builder_sizes_are_parsed_and_floored() {
+        let ok = parse_size("900x700").unwrap();
+        assert_eq!((f32::from(ok.width), f32::from(ok.height)), (900., 700.));
+        assert!(parse_size("300x200").is_none());
+        assert!(parse_size("wide").is_none());
+        assert!(parse_size("NaNx700").is_none());
     }
 
     #[test]

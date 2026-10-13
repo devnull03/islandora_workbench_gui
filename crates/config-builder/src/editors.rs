@@ -20,6 +20,7 @@ use gpui_component::{
 };
 use serde_yaml::{Mapping, Value};
 use workbench_integration::config::{
+    ConfigDraft,
     catalog::{Browse, SettingDef, Shape},
     validate::Severity,
 };
@@ -157,6 +158,70 @@ pub(crate) fn default_state(def: &SettingDef, value: &Value) -> (bool, Option<St
     }
 }
 
+/// What a template setting resolves to, filled with this draft's own values where it has them
+/// and representative ones where it does not (§04: "resolved preview", not the raw text again).
+pub(crate) fn template_preview(key: &str, raw: &str, draft: &ConfigDraft) -> String {
+    use workbench_integration::config::template;
+    let config_filename = draft
+        .path
+        .as_deref()
+        .and_then(|p| p.file_stem())
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "this_config".into());
+    let text = |k: &str, fallback: &str| {
+        draft
+            .values
+            .get(k)
+            .map(scalar_text)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| fallback.to_string())
+    };
+    let start_row = text("csv_start_row", "0");
+    let stop_row = text("csv_stop_row", "None");
+    let values = [
+        ("config_filename", config_filename.as_str()),
+        ("input_csv_filename", "metadata"),
+        ("csv_start_row", start_row.as_str()),
+        ("csv_stop_row", stop_row.as_str()),
+        ("parent_title", "Parent title"),
+        ("weight", "1"),
+    ];
+    // Workbench adds the extension to rollback names itself.
+    let extension = match key {
+        "rollback_config_filename_template" => ".yml",
+        "rollback_csv_filename_template" => ".csv",
+        _ => "",
+    };
+    match template::render(raw, &values) {
+        Some(resolved) if resolved.is_empty() => "—".into(),
+        Some(resolved) => format!("{resolved}{extension}"),
+        None => "— (fix the template to see it)".into(),
+    }
+}
+
+/// A table cell's text as YAML, keeping the loaded value's type: a `5` or `true` that was a
+/// number or boolean stays one (`'5'` would change what Workbench reads); new cells are text.
+pub(crate) fn cell_value_typed(text: &str, original: Option<&Value>) -> Value {
+    match original {
+        Some(Value::Bool(_)) if matches!(text.trim(), "true" | "false") => {
+            Value::Bool(text.trim() == "true")
+        }
+        Some(Value::Number(_)) => parse_text_keeping_numbers(text, true),
+        _ => Value::String(text.to_string()),
+    }
+}
+
+/// The first key repeated in `keys`, as `(first row, repeat row)`. Blank keys are not compared:
+/// an unfinished row is not a duplicate.
+pub(crate) fn duplicate_key(keys: &[String]) -> Option<(usize, usize)> {
+    keys.iter().enumerate().find_map(|(again, key)| {
+        (!key.trim().is_empty())
+            .then(|| keys[..again].iter().position(|earlier| earlier == key))
+            .flatten()
+            .map(|first| (first, again))
+    })
+}
+
 /// An integer field's text as YAML. Never a string: empty (or a lone `-` mid-typing) is
 /// **unset** — `Value::Null`, which the draft does not write — so Workbench uses its default
 /// (§04; plan 1.5, P0-5). The field's pattern admits nothing but `-?\d*`, so the only other
@@ -213,11 +278,54 @@ fn parse_scalar(text: &str, numeric: bool) -> Value {
 impl ConfigBuilder {
     // --- reading widgets back into the draft ------------------------------------------
 
-    /// Rebuild one setting's value from its widgets. `None` means "leave the draft alone" —
+    /// Rebuild one setting's value from its widgets. `Ok(None)` means "leave the draft alone" —
     /// used by shapes whose control mutates the draft directly (checkbox, row add/remove).
-    pub(super) fn read_widgets(&self, def: &SettingDef, cx: &App) -> Option<Value> {
+    /// `Err` is a value the widgets cannot express faithfully (a key typed twice in a map); the
+    /// draft keeps its last good value and the row shows the message.
+    pub(super) fn read_widgets(&self, def: &SettingDef, cx: &App) -> Result<Option<Value>, String> {
         let key = def.key.as_str();
-        let current = self.draft.values.get(key)?;
+        let Some(current) = self.draft.values.get(key) else {
+            return Ok(None);
+        };
+        if def.shape == Shape::Map {
+            return self.read_map(key, current, cx).map(Some);
+        }
+        Ok(self.read_other(def, current, cx))
+    }
+
+    /// A keyed table. Two rows with the same key would silently collapse into one entry, so a
+    /// repeat is refused with the row numbers (§07). Values keep the type they were loaded with.
+    fn read_map(&self, key: &str, current: &Value, cx: &App) -> Result<Value, String> {
+        let originals: Vec<Value> = current
+            .as_mapping()
+            .map(|m| m.values().cloned().collect())
+            .unwrap_or_default();
+        let n = rows_of(Shape::Map, current).len();
+        let mut keys = Vec::with_capacity(n);
+        let mut m = Mapping::new();
+        for i in 0..n {
+            let row = i.to_string();
+            let cell_key = self.input_value(&field_id(&[key, &row, "k"]), cx);
+            let cell_value = self.input_value(&field_id(&[key, &row, "v"]), cx);
+            keys.push(cell_key.clone());
+            m.insert(
+                Value::String(cell_key),
+                cell_value_typed(&cell_value, originals.get(i)),
+            );
+        }
+        if let Some((first, again)) = duplicate_key(&keys) {
+            return Err(format!(
+                "Row {}: \"{}\" is already the key of row {}.",
+                again + 1,
+                keys[again],
+                first + 1
+            ));
+        }
+        Ok(Value::Mapping(m))
+    }
+
+    fn read_other(&self, def: &SettingDef, current: &Value, cx: &App) -> Option<Value> {
+        let key = def.key.as_str();
 
         match def.shape {
             Shape::Boolean => None, // the checkbox writes straight through
@@ -252,33 +360,32 @@ impl ConfigBuilder {
                 ))
             }
             Shape::ListOfOneKeyMaps => {
+                let originals: Vec<Option<Value>> = current
+                    .as_sequence()
+                    .map(|items| {
+                        items
+                            .iter()
+                            .map(|item| item.as_mapping().and_then(|m| m.values().next().cloned()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 let n = rows_of(def.shape, current).len();
                 Some(Value::Sequence(
                     (0..n)
                         .map(|i| {
-                            let i = i.to_string();
+                            let row = i.to_string();
                             let mut m = Mapping::new();
+                            let value = self.input_value(&field_id(&[key, &row, "v"]), cx);
                             m.insert(
-                                Value::String(self.input_value(&field_id(&[key, &i, "k"]), cx)),
-                                Value::String(self.input_value(&field_id(&[key, &i, "v"]), cx)),
+                                Value::String(self.input_value(&field_id(&[key, &row, "k"]), cx)),
+                                cell_value_typed(&value, originals.get(i).and_then(Option::as_ref)),
                             );
                             Value::Mapping(m)
                         })
                         .collect(),
                 ))
             }
-            Shape::Map => {
-                let n = rows_of(def.shape, current).len();
-                let mut m = Mapping::new();
-                for i in 0..n {
-                    let i = i.to_string();
-                    m.insert(
-                        Value::String(self.input_value(&field_id(&[key, &i, "k"]), cx)),
-                        Value::String(self.input_value(&field_id(&[key, &i, "v"]), cx)),
-                    );
-                }
-                Some(Value::Mapping(m))
-            }
+            Shape::Map => None, // read_map
             // Written as Workbench reads it: a list of one-key mappings
             // (`- image: [png, jpg]`). Upstream iterates `media_types`, `models`,
             // `oembed_providers` and `media_types_override` as lists; a mapping crashes it.
@@ -371,10 +478,12 @@ impl ConfigBuilder {
         // slot under the control by design: a stack of five is a wall nobody reads.
         let note = self
             .problems_for(key)
-            .filter_map(|p| match p.severity {
-                Severity::Error => Some(InlineMessage::error(p.message.clone())),
-                Severity::Warn => Some(InlineMessage::warning(p.message.clone())),
-                Severity::Ok => None,
+            .map(|p| match p.severity {
+                Severity::Error => InlineMessage::error(p.message.clone()),
+                Severity::Warn => InlineMessage::warning(p.message.clone()),
+                // §03's ✓ line: "Resolves to … — folder exists, writable." Facts, shown only
+                // when nothing worse is.
+                Severity::Ok => InlineMessage::info(p.message.clone()),
             })
             .min_by_key(InlineMessage::level);
         // A boolean is one short control, so its label centres against it rather than sitting
@@ -674,7 +783,7 @@ impl ConfigBuilder {
 
             Shape::TemplateString => {
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
-                let preview = scalar_text(&value);
+                let preview = template_preview(&key, &scalar_text(&value), &self.draft);
                 v_flex()
                     .w_full()
                     .gap(GAP_SM)
@@ -693,21 +802,20 @@ impl ConfigBuilder {
                                 .children(def.tokens.iter().enumerate().map(|(index, token)| {
                                     let field = input.clone();
                                     let token: SharedString = token.clone().into();
+                                    let setting = key.clone();
                                     app_button(SharedString::from(format!(
                                         "insert-token-{key}-{index}"
                                     )))
                                     .with_size(gpui_component::Size::Small)
                                     .outline()
                                     .label(token.clone())
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            field.update(cx, |state, cx| {
-                                                let mut next = state.value().to_string();
-                                                next.push_str(&token);
-                                                state.set_value(next, window, cx);
-                                            });
-                                        },
-                                    )
+                                    // §04: tokens go in at the caret, not at the end.
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        field.update(cx, |state, cx| {
+                                            state.insert(token.clone(), window, cx);
+                                        });
+                                        this.commit(&setting, cx);
+                                    }))
                                 })),
                         )
                     })
@@ -793,16 +901,34 @@ impl ConfigBuilder {
     ///
     /// §05: duplicates are dropped silently rather than flagged. Re-typing a value you already
     /// have is not an error worth a message — the set already says what you meant.
-    pub(super) fn push_chip(&mut self, key: &str, text: &str, cx: &mut Context<Self>) {
+    ///
+    /// A list of numbers refuses a value that is not one (`Err` with the text, so the field can
+    /// keep it) and says so under the chips, rather than storing a word that validation would
+    /// later call a shape error.
+    pub(super) fn push_chip(
+        &mut self,
+        key: &str,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
         let text = text.trim();
         if text.is_empty() {
-            return;
+            return Ok(());
         }
         let Some(def) = workbench_integration::config::catalog::find(key) else {
-            return;
+            return Ok(());
         };
         let numeric = def.shape == Shape::ListOfNumbers;
         let chip = parse_scalar(text, numeric);
+        if numeric && !chip.is_number() {
+            self.widget_errors.insert(
+                key.to_string(),
+                format!("\"{text}\" is not a whole number."),
+            );
+            self.revalidate(cx);
+            return Err(text.to_string());
+        }
+        self.widget_errors.remove(key);
         let entry = self.draft.values.entry(key.to_string());
         let current = entry.or_insert_with(|| empty_value(def.shape));
         let items = as_sequence(current);
@@ -810,6 +936,7 @@ impl ConfigBuilder {
             items.push(chip);
         }
         self.revalidate(cx);
+        Ok(())
     }
 
     /// The shared editor behind every list and map shape: numbered rows, a remove button per
@@ -1157,9 +1284,55 @@ fn normalise_to_mapping(value: &Value) -> Mapping {
 #[cfg(test)]
 mod tests {
     use super::{
-        Value, default_state, parse_decimal, parse_integer, parse_text_keeping_numbers, short_value,
+        ConfigDraft, Value, cell_value_typed, default_state, duplicate_key, parse_decimal,
+        parse_integer, parse_text_keeping_numbers, short_value, template_preview,
     };
     use workbench_integration::config::catalog;
+
+    #[test]
+    fn repeated_map_keys_are_found_with_their_rows() {
+        let keys: Vec<String> = ["image", "", "file", "", "image"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(duplicate_key(&keys), Some((0, 4)));
+        assert_eq!(duplicate_key(&["a".into(), "b".into()]), None);
+    }
+
+    #[test]
+    fn cells_keep_their_loaded_type() {
+        assert_eq!(
+            cell_value_typed("5", Some(&Value::Number(4.into()))),
+            Value::Number(5.into())
+        );
+        assert_eq!(
+            cell_value_typed("false", Some(&Value::Bool(true))),
+            Value::Bool(false)
+        );
+        assert_eq!(cell_value_typed("5", None), Value::String("5".into()));
+        assert_eq!(
+            cell_value_typed("maybe", Some(&Value::Bool(true))),
+            Value::String("maybe".into())
+        );
+    }
+
+    #[test]
+    fn template_previews_resolve() {
+        let mut draft = ConfigDraft::from_yaml("task: create\ncsv_start_row: 10\n").unwrap();
+        draft.path = Some("/lib/main_batch.yml".into());
+        assert_eq!(
+            template_preview(
+                "rollback_csv_filename_template",
+                "rb_${config_filename}_$csv_start_row",
+                &draft
+            ),
+            "rb_main_batch_10.csv"
+        );
+        assert_eq!(
+            template_preview("page_title_template", "$parent_title, page $weight", &draft),
+            "Parent title, page 1"
+        );
+        assert!(template_preview("page_title_template", "$nope", &draft).starts_with("—"));
+    }
 
     #[test]
     fn short_values_truncate_by_character() {

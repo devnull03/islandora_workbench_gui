@@ -255,3 +255,26 @@ segments plus `+9` rather than as a truncation.
   yet; child windows cascade 24px per level, centred past level 3. The "orange frame" on child
   windows is not drawn: GPUI exposes no window-border colour, and the breadcrumb and level
   badge already mark a child.
+- [x] **2B/2D inputs.** Path rows resolve like Workbench (relative to its folder, `~` expanded)
+  and say so: "Resolves to … — folder exists, writable" (or read-only / doesn't exist yet) as
+  the §03 ✓ line, which rows now show — they used to drop every info-level message. URL
+  settings must be an http(s) URI or a numeric term ID. Template settings are checked the way
+  Workbench fills them (`config::template`, Python `string.Template` rules): an unknown
+  placeholder is an error, and the documented pitfall `$config_filename_$input…` gets the fix
+  ("Write ${config_filename}_"); the rollback templates offer all four placeholders upstream
+  substitutes (`create_from_files` only `config_filename`); the preview shows the resolved name
+  (with the `.yml`/`.csv` Workbench adds); Insert puts the token at the caret. Delimiters stay
+  "one code point", not one grapheme as the plan suggested: Python's csv module counts code
+  points. Number bounds/units, trim-on-blur and validate-on-blur are not built.
+- [x] **2F chips.** A comma commits (paste `tif, jp2, png` → three chips); a word in a list of
+  numbers is refused with a message and stays in the field. Backspace-removes-last is not
+  built (the add slot's input exposes no key events); each chip's ✕ removes it.
+- [x] **2G rows.** A key typed twice in a map is an error naming both rows ("Row 5: "image" is
+  already the key of row 1") instead of silently collapsing; map and list cells keep the type
+  they were loaded with (`5` stays a number, `true` a boolean). Drag reorder, borderless cells
+  and Tab navigation are not built.
+- [x] **2H picker.** The counter is always visible ("177 settings · 8 in this config"; "7 of
+  177" while typing).
+- [x] **2M window.** The builder opens at the spec's 800×760 editor size (plus the YAML panel),
+  minimum 640×520, and remembers the editor size the user leaves it at
+  (`builder_editor_size`). This replaces the earlier rule of sizing it from the main window.

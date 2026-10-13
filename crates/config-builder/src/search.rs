@@ -109,6 +109,15 @@ impl ConfigBuilder {
         let background = colors.background;
         let primary = colors.primary;
         let total = catalogue_size();
+        let in_config = self
+            .draft
+            .values
+            .iter()
+            .filter(|(key, value)| {
+                !value.is_null()
+                    && !workbench_integration::config::ConfigDraft::is_app_supplied(key)
+            })
+            .count();
 
         v_flex()
             .w_full()
@@ -166,13 +175,19 @@ impl ConfigBuilder {
                                         .w_full(),
                                 ),
                             )
-                            .when(!query.trim().is_empty(), |this| {
-                                this.child(
-                                    Label::new(format!("{} of {total} settings", matches.len()))
-                                        .text_xs()
-                                        .text_color(muted),
-                                )
-                            }),
+                            // §08: the counter is always there. Idle it says how big the
+                            // catalogue is and how much of it this config uses; while typing,
+                            // how many match.
+                            .child(
+                                Label::new(if query.trim().is_empty() {
+                                    format!("{total} settings · {in_config} in this config")
+                                } else {
+                                    format!("{} of {total}", matches.len())
+                                })
+                                .text_xs()
+                                .text_color(muted)
+                                .flex_none(),
+                            ),
                     )
                     .when(show_results, |this| {
                         this.child(self.render_results(&query, &matches, cx))

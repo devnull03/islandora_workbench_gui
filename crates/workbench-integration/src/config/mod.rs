@@ -2,6 +2,7 @@
 
 pub mod catalog;
 pub mod chain;
+pub mod template;
 pub mod validate;
 
 mod draft;
