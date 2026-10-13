@@ -12,6 +12,7 @@
 //! from the draft rather than left holding shifted values.
 
 mod chain;
+mod dock;
 mod editors;
 mod search;
 mod yaml_panel;
@@ -24,7 +25,7 @@ use std::time::Instant;
 use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme, Disableable, IconName, Root, Sizable, StyledExt, TitleBar,
+    ActiveTheme, Disableable, IconName, Root, Selectable as _, Sizable, StyledExt, TitleBar,
     button::ButtonVariants,
     h_flex,
     input::EditorState,
@@ -52,6 +53,12 @@ use ui::{
 };
 
 actions!(config_builder, [OpenConfigBuilder]);
+
+pub use dock::{
+    BUILDER_OPEN_DOCKED_KEY, BuilderDock, BuilderPane, DOCK_DEFAULT_W, ToggleBuilderDock,
+    clamp_dock_width, install_builder_dock,
+};
+pub(crate) use dock::{BuilderHost, BuilderSnapshot};
 
 /// What a `Shape::Integer` field accepts while it is being typed into. Empty is allowed on
 /// purpose (§04: empty means "use the default", not zero), and so is a leading minus, because
@@ -118,6 +125,13 @@ impl ConfigBuilderWindows {
             .map(|view| view.read(cx).draft.clone())
             .filter(|draft| draft.path.is_some())
             .collect()
+    }
+
+    /// The window `view` is registered in.
+    pub(crate) fn window_of(&self, view: &WeakEntity<ConfigBuilder>) -> Option<AnyWindowHandle> {
+        self.live()
+            .find(|open| &open.view == view)
+            .map(|open| open.window)
     }
 
     fn live(&self) -> impl Iterator<Item = &OpenBuilder> {
@@ -200,13 +214,33 @@ fn open_config_builder_with_ancestors(
         return;
     }
 
+    // A root config opens in the main window's dock when Settings says so and the dock is
+    // free; a chain child always gets its own window (plan 5.7).
+    if ancestors.is_empty() && dock::open_docked(path.clone(), cx) {
+        return;
+    }
+    let depth = ancestors.len();
+    let key = path.clone();
+    open_builder_window(
+        key,
+        depth,
+        move |window, cx| ConfigBuilder::new(path, ancestors, window, cx),
+        cx,
+    )
+    .detach();
+}
+
+/// Open a builder window around the view `build` makes, register it under `key`, and hand the
+/// view back once the window exists.
+pub(crate) fn open_builder_window(
+    key: Option<PathBuf>,
+    depth: usize,
+    build: impl FnOnce(&mut Window, &mut Context<ConfigBuilder>) -> ConfigBuilder + 'static,
+    cx: &mut App,
+) -> Task<Option<Entity<ConfigBuilder>>> {
     // The starting width has to agree with whether the YAML panel is showing, or the window
     // opens the wrong size and the first toggle corrects it with a visible jump.
-    let with_yaml = AppSettings::get(cx)
-        .values
-        .get("builder_show_yaml")
-        .map(|v| v.bool())
-        .unwrap_or(true);
+    let with_yaml = AppSettings::bool_or("builder_show_yaml", true, cx);
     // The editable side opens at the size the user last left a builder at, else the spec's
     // 800×760 (§02). YAML is an additional right-hand surface, never width stolen from the
     // form the user is trying to edit.
@@ -223,7 +257,6 @@ fn open_config_builder_with_ancestors(
     let mut bounds = Bounds::centered(None, size(width, editor_size.height), cx);
     // `2a`: a child window cascades from its parent by one step per level so the chain reads
     // as a stack; past level 3 the offsets would walk off a laptop screen, so it centres.
-    let depth = ancestors.len();
     if (1..=3).contains(&depth) {
         bounds.origin += point(CASCADE_STEP * depth as f32, CASCADE_STEP * depth as f32);
     }
@@ -235,24 +268,29 @@ fn open_config_builder_with_ancestors(
     };
 
     cx.spawn(async move |cx| {
-        let key = path.clone();
         let mut view = None;
         let opened = cx.open_window(options, |window, cx| {
-            let builder = cx.new(|cx| ConfigBuilder::new(path, ancestors, window, cx));
-            view = Some(builder.downgrade());
+            let builder = cx.new(|cx| build(window, cx));
+            view = Some(builder.clone());
             cx.new(|cx| Root::new(builder, window, cx))
         });
-        if let (Ok(handle), Some(view)) = (opened, view) {
-            cx.update(|cx| {
-                cx.global_mut::<ConfigBuilderWindows>()
-                    .register(key, handle.into(), view);
-            });
-        }
+        let (Ok(handle), Some(view)) = (opened, view) else {
+            return None;
+        };
+        cx.update(|cx| {
+            cx.global_mut::<ConfigBuilderWindows>()
+                .register(key, handle.into(), view.downgrade());
+        });
+        Some(view)
     })
-    .detach();
 }
 
 pub struct ConfigBuilder {
+    /// Where this builder is shown: its own window, or the main window's right dock.
+    pub(crate) host: BuilderHost,
+    /// While a floating builder sits over the main window's right edge: when it got there, so
+    /// it docks once it has been still there for a moment (`dock::window_moved`).
+    pub(crate) snap: Option<Instant>,
     pub(crate) draft: ConfigDraft,
     /// Existing config that owns this draft when it was opened via “Add under”.
     pub(crate) parent_path: Option<PathBuf>,
@@ -672,6 +710,67 @@ impl ConfigBuilder {
         // for a new draft and for an invalid hand-written config that omitted it.
         ensure_required_settings(&mut draft);
 
+        // The library is the only place the description exists, so a draft opened from a file
+        // has to go and find it. A file the library has never seen simply has none.
+        let description = path
+            .as_ref()
+            .and_then(|p| library_description(p, cx))
+            .unwrap_or_default();
+        let loaded_numbers = numeric_keys(&draft);
+        let snapshot = BuilderSnapshot {
+            draft,
+            description,
+            ancestors,
+            loaded_numbers,
+            collapsed_chain: HashSet::new(),
+            // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is
+            // the thing that makes the editors legible to someone who knows the YAML already.
+            chrome: BuilderChromeState {
+                save: if notice.is_some() {
+                    BuilderTitleSaveState::Error("Load failed".into())
+                } else {
+                    BuilderTitleSaveState::Clean
+                },
+                yaml: if AppSettings::bool_or("builder_show_yaml", true, cx) {
+                    BuilderYamlState::Visible
+                } else {
+                    BuilderYamlState::Hidden
+                },
+                notice,
+            },
+        };
+        Self::restore(snapshot, BuilderHost::Window, window, cx)
+    }
+
+    /// Everything a builder holds that is not a widget: enough to rebuild it in another host
+    /// (`dock`). The widgets are rebuilt from the draft, which is the source of truth anyway.
+    pub(crate) fn snapshot(&self) -> BuilderSnapshot {
+        BuilderSnapshot {
+            draft: self.draft.clone(),
+            description: self.description.clone(),
+            ancestors: self.ancestors.clone(),
+            loaded_numbers: self.loaded_numbers.clone(),
+            collapsed_chain: self.collapsed_chain.clone(),
+            chrome: self.chrome.clone(),
+        }
+    }
+
+    /// Build the view around `snapshot`, hosted in its own window or in the main window's dock.
+    pub(crate) fn restore(
+        snapshot: BuilderSnapshot,
+        host: BuilderHost,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let BuilderSnapshot {
+            draft,
+            description,
+            ancestors,
+            loaded_numbers,
+            collapsed_chain,
+            chrome,
+        } = snapshot;
+
         let search = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Search settings to add — try \"log\", \"rollback\", \"media\"")
@@ -682,6 +781,11 @@ impl ConfigBuilder {
         // Remember the editor side's size (the window less the YAML panel) for the next builder.
         // Only a change is written, so a drag is a handful of writes, not one per frame.
         let size_sub = cx.observe_window_bounds(window, |this, window, cx| {
+            // Docked, the window is the main window: its size is not the builder's.
+            if this.host == BuilderHost::Docked {
+                return;
+            }
+            dock::window_moved(this, window, cx);
             // A maximized or full-screen size is the screen's, not a size the user chose.
             if window.is_maximized() || window.is_fullscreen() {
                 return;
@@ -737,19 +841,13 @@ impl ConfigBuilder {
             }),
         ];
 
-        // The library is the only place the description exists, so a draft opened from a file
-        // has to go and find it. A file the library has never seen simply has none.
-        let description = path
-            .as_ref()
-            .and_then(|p| library_description(p, cx))
-            .unwrap_or_default();
-
         let problems = validate_draft(&draft, cx);
-        let loaded_numbers = numeric_keys(&draft);
         Self {
+            host,
             draft,
             description,
             parent_path: ancestors.last().cloned(),
+            snap: None,
             ancestors,
             problems,
             inputs: HashMap::new(),
@@ -766,29 +864,10 @@ impl ConfigBuilder {
             yaml_revision: None,
             yaml_markers: Vec::new(),
             search_open: false,
-            // Settings → Config builder → "Show the YAML panel". Defaults on: the preview is the
-            // thing that makes the editors legible to someone who knows the YAML already.
-            chrome: BuilderChromeState {
-                save: if notice.is_some() {
-                    BuilderTitleSaveState::Error("Load failed".into())
-                } else {
-                    BuilderTitleSaveState::Clean
-                },
-                yaml: if AppSettings::get(cx)
-                    .values
-                    .get("builder_show_yaml")
-                    .map(|v| v.bool())
-                    .unwrap_or(true)
-                {
-                    BuilderYamlState::Visible
-                } else {
-                    BuilderYamlState::Hidden
-                },
-                notice,
-            },
+            chrome,
             chain_nodes: Vec::new(),
             chain_error: None,
-            collapsed_chain: HashSet::new(),
+            collapsed_chain,
             last_chain_scan: None,
             widget_subscriptions: HashMap::new(),
             chain_scan: None,
@@ -892,13 +971,7 @@ impl ConfigBuilder {
     /// The name to show for this draft: what the user typed, else the file's stem, else a
     /// placeholder. Never an empty string — the title bar would collapse around it.
     pub(crate) fn display_label(&self) -> String {
-        if !self.draft.label.trim().is_empty() {
-            return self.draft.label.clone();
-        }
-        match &self.draft.path {
-            Some(path) => stem_of(path),
-            None => "New config".to_string(),
-        }
+        ui_title(&self.draft)
     }
     /// The add slot of a chip list.
     ///
@@ -1421,14 +1494,29 @@ impl Render for ConfigBuilder {
         let warnings = self.count(Severity::Warn);
         let has_secondary_tasks = self.draft.values.contains_key("secondary_tasks");
 
+        let docked = self.host == BuilderHost::Docked;
+        let body = if docked { v_flex() } else { h_flex() };
+
         v_flex()
+            .id("config-builder")
             .size_full()
             .app_font(cx)
-            .child(self.render_title_bar(cx))
+            .key_context("ConfigBuilder")
+            .on_action(cx.listener(|this, _: &ToggleBuilderDock, _, cx| {
+                this.toggle_dock(cx);
+                cx.stop_propagation();
+            }))
+            .map(|root| {
+                if docked {
+                    root.child(self.render_docked_bar(cx))
+                } else {
+                    root.child(self.render_title_bar(cx))
+                }
+            })
             .child(
-                h_flex()
-                    .flex_1()
+                body.flex_1()
                     .w_full()
+                    .min_h(px(0.))
                     .overflow_hidden()
                     .child(
                         v_flex()
@@ -1438,7 +1526,8 @@ impl Render for ConfigBuilder {
                             // the window — grow. Everything inside must fit the column, never
                             // the other way round.
                             .min_w(px(0.))
-                            .h_full()
+                            .min_h(px(0.))
+                            .when(!docked, |column| column.h_full())
                             .p(PAD_PAGE)
                             .gap(GAP_2XL)
                             .overflow_y_scrollbar()
@@ -1455,18 +1544,66 @@ impl Render for ConfigBuilder {
                     ),
             )
             .child(self.render_footer(errors, warnings, cx))
-            .children(Root::render_dialog_layer(window, cx))
+            // Docked, the main window's own dialog layer shows this builder's dialogs.
+            .children(
+                (!docked)
+                    .then(|| Root::render_dialog_layer(window, cx))
+                    .flatten(),
+            )
     }
 }
 
+/// What the title row says: the crumb, the save state, and the chain level.
+struct TitleParts {
+    crumbs: Vec<AnyElement>,
+    save: Option<(SharedString, Hsla)>,
+    depth: Option<usize>,
+}
+
 impl ConfigBuilder {
+    /// Docked, the dock's tab names the builder and the main window owns the title bar; this
+    /// row keeps the crumb and save state, with Pop out beside them.
+    fn render_docked_bar(&self, cx: &Context<Self>) -> impl IntoElement {
+        let TitleParts { crumbs, save, .. } = self.title_parts(cx);
+        h_flex()
+            .w_full()
+            .flex_none()
+            .px_3()
+            .py_1()
+            .gap(GAP_SM)
+            .items_center()
+            .border_b_1()
+            .border_color(cx.theme().colors.border)
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .gap(GAP_SM)
+                    .items_center()
+                    .children(crumbs),
+            )
+            .children(save.map(|(label, color)| Label::new(label).text_xs().text_color(color)))
+            .child(
+                ghost_button("builder-pop-out")
+                    .icon(IconName::ExternalLink)
+                    .tooltip_with_action("Pop out", &ToggleBuilderDock, Some("ConfigBuilder"))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_dock(cx))),
+            )
+            .child(
+                ghost_button("builder-close-docked")
+                    .icon(IconName::Close)
+                    .tooltip("Close the builder")
+                    .on_click(cx.listener(|this, _, window, cx| this.close_docked(window, cx))),
+            )
+    }
+
     /// Title, then the page crumb, then — pushed to the right, immediately before the window
     /// controls — whatever transient thing the window has to say (§02).
     ///
     /// A child window says so in its crumb rather than in a separate line: `Main batch items /
     /// Child pages` is `1d`'s breadcrumb, and it is the only place the relationship is stated
     /// once the child has been floated away from its parent.
-    fn render_title_bar(&self, cx: &Context<Self>) -> impl IntoElement {
+    fn title_parts(&self, cx: &Context<Self>) -> TitleParts {
         let muted = cx.theme().colors.muted_foreground;
         let state = self.title_chrome_state();
         let mut crumbs = Vec::new();
@@ -1519,6 +1656,20 @@ impl ConfigBuilder {
             BuilderTitleSaveState::Error(message) => Some((message, cx.theme().colors.danger)),
         };
 
+        TitleParts {
+            crumbs,
+            save,
+            depth,
+        }
+    }
+
+    fn render_title_bar(&self, cx: &Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().colors.muted_foreground;
+        let TitleParts {
+            crumbs,
+            save,
+            depth,
+        } = self.title_parts(cx);
         TitleBar::new()
             .child(
                 h_flex()
@@ -1630,7 +1781,13 @@ impl ConfigBuilder {
         warnings: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // The docked pane is half the width of a builder window: shorter labels, and the
+        // problem summary gives way before the buttons do.
+        let compact = self.host == BuilderHost::Docked;
         let left = h_flex()
+            .flex_1()
+            .min_w(px(0.))
+            .overflow_hidden()
             .gap(GAP_MD)
             .items_center()
             .child(ProblemSummary::new(errors, warnings))
@@ -1642,24 +1799,28 @@ impl ConfigBuilder {
             );
 
         let right = h_flex()
+            .flex_none()
             .gap(GAP_SM)
             .items_center()
             .child(
                 status_bar_button("toggle-yaml")
-                    .label(if self.chrome.yaml_visible() {
-                        "Hide YAML"
-                    } else {
-                        "Show YAML"
+                    .label(match (self.chrome.yaml_visible(), compact) {
+                        (true, false) => "Hide YAML",
+                        (false, false) => "Show YAML",
+                        (_, true) => "YAML",
                     })
+                    .selected(compact && self.chrome.yaml_visible())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.chrome.transition(BuilderChromeEvent::ToggleYaml);
-                        this.resize_for_yaml(window);
+                        if this.host == BuilderHost::Window {
+                            this.resize_for_yaml(window);
+                        }
                         cx.notify();
                     })),
             )
             .child(
                 status_bar_button("discard-draft")
-                    .label("Discard draft")
+                    .label(if compact { "Discard" } else { "Discard draft" })
                     .disabled(!self.chrome.is_dirty())
                     .tooltip(if self.draft.path.is_some() {
                         "Go back to the saved file"
@@ -1671,7 +1832,7 @@ impl ConfigBuilder {
             .child(
                 status_bar_button("save-config")
                     .primary()
-                    .label("Save to library")
+                    .label(if compact { "Save" } else { "Save to library" })
                     .icon(IconName::Check)
                     // §06: disabled by errors only. A warning is something to know, not a
                     // veto — blocking on one teaches people to write configs that say less.
@@ -1722,6 +1883,17 @@ fn locked_source(key: &str, in_file: Option<&Value>) -> String {
         "input_csv" if set_in_file => "set in file — used unless step 1 processes a source".into(),
         "input_csv" => "Processed CSV from step 1".into(),
         _ => "The app".into(),
+    }
+}
+
+/// A draft's name as the user sees it: its label, else its file's name, else "New config".
+pub(crate) fn ui_title(draft: &ConfigDraft) -> String {
+    if !draft.label.trim().is_empty() {
+        return draft.label.clone();
+    }
+    match &draft.path {
+        Some(path) => stem_of(path),
+        None => "New config".to_string(),
     }
 }
 

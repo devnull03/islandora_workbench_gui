@@ -57,11 +57,18 @@ impl ConfigBuilder {
             })
             .collect();
         let yaml_for_copy = self.yaml_text.clone();
+        // Beside the form in its own window; under it when docked, where the pane is too
+        // narrow for two columns.
+        let docked = self.host == crate::BuilderHost::Docked;
 
         v_flex()
-            .w(YAML_PANEL_WIDTH)
-            .h_full()
-            .border_l_1()
+            .map(|panel| {
+                if docked {
+                    panel.w_full().h(relative(0.4)).border_t_1()
+                } else {
+                    panel.w(YAML_PANEL_WIDTH).h_full().border_l_1()
+                }
+            })
             .border_color(cx.theme().colors.border)
             .child(
                 h_flex()
@@ -102,7 +109,7 @@ impl ConfigBuilder {
                     .min_h_0()
                     .gap_2()
                     .when(!problems.is_empty(), |this| {
-                        this.child(h_flex().gap_2().flex_wrap().children(problems))
+                        this.child(h_flex().px_2().gap_2().flex_wrap().children(problems))
                     })
                     .child(
                         Editor::new(&self.yaml_editor)

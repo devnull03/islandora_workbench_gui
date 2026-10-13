@@ -1,7 +1,7 @@
 # Stage 5 — Profiles
 
 **Mockup:** `3c`
-**Status:** not started
+**Status:** built (October 2026) — see *Built* below
 **Depends on:** Stage 2 (input source) and Stage 3 (the settings surface being bundled)
 **Blocks:** nothing
 

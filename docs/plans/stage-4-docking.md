@@ -1,7 +1,7 @@
 # Stage 4 — Builder window placement (docking)
 
 **Mockup:** `2b` (docked → floated → snapping back)
-**Status:** blocked until the UI/completeness pass is complete; chrome foundation built
+**Status:** built (October 2026) — see *Built* at the end
 **Depends on:** Stage 1 (`ConfigBuilderWindow` must render as a plain view, not a window-bound one)
 **Blocks:** nothing
 
@@ -56,3 +56,45 @@ verification gate passes, so the final builder is re-parented once.
 - Whether GPUI gives a usable window-drag position stream for the snap hit-test, or whether the
   snap has to be driven off the drop rather than the drag. Check before committing to the
   dashed-target interaction.
+
+## Built (October 2026)
+
+Decisions taken with the plan's recommended defaults: **Q4** — `builder_open_docked`, default
+off; **Q5** — right side only, and a floating builder only snaps to a main window on its own
+display.
+
+- **No view moves between windows.** A gpui view's inputs hold its window's focus handles, so
+  docking and floating rebuild the builder in the other host from a `BuilderSnapshot` (draft,
+  description, chain ancestry, save state, loaded number types, collapsed chain nodes). The draft
+  is the source of truth, so nothing typed is lost; a value that was still refused in a widget
+  (a word in a number list) is the one thing not carried. `ConfigBuilder::new` itself now builds
+  a snapshot and restores it.
+- **The dock is gpui-component's.** `MainDock` has a right dock holding `BuilderPane`, a panel
+  registered like the workspace and the log (layout version 2). The library supplies the
+  divider, its drag and the persisted width; the app clamps the width to 420 px … 60% of the
+  window (`2b`) whenever the layout changes, and closes the right dock at startup since nothing
+  is docked then. The pane shows the docked builder, the dashed placeholder while it floats
+  ("… is in its own window", with **Dock**), or the snap target.
+- **Docked builder chrome.** No title bar, no window sizing, no dialog layer of its own (the main
+  window's shows its dialogs). A slim bar keeps the crumb and save state with **Pop out** and
+  **✕** (✕ asks before dropping unsaved edits). The YAML preview stacks under the form (40%)
+  instead of beside it, and the footer uses short labels (YAML · Discard · Save).
+- **Snapping is drop-driven.** The library has no drag of a panel out to an OS window or back,
+  and window managers report a window's moves but not the end of a move drag, so the floating
+  builder watches its own bounds: with its left edge within 24 px of the main window's right
+  edge (and overlapping it vertically, same display) the pane shows `right half · NN%` /
+  "Release to dock"; held there for 600 ms it docks. Moving away clears the target.
+- **`Ctrl+\`** (`ToggleBuilderDock`, also in the Islandora Workbench menu) docks a builder
+  window, floats the docked one, and from the main window brings a floated builder home.
+- **One docked builder.** Docking a second floats the first out. Chain children always open as
+  windows (plan 5.7). The window registry entry for a docked builder names the main window, so
+  Edit on its file focuses the main window.
+- **Closing the main window** with unsaved edits in the docked builder asks first
+  ("Discard and close").
+- The library's single-panel title row (30 px) is now hidden by an exact offset
+  (`DOCK_TITLE_H`) instead of the old `my_neg_4`, which clipped the "Workbench" title halfway
+  and left it showing.
+- Verified under Xvfb: Edit → `Ctrl+\` docks; Pop out leaves the placeholder; moving the window
+  onto the edge shows the target and docks; ✕ with edits prompts and closes.
+- Not done: the run controls do not compress to a rail when the builder is docked — the
+  workspace simply narrows (it already reflows to its minimum width).

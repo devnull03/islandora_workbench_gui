@@ -137,3 +137,6 @@ Stage 5 needs — *Workbench & Python* is machine facts, everything else is inst
   for never tested). gpui-component's `Settings` has no sidebar-footer slot, so it runs along
   the window's bottom edge. The profile name becomes real with Stage 5.
 - **Window**: opens 846×470, minimum 720×420 (§02).
+- **Config builder → Open the builder docked** (`builder_open_docked`, machine scope, default
+  off — plan Q4): Edit and New open a root config in the main window's right dock when it is
+  free. Added with Stage 4.

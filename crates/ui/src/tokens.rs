@@ -49,6 +49,8 @@ pub const SIDEBAR_W: Pixels = px(176.);
 pub const TITLE_BAR_H: Pixels = px(34.);
 /// The status bar and the builder footer, matching the title bar (decided: 34 px).
 pub const STATUS_BAR_H: Pixels = px(34.);
+/// gpui-component's title row over a dock that holds a single panel (`TabPanel::render_title`).
+pub const DOCK_TITLE_H: Pixels = px(30.);
 /// The setting picker's trigger, one step taller than an ordinary control because it is the only
 /// thing on its row (Component Spec §08).
 pub const PICKER_TRIGGER_H: Pixels = px(34.);

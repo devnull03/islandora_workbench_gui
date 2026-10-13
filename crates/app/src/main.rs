@@ -37,7 +37,10 @@ use crate::{
     status_items::{PingLogEvent, build_status_bar_registry, ping::ServerPingIndicator},
     workspace::{LogViewer, Workspace},
 };
-use config_builder::{ConfigBuilderWindows, OpenConfigBuilder, open_config_builder};
+use config_builder::{
+    ConfigBuilderWindows, OpenConfigBuilder, ToggleBuilderDock, install_builder_dock,
+    open_config_builder,
+};
 
 pub struct App {
     dock: Entity<MainDock>,
@@ -56,6 +59,8 @@ impl App {
         let log_viewer = cx.new(LogViewer::new);
         let workspace = cx.new(|cx| Workspace::new(log_viewer.clone(), window, cx));
         let dock = cx.new(|cx| MainDock::new(workspace, log_viewer.clone(), window, cx));
+        let builder_pane = dock.read(cx).builder_pane().clone();
+        install_builder_dock(window.window_handle(), &builder_pane, cx);
         let status_bar = cx.new(|_| StatusBar);
 
         let ping = cx.new(ServerPingIndicator::new);
@@ -90,8 +95,30 @@ impl App {
             cx.notify();
         });
 
-        // Block the OS close button while an ingest run is in progress.
-        window.on_window_should_close(cx, |_, cx| !WindowLock::is_locked(cx));
+        // Block the OS close button while an ingest run is in progress, and ask before a docked
+        // builder's unsaved edits go with the window (plan 5, accept).
+        window.on_window_should_close(cx, move |window, cx| {
+            if WindowLock::is_locked(cx) {
+                return false;
+            }
+            if !builder_pane.read(cx).has_unsaved_changes(cx) {
+                return true;
+            }
+            let pane = builder_pane.clone();
+            ui::confirm_dialog(
+                window,
+                cx,
+                "Close with unsaved builder edits?",
+                "The docked Config Builder has edits that are not saved. Closing the window \
+                 discards them.",
+                "Discard and close",
+                move |window, cx| {
+                    pane.update(cx, |pane, cx| pane.discard_docked(cx));
+                    window.remove_window();
+                },
+            );
+            false
+        });
 
         let focus_handle = cx.focus_handle();
         if window.focused(cx).is_none() {
@@ -122,6 +149,11 @@ impl Render for App {
             .size_full()
             .on_action(cx.listener(|this, _: &ToggleLog, window, cx| {
                 this.dock.update(cx, |dock, cx| dock.toggle_log(window, cx));
+            }))
+            // Reached only when focus is outside the docked builder, which handles it itself.
+            .on_action(cx.listener(|this, _: &ToggleBuilderDock, _, cx| {
+                let pane = this.dock.read(cx).builder_pane().clone();
+                pane.update(cx, |pane, cx| pane.toggle(cx));
             }))
             .child(
                 v_flex()

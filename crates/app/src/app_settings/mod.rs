@@ -17,7 +17,7 @@ use gpui_component::setting::{SettingGroup, SettingPage};
 
 use settings::{Setting, picker_with_path_button};
 
-use config_builder::{BUILDER_CHECK_PATHS_KEY, BUILDER_WARN_CLASHES_KEY};
+use config_builder::{BUILDER_CHECK_PATHS_KEY, BUILDER_OPEN_DOCKED_KEY, BUILDER_WARN_CLASHES_KEY};
 
 use custom_fields::{saved_configs_field, saved_servers_field};
 
@@ -143,6 +143,13 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
                         description:
                             "Where \"Save to library\" writes a config that has no file yet",
                         prompt: "Select the config library folder",
+                    }
+                    .into(),
+                    Setting::Switch {
+                        key: BUILDER_OPEN_DOCKED_KEY,
+                        label: "Open the builder docked",
+                        description: "Open configs in the main window's right pane instead of a \
+                                      window of their own. Ctrl+\\ docks or floats it any time.",
                     }
                     .into(),
                     Setting::Switch {

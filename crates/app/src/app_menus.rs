@@ -2,7 +2,7 @@ use gpui::*;
 
 use window_wrapper::OpenBrowser;
 
-use config_builder::OpenConfigBuilder;
+use config_builder::{OpenConfigBuilder, ToggleBuilderDock};
 
 actions!(nav, [OpenSettings, ToggleLog, Quit]);
 actions!(help, [CopyDebugInfo, OpenLogsFolder, ReportIssue]);
@@ -17,6 +17,7 @@ pub fn app_menus() -> Vec<Menu> {
             items: vec![
                 MenuItem::action("Settings", OpenSettings),
                 MenuItem::action("Config Builder", OpenConfigBuilder),
+                MenuItem::action("Dock or Float the Builder", ToggleBuilderDock),
                 MenuItem::action("Toggle Log", ToggleLog),
                 MenuItem::Separator,
                 MenuItem::action("Quit", Quit),

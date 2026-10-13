@@ -22,9 +22,9 @@ it is stable across canvas edits. Read the canvas with the `claude_design` MCP
 | 1 | [stage-1-config-builder.md](stage-1-config-builder.md) | `1a` `1b` `1c` `1d` | **built**; the October 2026 audit's blockers (P0-1…P0-11) are fixed and a builder-made config now passes the Check exit gate — see its Phase 1 section |
 | 2 | [stage-2-main-window.md](stage-2-main-window.md) | `2c` | **built** — see its notes section |
 | 3 | [stage-3-settings.md](stage-3-settings.md) | `3a` → `3b` | **built** — see its notes section |
-| Q | [ui-quality-pass.md](ui-quality-pass.md) | `1a` `1b` `1d` `2a` | **active** — required before docking |
-| 4 | [stage-4-docking.md](stage-4-docking.md) | `2b` | blocked on the UI/completeness pass |
-| 5 | [stage-5-profiles.md](stage-5-profiles.md) | `3c` | not started |
+| Q | [ui-quality-pass.md](ui-quality-pass.md) | `1a` `1b` `1d` `2a` | **done** — its gate passed before docking started |
+| 4 | [stage-4-docking.md](stage-4-docking.md) | `2b` | **built** — see its *Built* section |
+| 5 | [stage-5-profiles.md](stage-5-profiles.md) | `3c` | **built** — see its *Built* section |
 | 6 | [stage-6-chain-map.md](stage-6-chain-map.md) | `2a` | moved into the active UI/completeness pass |
 
 Stages are ordered by dependency, not by importance. Stage 1 must land before 2, 4 or 6 —
@@ -60,8 +60,8 @@ The qrate-derived window foundation is now current independently of the numbered
 - App-chrome hardening now includes immediate update-indicator repainting, a startup server ping,
   bounded run logs, and throttled filesystem discovery for preprocessors and linked configs.
 
-This is infrastructure for Stage 4, not completion of Stage 4: the Config Builder is still a
-separate OS window and does not yet dock into the main window's right side.
+This was the infrastructure for Stage 4; Stage 4 itself (the builder docking into the right side)
+is now built on top of it.
 
 ## Working agreement
 

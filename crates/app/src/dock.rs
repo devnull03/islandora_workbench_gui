@@ -5,6 +5,7 @@
 //! between three docks and its bar buttons have to follow them; with a single panel in a single
 //! dock there is nothing to track — the button toggles the bottom dock and that is the whole model.
 
+use config_builder::{BuilderPane, DOCK_DEFAULT_W, clamp_dock_width};
 use gpui::*;
 use gpui_component::{
     IconName, Selectable as _,
@@ -14,6 +15,7 @@ use gpui_component::{
     },
 };
 use settings::AppSettings;
+use ui::tokens::DOCK_TITLE_H;
 
 use crate::{
     app_menus::ToggleLog,
@@ -25,10 +27,12 @@ use crate::{
 const LAYOUT_KEY: &str = "main_dock_layout";
 /// Layout schema version. Bump when a panel is renamed or the arrangement changes shape — a saved
 /// layout from an older version is discarded rather than restored into a shape it no longer fits.
-const LAYOUT_VERSION: usize = 1;
+const LAYOUT_VERSION: usize = 2;
 
 pub struct MainDock {
     dock_area: Entity<DockArea>,
+    /// The right dock's one panel: the docked Config Builder, or its placeholder.
+    builder_pane: Entity<BuilderPane>,
     /// Persists the layout whenever the dock emits `LayoutChanged`.
     _layout_sub: Subscription,
 }
@@ -52,6 +56,11 @@ impl MainDock {
             let log = log.clone();
             move |_, _, _| panel_handle(log.clone())
         });
+        let builder_pane = cx.new(BuilderPane::new);
+        register_panel(cx, "BuilderPane", {
+            let pane = builder_pane.clone();
+            move |_, _, _| panel_handle(pane.clone())
+        });
 
         let (dock_area, dock_skin) = DockSkin::dock_area("main", Some(LAYOUT_VERSION), window, cx);
         dock_skin.set_toggle_button_visible(false, cx);
@@ -73,18 +82,38 @@ impl MainDock {
             if area.is_dock_open(DockPlacement::Bottom) {
                 area.toggle_dock(DockPlacement::Bottom, window, cx);
             }
+            area.set_dock(
+                DockPlacement::Right,
+                DockLayout::tabs().panel_view(panel_handle(builder_pane.clone()), cx),
+                window,
+                cx,
+            );
+            area.set_dock_size(DockPlacement::Right, DOCK_DEFAULT_W, window, cx);
         });
+        builder_pane.update(cx, |pane, _| pane.set_area(dock_area.downgrade()));
 
         Self::restore_layout(&dock_area, window, cx);
-
-        let _layout_sub = cx.subscribe(&dock_area, |_this, area, event: &DockEvent, cx| {
-            if matches!(event, DockEvent::LayoutChanged) {
-                Self::persist_layout(&area, cx);
+        // Nothing is docked at startup: a restored layout keeps the width, not an empty pane.
+        dock_area.update(cx, |area, cx| {
+            if area.is_dock_open(DockPlacement::Right) {
+                area.toggle_dock(DockPlacement::Right, window, cx);
             }
         });
 
+        let _layout_sub = cx.subscribe_in(
+            &dock_area,
+            window,
+            |_this, area, event: &DockEvent, window, cx| {
+                if matches!(event, DockEvent::LayoutChanged) {
+                    Self::clamp_builder_width(area, window, cx);
+                    Self::persist_layout(area, cx);
+                }
+            },
+        );
+
         Self {
             dock_area,
+            builder_pane,
             _layout_sub,
         }
     }
@@ -98,6 +127,23 @@ impl MainDock {
     pub fn toggle_log(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.dock_area.update(cx, |area, cx| {
             toggle_bottom_dock(area, window, cx);
+        });
+    }
+
+    pub fn builder_pane(&self) -> &Entity<BuilderPane> {
+        &self.builder_pane
+    }
+
+    /// Component Spec `2b`: the builder's dock stays between 420 px and 60% of the window.
+    fn clamp_builder_width(area: &Entity<DockArea>, window: &mut Window, cx: &mut App) {
+        let window_width = window.bounds().size.width;
+        area.update(cx, |area, cx| {
+            if let Some(width) = area.dock_size(DockPlacement::Right) {
+                let clamped = clamp_dock_width(width, window_width);
+                if clamped != width {
+                    area.set_dock_size(DockPlacement::Right, clamped, window, cx);
+                }
+            }
         });
     }
 
@@ -140,7 +186,19 @@ impl MainDock {
 
 impl Render for MainDock {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.dock_area.clone()).my_neg_4()
+        // The centre and right docks each hold one panel, which the library titles with a
+        // plain row; the workspace needs no title and the docked builder draws its own bar. The
+        // area is lifted by exactly that row and clipped, so neither shows (the bottom log's
+        // title sits at its own top and stays).
+        div().size_full().relative().overflow_hidden().child(
+            div()
+                .absolute()
+                .top(-DOCK_TITLE_H)
+                .bottom_0()
+                .left_0()
+                .right_0()
+                .child(self.dock_area.clone()),
+        )
     }
 }
 
