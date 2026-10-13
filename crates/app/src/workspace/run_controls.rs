@@ -22,11 +22,11 @@ use gpui_component::{
     menu::{DropdownMenu, PopupMenuItem},
     v_flex,
 };
-use ui::tokens::{GAP_MD, GAP_SM, NUMBER_FIELD_W};
+use ui::tokens::{CARD_PAD, GAP_MD, GAP_SM, NUMBER_FIELD_W};
 use ui::{APP_CONTROL_SIZE, Card, CardTone, app_button, ghost_button};
 use workbench_integration::WorkbenchAction;
 
-use super::run::LastRun;
+use super::run::{LastRun, RunTarget};
 use super::{Operation, WorkflowStage, Workspace};
 use crate::helpers::{open_file, reveal_in_folder};
 
@@ -80,13 +80,23 @@ impl Workspace {
                         menu.item(item(
                             "Get CSV template",
                             Rc::new(|this, window, cx| {
-                                this.start_workbench(WorkbenchAction::CsvTemplate, None, window, cx)
+                                this.start_workbench(
+                                    WorkbenchAction::CsvTemplate,
+                                    RunTarget::default(),
+                                    window,
+                                    cx,
+                                )
                             }),
                         ))
                         .item(item(
                             "Print effective config",
                             Rc::new(|this, window, cx| {
-                                this.start_workbench(WorkbenchAction::PrintConfig, None, window, cx)
+                                this.start_workbench(
+                                    WorkbenchAction::PrintConfig,
+                                    RunTarget::default(),
+                                    window,
+                                    cx,
+                                )
                             }),
                         ))
                         .separator()
@@ -116,9 +126,9 @@ impl Workspace {
                         .danger()
                         .label(if cancelling { "Stop now" } else { "Cancel" })
                         .tooltip(if cancelling {
-                            "Workbench is finishing the current item; stop it immediately"
+                            "Stop Workbench immediately"
                         } else {
-                            "Stop Workbench after the current item (its ctrl-c)"
+                            "Stop Workbench (its ctrl-c): it logs where it got to and exits"
                         })
                         .on_click(cx.listener(|this, _, window, cx| this.cancel_run(window, cx))),
                 )
@@ -161,7 +171,7 @@ impl Workspace {
         Some(
             Card::new()
                 .tone(CardTone::Filled)
-                .padding(px(12.))
+                .padding(CARD_PAD)
                 .gap(GAP_MD)
                 .child(
                     h_flex()
@@ -216,12 +226,13 @@ impl Workspace {
         )
     }
 
-    /// One line on how the last run ended, and the follow-ups it makes possible.
+    /// One line on how the last run ended, and the follow-ups it makes possible. Everything
+    /// here was resolved when the run ended; rendering reads no files.
     pub(super) fn render_last_run(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.op != Operation::None {
             return None;
         }
-        let run = self.last_run.clone()?;
+        let run = self.last_run.as_ref()?;
         let colors = cx.theme().colors;
         let tone = if run.cancelled {
             colors.warning
@@ -232,51 +243,47 @@ impl Workspace {
         };
         let mut actions: Vec<AnyElement> = Vec::new();
 
-        if let Some(sheet) = run.report.contact_sheet.clone() {
+        if let Some(sheet) = &run.report.contact_sheet {
             actions.push(self.open_button("open-contact-sheet", "Open contact sheet", sheet, cx));
         }
-        if let Some(template) = run.report.csv_template.clone() {
-            let template = self.workbench_relative(template, cx);
+        if let Some(template) = &run.report.csv_template {
             actions.push(self.open_button("open-csv-template", "Open CSV template", template, cx));
         }
-        if let Some(output) = run.output_csv.clone() {
+        if let Some(output) = &run.output_csv {
             actions.push(self.open_button("open-output-csv", "Open output CSV", output, cx));
         }
         if let Some(rollback) = run.rollback_config.clone() {
+            let server = run.server_url.clone();
             actions.push(
                 ghost_button("roll-back")
                     .label("Roll back…")
                     .tooltip("Delete the nodes and media this run created")
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.ask_rollback(rollback.clone(), window, cx)
+                        this.ask_rollback(rollback.clone(), server.clone(), window, cx)
                     }))
                     .into_any_element(),
             );
         }
         if let Some(node) = run.resumable_from() {
+            let config = run.config_path.clone();
             actions.push(
                 ghost_button("resume-recovery")
                     .label(format!("Resume from node {node}…"))
                     .tooltip("Recovery mode: rerun the task, skipping rows already created")
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| this.ask_resume(node, window, cx)),
-                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.ask_resume(node, config.clone(), window, cx)
+                    }))
                     .into_any_element(),
             );
         }
-        let log = run.log.clone();
-        if log.is_file() {
+        if let Some(log) = &run.log {
             actions.push(self.open_button("open-workbench-log", "Open log", log, cx));
         }
 
         Some(
             v_flex()
                 .gap(GAP_SM)
-                .child(
-                    Label::new(last_run_summary(&run))
-                        .text_xs()
-                        .text_color(tone),
-                )
+                .child(Label::new(last_run_summary(run)).text_xs().text_color(tone))
                 .when(!actions.is_empty(), |this| {
                     this.child(h_flex().gap(GAP_SM).flex_wrap().children(actions))
                 })
@@ -288,9 +295,10 @@ impl Workspace {
         &self,
         id: &'static str,
         label: &'static str,
-        path: PathBuf,
+        path: &Path,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let path = path.to_path_buf();
         ghost_button(id)
             .label(label)
             .tooltip(path.display().to_string())
@@ -316,18 +324,29 @@ impl Workspace {
         }
     }
 
-    /// Workbench prints some paths relative to its own folder.
-    fn workbench_relative(&self, path: PathBuf, cx: &App) -> PathBuf {
-        if path.is_absolute() {
-            return path;
-        }
-        super::run::workbench_info(cx)
-            .map(|info| info.install_path.join(&path))
-            .unwrap_or(path)
-    }
-
     /// Roll back: run the rollback config Workbench wrote (a `delete` task), after asking.
-    fn ask_rollback(&mut self, config: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    fn ask_rollback(
+        &mut self,
+        config: PathBuf,
+        server: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // The rollback deletes node IDs from the server that created them. Selecting another
+        // server clears the last run, so this is a second line of defence, not the first.
+        let selected = self
+            .server_select
+            .read(cx)
+            .selected_value()
+            .map(|s| s.to_string());
+        if selected.as_deref() != Some(server.as_str()) {
+            self.append_log(
+                &format!("[ERROR] That run was against {server}; select it again to roll back."),
+                window,
+                cx,
+            );
+            return;
+        }
         let this = cx.entity().downgrade();
         let name = config
             .file_name()
@@ -344,8 +363,12 @@ impl Workspace {
             "Roll back",
             move |window, cx| {
                 let config = config.clone();
+                let target = RunTarget {
+                    config: Some(config.clone()),
+                    recovery_from: None,
+                };
                 this.update(cx, |this, cx| {
-                    this.start_workbench(WorkbenchAction::Run, Some(config), window, cx)
+                    this.start_workbench(WorkbenchAction::Run, target, window, cx)
                 })
                 .ok();
             },
@@ -353,7 +376,13 @@ impl Workspace {
     }
 
     /// Recovery mode: rerun the same task from the first node it created.
-    fn ask_resume(&mut self, node: u64, window: &mut Window, cx: &mut Context<Self>) {
+    fn ask_resume(
+        &mut self,
+        node: u64,
+        config: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let this = cx.entity().downgrade();
         ui::confirm_dialog(
             window,
@@ -364,10 +393,13 @@ impl Workspace {
              afterwards; it can occasionally be created twice.",
             "Resume",
             move |window, cx| {
+                // The config that ran, not whatever is selected now.
+                let target = RunTarget {
+                    config: Some(config.clone()),
+                    recovery_from: Some(node),
+                };
                 this.update(cx, |this, cx| {
-                    this.recovery_from_node = Some(node);
-                    this.start_workbench(WorkbenchAction::Run, None, window, cx);
-                    this.recovery_from_node = None;
+                    this.start_workbench(WorkbenchAction::Run, target, window, cx)
                 })
                 .ok();
             },
@@ -431,7 +463,12 @@ impl Workspace {
                                         WorkbenchAction::QuickDeleteNode(url)
                                     };
                                     this.update(cx, |this, cx| {
-                                        this.start_workbench(action, None, window, cx)
+                                        this.start_workbench(
+                                            action,
+                                            RunTarget::default(),
+                                            window,
+                                            cx,
+                                        )
                                     })
                                     .ok();
                                 }),
@@ -487,7 +524,10 @@ mod tests {
                 ..Default::default()
             },
             task: None,
-            log: PathBuf::new(),
+            server_url: String::new(),
+            config_path: PathBuf::new(),
+            recovery_from: None,
+            log: None,
             rollback_config: None,
             output_csv: None,
         }

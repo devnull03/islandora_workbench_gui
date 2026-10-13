@@ -174,3 +174,18 @@ The argument mapping lives in `workbench_integration::invocation` and the output
 Rollback, recovery, contact sheet, CSV template and quick delete need a live Islandora to
 exercise end to end; in the cloud container they are covered at the argument and parsing level,
 and Check, Print config and Cancel were exercised in the GUI against real Workbench.
+
+**M1 audit fixes (October 2026).** A code-quality/performance audit of the run surface found,
+and these were fixed: Workbench exits **0** on ctrl-c, so a cancelled Check counted as passed
+(and unlocked Run Ingest) and a cancelled create was not offered Resume — both now look at the
+cancel flag; resuming a resumed run now keeps the original start node (recovery mode only skips
+map rows at or after the start node, so a later start would re-create the first attempt's rows);
+the last run is tied to the server and config it ran against and cleared when either changes,
+so Roll back cannot delete node IDs on a different server; the stream sends Done only after
+both output readers drain (the contact-sheet / CSV-template lines are printed just before exit
+and could be lost); created nodes are also counted from the log (Workbench prints them only
+without `progress_bar`); `log_file_mode: w` reads the log from 0; an "always confirm" server
+ignores Skip user prompts for destructive actions; quick delete refuses a URL that is not on
+the selected server; the log scan after a run moved to a background thread and the results
+strip reads no files while rendering; a run whose session is dropped (app quit) is killed;
+Windows `open_file` uses Explorer rather than `cmd /C start` (cmd re-parses `&`/`^`).

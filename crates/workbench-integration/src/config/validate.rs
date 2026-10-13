@@ -87,7 +87,11 @@ fn task_needs_its_settings(draft: &ConfigDraft, _: &ValidationContext) -> Option
         .iter()
         .filter(|(tasks, _)| tasks.contains(&task))
         .map(|(_, key)| *key)
-        .find(|key| draft.values.get(*key).is_none_or(Value::is_null))
+        .find(|key| {
+            draft.values.get(*key).is_none_or(|value| {
+                value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty())
+            })
+        })
         .map(|key| {
             Problem::new(
                 "task",
@@ -289,9 +293,9 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
         },
         Shape::Map => (!value.is_mapping()).then(|| wrong("a set of key/value pairs")).flatten(),
         Shape::MapOfLists => match value {
-            // Written either as a mapping of lists, or as a list of one-key mappings whose
-            // values are lists. Workbench's own defaults use the second form.
-            Value::Mapping(m) if m.values().all(Value::is_sequence) => None,
+            // Only the list form: upstream iterates these settings (`for types in
+            // config["media_types"]: types.items()`), so a mapping crashes Workbench.
+            Value::Mapping(_) => wrong("a list of entries, each written `- key: [values]`"),
             Value::Sequence(items)
                 if items.iter().all(|v| {
                     matches!(v.as_mapping(), Some(m) if m.len() == 1 && m.values().all(Value::is_sequence))
@@ -488,6 +492,9 @@ mod tests {
         }
         let draft = ConfigDraft::from_yaml("task: create_terms\nvocab_id: tags\n").unwrap();
         assert_eq!(errors(&draft), Vec::<String>::new());
+        // An empty value is as missing as no value.
+        let draft = ConfigDraft::from_yaml("task: create_terms\nvocab_id: ''\n").unwrap();
+        assert_eq!(errors(&draft), vec!["task".to_string()]);
     }
 
     /// Values Workbench's own documentation uses must not be flagged.
@@ -497,7 +504,7 @@ mod tests {
             "task: run_scripts\nmedia_use_tid: 17\ngoogle_sheets_gid: 1867618389\n\
              subdelimiter: '%%%'\nadaptive_pause_threshold: 2.5\n\
              view_parameters: ['date=20231202']\n\
-             media_type_file_fields: [{my_custom_media: field_media_file}]\n\
+             media_type_file_fields: {my_custom_media: field_media_file}\n\
              models: [{'https://schema.org/DigitalDocument': [pdf, doc]}]\n\
              paragraph_fields: {field_p: {type: x, field_order: [a, b]}}\n",
         )
@@ -508,6 +515,16 @@ mod tests {
                 .iter()
                 .all(|p| !p.message.starts_with("Not a setting"))
         );
+    }
+
+    /// Upstream iterates map-of-lists settings, so only the list form runs.
+    #[test]
+    fn map_of_lists_must_be_the_list_form() {
+        let mapping =
+            ConfigDraft::from_yaml("task: create\nmedia_types: {image: [png]}\n").unwrap();
+        assert_eq!(errors(&mapping), vec!["media_types".to_string()]);
+        let list = ConfigDraft::from_yaml("task: create\nmedia_types: [{image: [png]}]\n").unwrap();
+        assert_eq!(errors(&list), Vec::<String>::new());
     }
 
     #[test]

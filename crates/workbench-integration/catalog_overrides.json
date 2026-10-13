@@ -62,7 +62,7 @@
     "export_file_media_use_term_id": { "shape": "url", "group": "Export" },
     "media_types": { "shape": "map_of_lists", "group": "Media" },
     "media_fields": { "shape": "map", "group": "Media" },
-    "media_type_file_fields": { "shape": "list_of_one_key_maps", "group": "Media" },
+    "media_type_file_fields": { "shape": "map", "group": "Media" },
     "media_track_file_fields": { "shape": "map", "group": "Media" },
     "oembed_providers": { "shape": "map_of_lists", "group": "Media" },
     "preprocessors": { "shape": "map", "group": "Scripts" },

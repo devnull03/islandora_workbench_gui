@@ -752,7 +752,7 @@
     },
     {
       "key": "media_type_file_fields",
-      "shape": "list_of_one_key_maps",
+      "shape": "map",
       "default": {
         "file": "field_media_file",
         "document": "field_media_document",

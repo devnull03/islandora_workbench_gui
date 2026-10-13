@@ -217,6 +217,9 @@ pub struct ConfigBuilder {
     /// Text in a YAML editor that does not parse, by setting key. The draft keeps the last good
     /// value; this is what the row says instead.
     yaml_errors: HashMap<String, String>,
+    /// Text and URL settings whose value was a number when the config was loaded, so they are
+    /// written back as numbers (see `editors::parse_text_keeping_numbers`).
+    loaded_numbers: HashSet<String>,
 
     /// What the config is for, in the author's words. Not a Workbench setting — it lives in
     /// the config library beside the label, because the YAML schema has nowhere to put it.
@@ -358,6 +361,16 @@ pub(crate) fn workbench_dir(cx: &App) -> Option<PathBuf> {
         .map(|v| v.text().trim().to_string())
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
+}
+
+/// Keys whose value is a number, for `loaded_numbers`.
+fn numeric_keys(draft: &ConfigDraft) -> HashSet<String> {
+    draft
+        .values
+        .iter()
+        .filter(|(_, value)| value.is_number())
+        .map(|(key, _)| key.clone())
+        .collect()
 }
 
 /// A YAML editor's text as a value: empty is unset, anything else must parse.
@@ -585,6 +598,7 @@ impl ConfigBuilder {
             .unwrap_or_default();
 
         let problems = validate_draft(&draft, cx);
+        let loaded_numbers = numeric_keys(&draft);
         Self {
             draft,
             description,
@@ -595,6 +609,7 @@ impl ConfigBuilder {
             selects: HashMap::new(),
             textareas: HashMap::new(),
             yaml_errors: HashMap::new(),
+            loaded_numbers,
             search,
             search_selected: None,
             search_scroll: ScrollHandle::new(),
@@ -957,16 +972,15 @@ impl ConfigBuilder {
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
         self.draft_revision += 1;
         self.problems = validate_draft(&self.draft, cx);
-        for (key, error) in &self.yaml_errors {
-            self.problems.insert(
-                0,
-                Problem {
-                    key: Some(key.clone()),
-                    severity: Severity::Error,
-                    message: format!("Not valid YAML: {error}"),
-                },
-            );
-        }
+        // Sorted, so the footer and the "first blocker" are the same on every render.
+        let mut yaml_errors: Vec<_> = self.yaml_errors.iter().collect();
+        yaml_errors.sort();
+        let yaml_problems = yaml_errors.into_iter().map(|(key, error)| Problem {
+            key: Some(key.clone()),
+            severity: Severity::Error,
+            message: format!("Not valid YAML: {error}"),
+        });
+        self.problems.splice(0..0, yaml_problems);
         self.chrome.transition(BuilderChromeEvent::Edited);
         cx.notify();
     }
@@ -1103,6 +1117,7 @@ impl ConfigBuilder {
                 self.selects.clear();
                 self.textareas.clear();
                 self.yaml_errors.clear();
+                self.loaded_numbers = numeric_keys(&self.draft);
                 self.last_chain_scan = None;
                 self.problems = validate_draft(&self.draft, cx);
                 self.draft_revision += 1;

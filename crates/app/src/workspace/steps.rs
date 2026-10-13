@@ -67,7 +67,7 @@ impl Workspace {
             .child(
                 Card::new()
                     .tone(CardTone::Filled)
-                    .padding(px(12.))
+                    .padding(ui::tokens::CARD_PAD)
                     .child(self.render_source_field(cx))
                     .child(
                         LabeledField::new("Ingest dir").child(

@@ -93,5 +93,8 @@ pub const MIN_WINDOW_W: Pixels = px(520.);
 /// §03 ModifiedMark: the bar beside a label whose value differs from the default.
 pub const MODIFIED_MARK_W: Pixels = px(2.);
 
+/// Inner padding of a filled card that groups a step's fields (mockup `2c`).
+pub const CARD_PAD: Pixels = px(12.);
+
 /// ConfirmDialog width (§09).
 pub const CONFIRM_DIALOG_W: Pixels = px(420.);

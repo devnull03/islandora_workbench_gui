@@ -78,13 +78,23 @@ impl ProcessControl {
             let mut taskkill = Command::new("taskkill");
             taskkill.args(["/PID", &self.pid.to_string(), "/T", "/F"]);
             crate::util::apply_no_window(&mut taskkill);
-            let _ = taskkill.status();
+            // Fire and forget: waiting would block the UI thread that pressed Cancel.
+            let _ = taskkill.spawn();
         }
     }
 
     /// Whether the child has exited.
     pub fn has_exited(&self) -> bool {
         self.exited.load(Ordering::SeqCst)
+    }
+
+    /// Stop the run if it is still going — for when its owner goes away (the window closes or
+    /// the app quits). A run in its own process group no longer gets the terminal's SIGHUP, so
+    /// without this it would outlive the app.
+    pub fn stop_if_running(&self) {
+        if !self.has_exited() {
+            self.kill();
+        }
     }
 }
 
@@ -134,7 +144,7 @@ pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<StreamingPro
 
     // Stdout: byte-by-byte reader to detect y/n prompts that don't end with '\n'.
     let tx_stdout = tx.clone();
-    thread::spawn(move || {
+    let stdout_reader = thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         let mut buf: Vec<u8> = Vec::new();
         let mut byte = [0u8; 1];
@@ -182,7 +192,7 @@ pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<StreamingPro
 
     // Stderr: line-by-line (prompts never come from stderr).
     let tx_stderr = tx.clone();
-    thread::spawn(move || {
+    let stderr_reader = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             match line {
@@ -205,10 +215,14 @@ pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<StreamingPro
         exited: exited.clone(),
     };
 
-    // Wait thread: sends Done/Error when the child process exits.
+    // Wait thread: sends Done/Error when the child process exits — after both readers have
+    // drained, because Workbench's last lines ("Contact sheet is at …", "CSV template saved at
+    // …") are printed just before it exits and the UI stops reading at Done.
     thread::spawn(move || {
         let status = child.wait();
         exited.store(true, Ordering::SeqCst);
+        let _ = stdout_reader.join();
+        let _ = stderr_reader.join();
         match status {
             Ok(s) => {
                 let _ = tx.send(StreamLine::Done(s.code().unwrap_or(-1)));
@@ -271,6 +285,28 @@ mod tests {
         }
         // Killed by SIGINT: no exit code, which the stream reports as -1.
         assert_eq!(code, Some(-1));
+    }
+
+    /// Done must come after the last line, however close to exit it was printed.
+    #[test]
+    fn the_last_line_arrives_before_done() {
+        for _ in 0..20 {
+            let mut cmd = Command::new("sh");
+            cmd.args([
+                "-c",
+                "printf 'Contact sheet is at /x/contact_sheet.htm.\\n'; exit 0",
+            ]);
+            let process = spawn_command_streaming(cmd).unwrap();
+            let mut saw_line = false;
+            loop {
+                match process.lines.recv_timeout(Duration::from_secs(5)).unwrap() {
+                    StreamLine::Stdout(_) => saw_line = true,
+                    StreamLine::Done(_) => break,
+                    _ => {}
+                }
+            }
+            assert!(saw_line);
+        }
     }
 
     #[test]

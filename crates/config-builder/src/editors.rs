@@ -182,10 +182,11 @@ pub(crate) fn parse_decimal(text: &str) -> Value {
 }
 
 /// A text field's value, keeping the type the file had: `media_use_tid: 17` must not come back
-/// as `'17'` just because it passed through a text box. Only a value that was a number and
-/// still parses as one stays a number.
-pub(crate) fn parse_text_keeping_numbers(text: &str, previous: &Value) -> Value {
-    if previous.is_number() {
+/// as `'17'` just because it passed through a text box. `was_number` is decided from the value
+/// as *loaded*, not the previous keystroke — otherwise clearing the field once, or a stray
+/// character, would turn it into text for good.
+pub(crate) fn parse_text_keeping_numbers(text: &str, was_number: bool) -> Value {
+    if was_number {
         if let Ok(n) = text.trim().parse::<i64>() {
             return Value::Number(n.into());
         }
@@ -227,7 +228,7 @@ impl ConfigBuilder {
             Shape::Yaml => None,
             Shape::String | Shape::Url => Some(parse_text_keeping_numbers(
                 &self.input_value(&field_id(&[key]), cx),
-                current,
+                self.loaded_numbers.contains(key),
             )),
             Shape::Enum | Shape::NullableEnum => match self.select_value(&field_id(&[key]), cx) {
                 Some(v) if v.is_empty() => Some(Value::Null),
@@ -278,24 +279,33 @@ impl ConfigBuilder {
                 }
                 Some(Value::Mapping(m))
             }
+            // Written as Workbench reads it: a list of one-key mappings
+            // (`- image: [png, jpg]`). Upstream iterates `media_types`, `models`,
+            // `oembed_providers` and `media_types_override` as lists; a mapping crashes it.
             Shape::MapOfLists => {
                 let rows = rows_of(def.shape, current);
-                let mut m = Mapping::new();
-                for (i, (_, items)) in rows.iter().enumerate() {
-                    let i = i.to_string();
-                    let values = (0..items.len())
-                        .map(|j| {
-                            Value::String(
-                                self.input_value(&field_id(&[key, &i, "l", &j.to_string()]), cx),
-                            )
+                let entries =
+                    rows.iter()
+                        .enumerate()
+                        .map(|(i, (_, items))| {
+                            let i = i.to_string();
+                            let values = (0..items.len())
+                                .map(|j| {
+                                    Value::String(self.input_value(
+                                        &field_id(&[key, &i, "l", &j.to_string()]),
+                                        cx,
+                                    ))
+                                })
+                                .collect();
+                            let mut entry = Mapping::new();
+                            entry.insert(
+                                Value::String(self.input_value(&field_id(&[key, &i, "k"]), cx)),
+                                Value::Sequence(values),
+                            );
+                            Value::Mapping(entry)
                         })
                         .collect();
-                    m.insert(
-                        Value::String(self.input_value(&field_id(&[key, &i, "k"]), cx)),
-                        Value::Sequence(values),
-                    );
-                }
-                Some(Value::Mapping(m))
+                Some(Value::Sequence(entries))
             }
         }
     }
@@ -1193,18 +1203,25 @@ mod tests {
     /// `media_use_tid: 17` survives the text box as a number; a URI stays text.
     #[test]
     fn text_fields_keep_a_number_a_number() {
-        let was_number = Value::Number(17.into());
         assert_eq!(
-            parse_text_keeping_numbers("18", &was_number),
+            parse_text_keeping_numbers("18", true),
             Value::Number(18.into())
         );
         assert_eq!(
-            parse_text_keeping_numbers("http://pcdm.org/use#Original", &was_number),
+            parse_text_keeping_numbers("http://pcdm.org/use#Original", true),
             Value::String("http://pcdm.org/use#Original".into())
         );
-        let was_text = Value::String("0".into());
+        // Cleared and retyped: still a number, because the loaded value was one.
         assert_eq!(
-            parse_text_keeping_numbers("12", &was_text),
+            parse_text_keeping_numbers("", true),
+            Value::String(String::new())
+        );
+        assert_eq!(
+            parse_text_keeping_numbers("17", true),
+            Value::Number(17.into())
+        );
+        assert_eq!(
+            parse_text_keeping_numbers("12", false),
             Value::String("12".into())
         );
     }

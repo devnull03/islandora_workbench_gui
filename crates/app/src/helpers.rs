@@ -115,12 +115,9 @@ pub fn open_file(path: &Path) -> std::io::Result<()> {
     }
     #[cfg(windows)]
     {
-        // `start` is a cmd built-in; the empty title argument stops it reading a quoted path
-        // as the window title.
-        Command::new("cmd")
-            .args(["/C", "start", ""])
-            .arg(path)
-            .spawn()?;
+        // Explorer opens a file with its associated application. Not `cmd /C start`: cmd
+        // re-parses the path, so `&` or `^` in a folder name would be run as syntax.
+        Command::new("explorer").arg(path).spawn()?;
     }
     #[cfg(target_os = "macos")]
     {

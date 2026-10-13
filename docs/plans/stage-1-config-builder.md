@@ -370,7 +370,7 @@ the catalogue.
   hidden (the docs' workflow examples set it). Regenerating also picked up upstream's new
   `exit_on_recovery_mode_parent_lookup_failure` and `hocr` in the media types. 180 settings.
 - Shapes corrected where the docs' own examples were rejected: `view_parameters` is a list of
-  strings, `media_type_file_fields` a list of one-key maps, `subdelimiter` may be several
+  strings, `subdelimiter` may be several
   characters (`'%%%'`), `adaptive_pause_threshold` is a decimal (`2.5`), and text/URL settings
   accept numbers (`media_use_tid: 17`, `google_sheets_gid: 1867618389`) — kept as numbers on
   save rather than turned into quoted strings.
@@ -381,3 +381,10 @@ the catalogue.
   `media_type`, the term tasks need `vocab_id`, the View tasks need `view_path`.
 - After this, the only docs snippets still flagged are not configs (Drupal role YAML, prose)
   or are typos in the docs themselves (`ask: create`, `processors:`, `nodes_only: "true"`).
+- **Correction after the M1 audit.** The docs show `media_type_file_fields` as a list, but
+  Workbench merges dict-valued settings key by key into its defaults and indexes this one as a
+  dict, so a list breaks it; it stays a map. Conversely the map-of-lists settings
+  (`media_types`, `models`, `oembed_providers`, `media_types_override`) are *iterated as lists*
+  upstream (`for types in config["media_types"]: types.items()`), and the builder used to write
+  them back as a mapping — a config it saved would crash Workbench. The editor now writes the
+  list form and validation rejects the mapping form.

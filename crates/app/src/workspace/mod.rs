@@ -64,7 +64,11 @@ pub struct Workspace {
     /// The Workbench process running now, if any.
     running: Option<run::RunSession>,
     /// What the last finished run left behind (rollback config, contact sheet, first node…).
+    /// Cleared when the server or config changes: its follow-ups only make sense for the run
+    /// they came from.
     last_run: Option<run::LastRun>,
+    /// Bumped per finished run, so a late background scan of an older run is dropped.
+    last_run_generation: u64,
 
     /// Run options (step 3, "Options"): per-session, never written into the config.
     options_open: bool,
@@ -72,8 +76,6 @@ pub struct Workspace {
     stop_row: Entity<InputState>,
     skip_user_prompts: bool,
     contact_sheet: bool,
-    /// Set by "Resume in recovery mode"; applies to the next Run only.
-    recovery_from_node: Option<u64>,
     /// The URL field in the quick-delete dialog, kept so a mistyped URL survives reopening it.
     quick_delete_url: Entity<InputState>,
     /// The log lives in the bottom dock now, not in this view — this handle is only how run
@@ -231,6 +233,7 @@ impl Workspace {
                 let SelectEvent::Confirm(value) = event;
                 AppSettings::set_default_task_config(value.clone(), cx);
                 this.reset_validation();
+                this.forget_last_run();
                 cx.notify();
             },
         ));
@@ -240,6 +243,7 @@ impl Workspace {
                 let SelectEvent::Confirm(value) = event;
                 AppSettings::set_default_server(value.clone(), cx);
                 this.reset_validation();
+                this.forget_last_run();
                 cx.notify();
             },
         ));
@@ -255,7 +259,7 @@ impl Workspace {
             stop_row,
             skip_user_prompts: false,
             contact_sheet: false,
-            recovery_from_node: None,
+            last_run_generation: 0,
             quick_delete_url,
             log_viewer,
             focus_handle: cx.focus_handle(),
@@ -311,6 +315,13 @@ impl Workspace {
             return;
         }
         self.stage = WorkflowStage::Unfilled;
+    }
+
+    /// The server or config changed: the last run's roll back and resume no longer apply.
+    fn forget_last_run(&mut self) {
+        if self.op == Operation::None {
+            self.last_run = None;
+        }
     }
 
     /// The source or processor changed, so the processed CSV is stale.
