@@ -96,6 +96,7 @@ impl BuilderDock {
                 pane.floated = None;
                 pane._floated_release = None;
                 pane.snap_preview = None;
+                pane._preview_release = None;
                 cx.notify();
             });
         }
@@ -125,6 +126,8 @@ pub struct BuilderPane {
     floated: Option<WeakEntity<ConfigBuilder>>,
     /// The dock's width as a share of the window, while a floating builder is over the edge.
     snap_preview: Option<f32>,
+    /// Clears the preview if the builder that set it goes away before it docks or moves on.
+    _preview_release: Option<Subscription>,
     focus_handle: FocusHandle,
     _floated_release: Option<Subscription>,
 }
@@ -136,6 +139,7 @@ impl BuilderPane {
             docked: None,
             floated: None,
             snap_preview: None,
+            _preview_release: None,
             focus_handle: cx.focus_handle(),
             _floated_release: None,
         }
@@ -210,6 +214,7 @@ impl BuilderPane {
         self.floated = None;
         self._floated_release = None;
         self.snap_preview = None;
+        self._preview_release = None;
         cx.notify();
     }
 
@@ -226,7 +231,18 @@ impl BuilderPane {
         cx.notify();
     }
 
-    fn set_snap_preview(&mut self, preview: Option<f32>, cx: &mut Context<Self>) {
+    fn set_snap_preview(
+        &mut self,
+        preview: Option<f32>,
+        source: Option<&Entity<ConfigBuilder>>,
+        cx: &mut Context<Self>,
+    ) {
+        self._preview_release = match (preview, source) {
+            (Some(_), Some(view)) => Some(cx.observe_release(view, |pane, _, cx| {
+                pane.set_snap_preview(None, None, cx);
+            })),
+            _ => None,
+        };
         if self.snap_preview != preview {
             self.snap_preview = preview;
             sync_dock_later(cx);
@@ -534,7 +550,7 @@ pub(crate) fn window_moved(
     if !moved_only || window.is_maximized() || window.is_fullscreen() || !this.ancestors.is_empty()
     {
         if this.snap.take().is_some() {
-            pane.update(cx, |pane, cx| pane.set_snap_preview(None, cx));
+            pane.update(cx, |pane, cx| pane.set_snap_preview(None, None, cx));
         }
         return;
     }
@@ -553,7 +569,10 @@ pub(crate) fn window_moved(
     let preview = main_state
         .filter(|_| over)
         .map(|(main_bounds, _)| dock_fraction(main_bounds.size.width, cx));
-    pane.update(cx, |pane, cx| pane.set_snap_preview(preview, cx));
+    let source = cx.entity();
+    pane.update(cx, |pane, cx| {
+        pane.set_snap_preview(preview, Some(&source), cx)
+    });
     if !over {
         this.snap = None;
         return;

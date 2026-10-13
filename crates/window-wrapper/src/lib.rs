@@ -42,6 +42,12 @@ impl WindowLock {
         Self::set_with(locked, "Preprocessing", false, cx);
     }
 
+    /// A run's config is being prepared: locked against profile switches and builder saves,
+    /// which would race the config rewrite, for the moment it takes.
+    pub fn set_preparing(locked: bool, cx: &mut App) {
+        Self::set_with(locked, "Preparing a run", false, cx);
+    }
+
     fn set_with(locked: bool, label: &'static str, blocks_close: bool, cx: &mut App) {
         // set_global (not global_mut) pushes NotifyGlobalObservers so observe_global fires.
         cx.set_global(Self {

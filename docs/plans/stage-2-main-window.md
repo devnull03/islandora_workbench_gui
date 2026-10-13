@@ -244,8 +244,8 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   The worksheet is a profile setting (`source_worksheet`).
 - *CSV ID → node ID map.* The More menu runs Workbench's own
   `scripts/manage_csv_to_node_id_map.py` in its Python, all seven of its operations: export the
-  map, export the rows with a duplicate value in a chosen column (`--nonunique`: CSV ID, node
-  ID, parent CSV ID or parent node ID), merge another map into this one, remove entries before
+  map, export the rows with a duplicate value in a chosen column (`--nonunique`: CSV ID or node
+  ID), merge another map into this one, remove entries before
   or after a date, remove the selected config's entries — with its secondary configs', each
   named the way Workbench records it (the `secondary_tasks` entry as written) — and remove
   entries for nodes the selected server no longer has (the dialog warns that the map is

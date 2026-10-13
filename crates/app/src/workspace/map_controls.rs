@@ -51,10 +51,13 @@ impl MapSite {
                 .map(str::to_owned)
         };
         let db = map_db_path(text, &workbench_dir);
+        // A config that no longer loads still has its own entries, under its path; only its
+        // secondary configs need it read.
         let recorded = match (&draft, &config) {
             (Some(draft), Some(path)) => {
                 recorded_config_files(draft, &path.display().to_string(), Some(&workbench_dir))
             }
+            (None, Some(path)) => vec![path.display().to_string()],
             _ => Vec::new(),
         };
         MapSite {
@@ -92,6 +95,7 @@ impl Workspace {
             .selected_value()
             .map(|path| PathBuf::from(path.as_ref()));
         self.op = Operation::Preparing;
+        WindowLock::set_preparing(true, cx);
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
             let site = cx
@@ -99,6 +103,7 @@ impl Workspace {
                 .await;
             this.update_in(cx, |this, window, cx| {
                 this.op = Operation::None;
+                WindowLock::set_preparing(false, cx);
                 cx.notify();
                 then(this, site, window, cx)
             })
@@ -499,15 +504,11 @@ impl Workspace {
     }
 }
 
-/// The map's columns a duplicate makes sense in (`manage_csv_to_node_id_map.py --nonunique`),
-/// with how the dialog names them. The table also has `timestamp`, `config_file` and `host`,
-/// which repeat by design.
-const DUPLICATE_COLUMNS: [(&str, &str); 4] = [
-    ("csv_id", "CSV ID"),
-    ("node_id", "Node ID"),
-    ("parent_csv_id", "Parent CSV ID"),
-    ("parent_node_id", "Parent node ID"),
-];
+/// The map's columns a duplicate means something in (`manage_csv_to_node_id_map.py
+/// --nonunique`), with how the dialog names them. The rest repeat by design: every top-level
+/// row has empty parent columns, siblings share a parent, and `timestamp`, `config_file` and
+/// `host` are shared by a whole run.
+const DUPLICATE_COLUMNS: [(&str, &str); 2] = [("csv_id", "CSV ID"), ("node_id", "Node ID")];
 
 /// `yyyy-mm-dd`, optionally followed by a time — what the script's `datetime` parsing takes.
 fn looks_like_a_date(text: &str) -> bool {

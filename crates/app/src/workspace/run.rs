@@ -222,11 +222,13 @@ impl Workspace {
         // Loading and rewriting the config, and reading the credentials file, happen off the UI
         // thread; the workspace stays busy meanwhile so nothing else starts.
         self.op = Operation::Preparing;
+        WindowLock::set_preparing(true, cx);
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
             let prepared = cx.background_spawn(async move { setup.prepare() }).await;
             this.update_in(cx, |this, window, cx| {
                 this.op = Operation::None;
+                WindowLock::set_preparing(false, cx);
                 // Preparing writes host, credentials and input_csv into the config file.
                 config_builder::ConfigFilesChanged::bump(cx);
                 match prepared {
