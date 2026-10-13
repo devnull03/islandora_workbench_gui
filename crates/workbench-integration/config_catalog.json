@@ -33,7 +33,7 @@
       "key": "drupal_filesystem",
       "shape": "string",
       "default": "fedora://",
-      "description": "",
+      "description": "Drupal file scheme for new files. Only Drupal 9.1 and older need it.",
       "group": "Advanced",
       "required": false
     },
@@ -49,7 +49,7 @@
       "key": "content_type",
       "shape": "string",
       "default": "islandora_object",
-      "description": "",
+      "description": "Machine name of the node content type to create or update.",
       "group": "Task",
       "required": false
     },
@@ -82,7 +82,7 @@
       "key": "log_file_mode",
       "shape": "enum",
       "default": "a",
-      "description": "",
+      "description": "Set to w to overwrite the log each run instead of appending.",
       "group": "Logging",
       "required": false,
       "choices": [
@@ -108,7 +108,7 @@
       "key": "perform_soft_checks",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Let --check report every problem it finds instead of stopping at the first.",
       "group": "Task",
       "required": false
     },
@@ -129,17 +129,19 @@
       "key": "max_node_title_length",
       "shape": "integer",
       "default": 255,
-      "description": "",
+      "description": "Longest node title your Drupal allows.",
       "group": "Advanced",
-      "required": false
+      "required": false,
+      "unit": "characters"
     },
     {
       "key": "max_image_alt_text_length",
       "shape": "integer",
       "default": 255,
-      "description": "",
+      "description": "Longest image alt text allowed (Drupal caps it at 255).",
       "group": "Advanced",
-      "required": false
+      "required": false,
+      "unit": "characters"
     },
     {
       "key": "paged_content_from_directories",
@@ -153,7 +155,7 @@
       "key": "paged_content_from_directories_parents_exist",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "The parents of pages created from subdirectories already exist in Drupal.",
       "group": "Paged content",
       "required": false
     },
@@ -161,7 +163,7 @@
       "key": "delete_media_with_nodes",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Delete a node's media when the delete task removes the node.",
       "group": "Media",
       "required": false
     },
@@ -177,7 +179,7 @@
       "key": "columns_with_term_names",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "CSV columns whose numbers are term names, not term IDs.",
       "group": "Taxonomy",
       "required": false
     },
@@ -193,7 +195,7 @@
       "key": "nodes_only",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Create the nodes but not their media.",
       "group": "Task",
       "required": false
     },
@@ -201,7 +203,7 @@
       "key": "log_response_time",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log requests slower than the average of the last 20. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -209,16 +211,16 @@
       "key": "adaptive_pause_threshold",
       "shape": "decimal",
       "default": 2,
-      "description": "",
+      "description": "How much slower than average a response must be before Workbench pauses.",
       "group": "HTTP",
       "required": false,
-      "unit": "seconds"
+      "unit": "× average"
     },
     {
       "key": "log_response_time_sample",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log the response times the adaptive pause averages over.",
       "group": "Logging",
       "required": false
     },
@@ -226,7 +228,7 @@
       "key": "log_request_url",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log each request's URL and method. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -234,7 +236,7 @@
       "key": "log_json",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log the JSON sent to Drupal. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -242,7 +244,7 @@
       "key": "log_response_body",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log raw HTTP response bodies. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -250,7 +252,7 @@
       "key": "log_response_status_code",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log each HTTP response code. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -258,7 +260,7 @@
       "key": "log_headers",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Log the HTTP headers of every request. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -266,7 +268,7 @@
       "key": "log_term_creation",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Log each term created on the fly during create and update tasks.",
       "group": "Logging",
       "required": false
     },
@@ -274,7 +276,7 @@
       "key": "log_file_name_and_line_number",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Add the source file and line number to each log entry.",
       "group": "Logging",
       "required": false
     },
@@ -282,7 +284,7 @@
       "key": "progress_bar",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Show a progress bar instead of one line of output per row.",
       "group": "Advanced",
       "required": false
     },
@@ -290,7 +292,7 @@
       "key": "show_percentage_of_csv_input_processed",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Show how much of the CSV is done on each line of output.",
       "group": "Input",
       "required": false
     },
@@ -298,7 +300,7 @@
       "key": "prompt_user_before_delete_task",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Ask for confirmation before a delete task starts.",
       "group": "Advanced",
       "required": false
     },
@@ -306,7 +308,7 @@
       "key": "run_scripts_threads",
       "shape": "integer",
       "default": 1,
-      "description": "",
+      "description": "How many run_scripts scripts to run at once.",
       "group": "Scripts",
       "required": false
     },
@@ -314,7 +316,7 @@
       "key": "run_scripts_log_script_output",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Copy run_scripts output into the Workbench log. Turn off if your script logs itself.",
       "group": "Scripts",
       "required": false
     },
@@ -322,7 +324,7 @@
       "key": "user_agent",
       "shape": "string",
       "default": "Islandora Workbench",
-      "description": "",
+      "description": "User-Agent header sent with every request.",
       "group": "HTTP",
       "required": false
     },
@@ -330,7 +332,7 @@
       "key": "allow_redirects",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Follow HTTP redirects from the server.",
       "group": "HTTP",
       "required": false
     },
@@ -338,7 +340,7 @@
       "key": "secure_ssl_only",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Require valid SSL certificates. Turn off only for test servers.",
       "group": "HTTP",
       "required": false
     },
@@ -346,7 +348,7 @@
       "key": "google_sheets_csv_filename",
       "shape": "string",
       "default": "google_sheet.csv",
-      "description": "",
+      "description": "Local file name the Google Sheet is saved to.",
       "group": "Input",
       "required": false
     },
@@ -354,7 +356,7 @@
       "key": "google_sheets_gid",
       "shape": "string",
       "default": "0",
-      "description": "",
+      "description": "Which worksheet of the Google Sheet to read (its gid).",
       "group": "Input",
       "required": false
     },
@@ -362,7 +364,7 @@
       "key": "excel_worksheet",
       "shape": "string",
       "default": "Sheet1",
-      "description": "",
+      "description": "Which worksheet of the Excel file to read.",
       "group": "Input",
       "required": false
     },
@@ -370,7 +372,7 @@
       "key": "excel_csv_filename",
       "shape": "string",
       "default": "excel.csv",
-      "description": "",
+      "description": "Local file name the Excel worksheet is saved to.",
       "group": "Input",
       "required": false
     },
@@ -386,7 +388,7 @@
       "key": "use_node_title_for_media",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Name media after their parent node's title.",
       "group": "Media",
       "required": false
     },
@@ -394,7 +396,7 @@
       "key": "use_nid_in_media_title",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Name media after their parent's node ID, as \"123-Original File\".",
       "group": "Media",
       "required": false
     },
@@ -402,7 +404,7 @@
       "key": "use_node_title_for_media_title",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Name media after their parent node's title (trimmed to 255 characters).",
       "group": "Media",
       "required": false
     },
@@ -410,7 +412,7 @@
       "key": "field_for_remote_filename",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "CSV column whose value names files downloaded from a URL.",
       "group": "Advanced",
       "required": false
     },
@@ -418,7 +420,7 @@
       "key": "remote_file_cookie_name",
       "shape": "string",
       "default": "",
-      "description": "",
+      "description": "Session cookie name sent when downloading remote files.",
       "group": "Advanced",
       "required": false
     },
@@ -426,7 +428,7 @@
       "key": "remote_file_cookie_value",
       "shape": "string",
       "default": "",
-      "description": "",
+      "description": "Session cookie value sent with remote_file_cookie_name.",
       "group": "Advanced",
       "required": false
     },
@@ -434,7 +436,7 @@
       "key": "keep_filename_parent_directory",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Include each file's parent folder name in the stored file name.",
       "group": "Advanced",
       "required": false
     },
@@ -442,7 +444,7 @@
       "key": "field_for_media_title",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "CSV column whose value becomes the media title.",
       "group": "Media",
       "required": false
     },
@@ -450,7 +452,7 @@
       "key": "delete_tmp_upload",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Delete the temporary copy of a remote file once its media exists.",
       "group": "Advanced",
       "required": false
     },
@@ -458,7 +460,7 @@
       "key": "input_data_zip_archives",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Local paths or URLs of .zip archives to extract into the input folder.",
       "group": "Input",
       "required": false
     },
@@ -466,7 +468,7 @@
       "key": "delete_zip_archive_after_extraction",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Delete a downloaded input archive once it is extracted.",
       "group": "Input",
       "required": false
     },
@@ -474,7 +476,7 @@
       "key": "list_missing_drupal_fields",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Have --check list CSV columns that match no Drupal field.",
       "group": "Advanced",
       "required": false
     },
@@ -490,7 +492,7 @@
       "key": "sqlite_db_filename",
       "shape": "string",
       "default": "workbench_temp_data.db",
-      "description": "",
+      "description": "File name of the database that holds session data.",
       "group": "Advanced",
       "required": false
     },
@@ -507,7 +509,7 @@
       "key": "csv_id_to_node_id_map_filename",
       "shape": "string",
       "default": "csv_id_to_node_id_map.db",
-      "description": "",
+      "description": "File name of the database that maps CSV IDs to node IDs.",
       "group": "Advanced",
       "required": false
     },
@@ -528,7 +530,7 @@
       "key": "validate_fixity_during_check",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Verify file checksums during --check.",
       "group": "Advanced",
       "required": false
     },
@@ -536,7 +538,7 @@
       "key": "output_csv_include_input_csv",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Copy every input CSV column into the output CSV.",
       "group": "Export",
       "required": false
     },
@@ -544,7 +546,7 @@
       "key": "export_file_url_instead_of_download",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Export file URLs instead of downloading the files.",
       "group": "Export",
       "required": false
     },
@@ -569,7 +571,7 @@
       "key": "rollback_file_include_node_info",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Add title, field_member_of and file columns to the rollback CSV.",
       "group": "Rollback",
       "required": false
     },
@@ -577,7 +579,7 @@
       "key": "enable_http_cache",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Cache responses on this machine. Turn off while troubleshooting.",
       "group": "HTTP",
       "required": false
     },
@@ -585,7 +587,7 @@
       "key": "http_cache_storage",
       "shape": "enum",
       "default": "memory",
-      "description": "",
+      "description": "Where the response cache lives. Use sqlite if Workbench runs out of memory.",
       "group": "HTTP",
       "required": false,
       "choices": [
@@ -597,7 +599,7 @@
       "key": "http_cache_storage_expire_after",
       "shape": "integer",
       "default": 1200,
-      "description": "",
+      "description": "How long cached responses are kept.",
       "group": "HTTP",
       "required": false,
       "unit": "seconds"
@@ -606,7 +608,7 @@
       "key": "http_max_retries",
       "shape": "integer",
       "default": 3,
-      "description": "",
+      "description": "How many times to retry a failed request. 0 turns retries off.",
       "group": "HTTP",
       "required": false
     },
@@ -619,7 +621,7 @@
         503,
         504
       ],
-      "description": "",
+      "description": "HTTP status codes that are retried. Rarely needs changing.",
       "group": "HTTP",
       "required": false
     },
@@ -627,9 +629,10 @@
       "key": "http_backoff_factor",
       "shape": "integer",
       "default": 1,
-      "description": "",
+      "description": "Sets how long Workbench waits between retries.",
       "group": "HTTP",
-      "required": false
+      "required": false,
+      "unit": "seconds"
     },
     {
       "key": "http_retry_allowed_methods",
@@ -642,7 +645,7 @@
         "PATCH",
         "DELETE"
       ],
-      "description": "",
+      "description": "HTTP methods that are retried. Rarely needs changing.",
       "group": "HTTP",
       "required": false
     },
@@ -650,7 +653,7 @@
       "key": "validate_terms_exist",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Have --check confirm each term exists in Drupal. Turn off to speed it up.",
       "group": "Taxonomy",
       "required": false
     },
@@ -658,7 +661,7 @@
       "key": "validate_parent_node_exists",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Have --check confirm each field_member_of node exists.",
       "group": "Advanced",
       "required": false
     },
@@ -722,7 +725,7 @@
           ]
         }
       ],
-      "description": "",
+      "description": "Media types and the file extensions each one takes.",
       "group": "Media",
       "required": false
     },
@@ -730,7 +733,7 @@
       "key": "preprocessors",
       "shape": "map",
       "default": {},
-      "description": "",
+      "description": "Scripts applied to CSV values before they are sent to Drupal.",
       "group": "Scripts",
       "required": false
     },
@@ -738,7 +741,7 @@
       "key": "paged_content_sequence_separator",
       "shape": "delimiter",
       "default": "-",
-      "description": "",
+      "description": "Character between a page file's name and its sequence number.",
       "group": "Paged content",
       "required": false
     },
@@ -746,7 +749,7 @@
       "key": "paged_content_page_weight_multiplier",
       "shape": "string",
       "default": "1",
-      "description": "",
+      "description": "Multiplies page sequence numbers to space out their weights.",
       "group": "Paged content",
       "required": false
     },
@@ -763,7 +766,7 @@
         "fits_technical_metadata": "field_media_file",
         "remote_video": "field_media_oembed_video"
       },
-      "description": "",
+      "description": "The file field on each media type.",
       "group": "Media",
       "required": false
     },
@@ -774,7 +777,7 @@
         "audio": "field_track",
         "video": "field_track"
       },
-      "description": "",
+      "description": "The track (caption) file field on each media type that has one.",
       "group": "Media",
       "required": false
     },
@@ -791,7 +794,7 @@
         "fits_technical_metadata": "field_media_file",
         "remote_video": "field_media_oembed_video"
       },
-      "description": "",
+      "description": "Extra media field settings for custom media types.",
       "group": "Media",
       "required": false
     },
@@ -799,7 +802,7 @@
       "key": "delete_media_by_node_media_use_tids",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Only delete media with these media use terms. Empty deletes all.",
       "group": "Media",
       "required": false
     },
@@ -807,7 +810,7 @@
       "key": "update_media_by_node_media_use_tids",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Only update media with these media use terms.",
       "group": "Media",
       "required": false
     },
@@ -815,7 +818,7 @@
       "key": "export_csv_term_mode",
       "shape": "enum",
       "default": "tid",
-      "description": "",
+      "description": "Export terms as IDs (tid) or names (name).",
       "group": "Export",
       "required": false,
       "choices": [
@@ -827,7 +830,7 @@
       "key": "export_csv_file_path",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Where the exported CSV is written.",
       "group": "Export",
       "required": false,
       "browse": "file"
@@ -836,7 +839,7 @@
       "key": "export_csv_field_list",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Fields to export. Empty exports all of them.",
       "group": "Export",
       "required": false
     },
@@ -844,7 +847,7 @@
       "key": "export_file_directory",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Folder exported files are written to. Created if missing.",
       "group": "Export",
       "required": false,
       "browse": "dir"
@@ -853,7 +856,7 @@
       "key": "export_file_media_use_term_id",
       "shape": "url",
       "default": "http://pcdm.org/use#OriginalFile",
-      "description": "",
+      "description": "Media use term of the files to export.",
       "group": "Export",
       "required": false
     },
@@ -861,7 +864,7 @@
       "key": "standalone_media_url",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Your Drupal has \"Standalone media URL\" turned on.",
       "group": "Advanced",
       "required": false
     },
@@ -869,7 +872,7 @@
       "key": "require_entity_reference_views",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Require a View for entity reference fields that use one. Turn off to skip.",
       "group": "Advanced",
       "required": false
     },
@@ -877,7 +880,7 @@
       "key": "csv_start_row",
       "shape": "integer",
       "default": 0,
-      "description": "",
+      "description": "Skip the rows before this row number.",
       "group": "Input",
       "required": false
     },
@@ -885,7 +888,7 @@
       "key": "csv_stop_row",
       "shape": "integer",
       "default": null,
-      "description": "",
+      "description": "Skip the rows after this row number.",
       "group": "Input",
       "required": false
     },
@@ -909,7 +912,7 @@
           ]
         }
       ],
-      "description": "",
+      "description": "oEmbed media types and the URL prefixes each one accepts.",
       "group": "Media",
       "required": false
     },
@@ -917,7 +920,7 @@
       "key": "contact_sheet_output_dir",
       "shape": "file_path",
       "default": "contact_sheet_output",
-      "description": "",
+      "description": "Folder the contact sheet is written to.",
       "group": "Export",
       "required": false,
       "browse": "dir"
@@ -926,7 +929,7 @@
       "key": "contact_sheet_css_path",
       "shape": "file_path",
       "default": "assets/contact_sheet/contact-sheet.css",
-      "description": "",
+      "description": "Stylesheet used for the contact sheet.",
       "group": "Export",
       "required": false,
       "browse": "file"
@@ -947,7 +950,7 @@
       "key": "csv_headers",
       "shape": "enum",
       "default": "names",
-      "description": "",
+      "description": "Use field labels (labels) instead of machine names as CSV headers.",
       "group": "Input",
       "required": false,
       "choices": [
@@ -959,7 +962,7 @@
       "key": "clean_csv_values_skip",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Cleanups to skip when Workbench tidies CSV values.",
       "group": "Input",
       "required": false
     },
@@ -967,7 +970,7 @@
       "key": "text_format_id",
       "shape": "string",
       "default": "basic_html",
-      "description": "",
+      "description": "Text format applied to formatted text fields.",
       "group": "Advanced",
       "required": false
     },
@@ -975,7 +978,7 @@
       "key": "ignore_existing_parent_ids",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Only use parent IDs recorded during this run, not earlier sessions.",
       "group": "Advanced",
       "required": false
     },
@@ -983,7 +986,7 @@
       "key": "query_csv_id_to_node_id_map_for_parents",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Look up parents created in earlier Workbench sessions.",
       "group": "Advanced",
       "required": false
     },
@@ -991,7 +994,7 @@
       "key": "ignore_duplicate_parent_ids",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Ignore duplicate parent IDs in the CSV ID map instead of warning.",
       "group": "Advanced",
       "required": false
     },
@@ -999,7 +1002,7 @@
       "key": "redirect_status_code",
       "shape": "integer",
       "default": 301,
-      "description": "",
+      "description": "HTTP status code of redirects made by create_redirect.",
       "group": "HTTP",
       "required": false
     },
@@ -1015,7 +1018,7 @@
       "key": "csv_value_templates_for_paged_content",
       "shape": "list_of_one_key_maps",
       "default": [],
-      "description": "",
+      "description": "Value templates applied to pages created from subdirectories.",
       "group": "Templates",
       "required": false
     },
@@ -1023,15 +1026,16 @@
       "key": "csv_value_templates_rand_length",
       "shape": "integer",
       "default": 5,
-      "description": "",
+      "description": "Length of the random strings in value templates.",
       "group": "Templates",
-      "required": false
+      "required": false,
+      "unit": "characters"
     },
     {
       "key": "allow_csv_value_templates_if_field_empty",
       "shape": "list_of_strings",
       "default": [],
-      "description": "",
+      "description": "Fields filled from a value template when their CSV cell is empty.",
       "group": "Templates",
       "required": false
     },
@@ -1039,7 +1043,7 @@
       "key": "remind_user_to_run_check",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Ask whether --check was run before starting.",
       "group": "Logging",
       "required": false
     },
@@ -1047,7 +1051,7 @@
       "key": "completion_message",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "Message shown when Workbench finishes.",
       "group": "Logging",
       "required": false
     },
@@ -1055,7 +1059,7 @@
       "key": "media_type_by_media_use",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Media type to use for each media use term, for additional files.",
       "group": "Media",
       "required": false
     },
@@ -1065,7 +1069,7 @@
       "default": [
         "Thumbs.db"
       ],
-      "description": "",
+      "description": "File names or * patterns to skip when scanning page folders.",
       "group": "Paged content",
       "required": false
     },
@@ -1073,7 +1077,7 @@
       "key": "include_password_in_rollback_config_file",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Copy the password into the rollback config.",
       "group": "Rollback",
       "required": false
     },
@@ -1081,7 +1085,7 @@
       "key": "remove_password_from_config_file",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Remove the password from this config once Workbench has read it.",
       "group": "Rollback",
       "required": false
     },
@@ -1089,7 +1093,7 @@
       "key": "recovery_mode_starting_from_node_id",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Last node created before an interrupted create. The app sets this when you resume.",
       "group": "Advanced",
       "required": false
     },
@@ -1097,7 +1101,7 @@
       "key": "exit_on_recovery_mode_parent_lookup_failure",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Stop a resumed create when a parent can't be found.",
       "group": "Advanced",
       "required": false
     },
@@ -1105,7 +1109,7 @@
       "key": "viewer_override_fieldname",
       "shape": "string",
       "default": "field_viewer_override",
-      "description": "",
+      "description": "Field that holds the Islandora Display term.",
       "group": "Advanced",
       "required": false
     },
@@ -1113,7 +1117,7 @@
       "key": "check_for_workbench_updates",
       "shape": "boolean",
       "default": true,
-      "description": "",
+      "description": "Have --check say whether this copy of Workbench is up to date.",
       "group": "Advanced",
       "required": false
     },
@@ -1121,7 +1125,7 @@
       "key": "use_workbench_permissions",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Use the Islandora Workbench Integration module's permissions.",
       "group": "Advanced",
       "required": false
     },
@@ -1129,7 +1133,7 @@
       "key": "show_shutdown_script_output",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Print what shutdown scripts output.",
       "group": "Scripts",
       "required": false
     },
@@ -1137,7 +1141,7 @@
       "key": "show_bootstrap_script_output",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Print what bootstrap scripts output.",
       "group": "Scripts",
       "required": false
     },
@@ -1280,7 +1284,7 @@
       "key": "node_post_create",
       "shape": "command_list",
       "default": null,
-      "description": "",
+      "description": "Scripts run after each node is created.",
       "group": "Scripts",
       "required": false
     },
@@ -1288,7 +1292,7 @@
       "key": "node_post_update",
       "shape": "command_list",
       "default": null,
-      "description": "",
+      "description": "Scripts run after each node is updated.",
       "group": "Scripts",
       "required": false
     },
@@ -1296,7 +1300,7 @@
       "key": "media_post_create",
       "shape": "command_list",
       "default": null,
-      "description": "",
+      "description": "Scripts run after each media is created.",
       "group": "Scripts",
       "required": false
     },
@@ -1304,7 +1308,7 @@
       "key": "run_scripts",
       "shape": "command_list",
       "default": null,
-      "description": "",
+      "description": "Scripts the run_scripts task runs.",
       "group": "Scripts",
       "required": false
     },
@@ -1312,7 +1316,7 @@
       "key": "run_scripts_entity_type",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "What the run_scripts task runs on: node, media or term.",
       "group": "Scripts",
       "required": false
     },
@@ -1328,7 +1332,7 @@
       "key": "csv_row_filters",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "Only process rows that match these field:is:value or field:isnot:value filters.",
       "group": "Input",
       "required": false
     },
@@ -1336,7 +1340,7 @@
       "key": "csv_rows_to_process",
       "shape": "list_of_strings",
       "default": null,
-      "description": "",
+      "description": "Only process the rows with these IDs.",
       "group": "Input",
       "required": false
     },
@@ -1344,7 +1348,7 @@
       "key": "csv_start_row_skip",
       "shape": "integer",
       "default": null,
-      "description": "",
+      "description": "First row of a range to skip.",
       "group": "Input",
       "required": false
     },
@@ -1352,7 +1356,7 @@
       "key": "csv_stop_row_skip",
       "shape": "integer",
       "default": null,
-      "description": "",
+      "description": "Last row of a range to skip.",
       "group": "Input",
       "required": false
     },
@@ -1360,7 +1364,7 @@
       "key": "additional_files",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "CSV columns that create extra media, each with its media use term.",
       "group": "Media",
       "required": false
     },
@@ -1368,7 +1372,7 @@
       "key": "field_text_format_ids",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "Text format for each formatted text field.",
       "group": "Advanced",
       "required": false
     },
@@ -1376,7 +1380,7 @@
       "key": "media_types_override",
       "shape": "map_of_lists",
       "default": null,
-      "description": "",
+      "description": "Media type to use for a file extension, overriding the default.",
       "group": "Media",
       "required": false
     },
@@ -1384,7 +1388,7 @@
       "key": "mimetype_extensions",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "File extension for MIME types the default mapping gets wrong.",
       "group": "Media",
       "required": false
     },
@@ -1392,7 +1396,7 @@
       "key": "extensions_to_mimetypes",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "MIME type for file extensions the default mapping gets wrong.",
       "group": "Media",
       "required": false
     },
@@ -1400,7 +1404,7 @@
       "key": "rollback_config_file_path",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Where the rollback config is written.",
       "group": "Rollback",
       "required": false,
       "browse": "file"
@@ -1423,7 +1427,7 @@
       "key": "rollback_csv_file_path",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Where the rollback CSV is written.",
       "group": "Rollback",
       "required": false,
       "browse": "file"
@@ -1432,7 +1436,7 @@
       "key": "rollback_csv_filename_template",
       "shape": "template_string",
       "default": null,
-      "description": "",
+      "description": "Name of the rollback CSV, built from placeholders.",
       "group": "Rollback",
       "required": false,
       "tokens": [
@@ -1446,7 +1450,7 @@
       "key": "rollback_file_comments",
       "shape": "list_of_strings",
       "default": null,
-      "description": "",
+      "description": "Comment lines added to the rollback config and CSV.",
       "group": "Rollback",
       "required": false
     },
@@ -1454,7 +1458,7 @@
       "key": "paged_content_page_content_type",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "Content type of pages, when it differs from the parent's.",
       "group": "Paged content",
       "required": false
     },
@@ -1462,7 +1466,7 @@
       "key": "paged_content_page_model_tid",
       "shape": "url",
       "default": null,
-      "description": "",
+      "description": "Islandora model term given to pages. Needed for paged content from directories.",
       "group": "Paged content",
       "required": false
     },
@@ -1470,7 +1474,7 @@
       "key": "paged_content_image_file_extension",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "Extension of the page images in each page folder, when others are there too.",
       "group": "Paged content",
       "required": false
     },
@@ -1478,7 +1482,7 @@
       "key": "paged_content_page_viewer_override",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "Islandora Display term given to pages. Defaults to the parent's.",
       "group": "Paged content",
       "required": false
     },
@@ -1486,7 +1490,7 @@
       "key": "page_files_source_dir_field",
       "shape": "string",
       "default": null,
-      "description": "",
+      "description": "CSV column that names each row's page folder.",
       "group": "Paged content",
       "required": false
     },
@@ -1494,7 +1498,7 @@
       "key": "entity_reference_view_endpoints",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "Views REST exports used to look up entity reference values.",
       "group": "Advanced",
       "required": false
     },
@@ -1502,7 +1506,7 @@
       "key": "node_exists_verification_view_endpoint",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
+      "description": "View used to check whether a row's node already exists.",
       "group": "Advanced",
       "required": false
     },
@@ -1607,7 +1611,7 @@
       "key": "field_viewer_override_models",
       "shape": "list_of_strings",
       "default": null,
-      "description": "",
+      "description": "Islandora Display term to set for each model.",
       "group": "Advanced",
       "required": false
     },
@@ -1615,7 +1619,7 @@
       "key": "field_viewer_override_extensions",
       "shape": "list_of_strings",
       "default": null,
-      "description": "",
+      "description": "Islandora Display term to set for each file extension.",
       "group": "Advanced",
       "required": false
     },
@@ -1623,7 +1627,7 @@
       "key": "temp_dir",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Folder for Workbench's temporary files.",
       "group": "Advanced",
       "required": false,
       "browse": "dir"
@@ -1632,7 +1636,7 @@
       "key": "output_csv",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "CSV written with one row per node created.",
       "group": "Export",
       "required": false,
       "browse": "file"
@@ -1641,7 +1645,7 @@
       "key": "csv_id_to_node_id_map_path",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Where the database mapping CSV IDs to node IDs is kept.",
       "group": "Advanced",
       "required": false,
       "browse": "file"
@@ -1650,7 +1654,7 @@
       "key": "csv_id_to_node_id_map_allowed_hosts",
       "shape": "list_of_strings",
       "default": null,
-      "description": "",
+      "description": "Only use map entries recorded for these hosts.",
       "group": "Advanced",
       "required": false
     },
@@ -1658,7 +1662,7 @@
       "key": "check_lock_file_path",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "File that records a successful --check.",
       "group": "Advanced",
       "required": false,
       "browse": "file"
@@ -1667,7 +1671,7 @@
       "key": "path_to_python",
       "shape": "file_path",
       "default": null,
-      "description": "",
+      "description": "Python interpreter secondary tasks are started with.",
       "group": "Scripts",
       "required": false,
       "browse": "file"
@@ -1676,7 +1680,7 @@
       "key": "use_nid_in_remote_filename",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Name files downloaded from a URL after their node ID.",
       "group": "Media",
       "required": false
     },
@@ -1684,7 +1688,7 @@
       "key": "use_node_title_for_remote_filename",
       "shape": "boolean",
       "default": false,
-      "description": "",
+      "description": "Name files downloaded from a URL after their node's title.",
       "group": "Media",
       "required": false
     }

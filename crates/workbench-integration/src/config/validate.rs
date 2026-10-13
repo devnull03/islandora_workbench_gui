@@ -191,11 +191,11 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
             continue;
         }
         let Some(def) = catalog::find(key) else {
-            problems.push(Problem::new(
-                key,
-                Severity::Warn,
-                "Not a setting Workbench recognises. Check the spelling.",
-            ));
+            let message = match retired_setting(key) {
+                Some(note) => note.to_string(),
+                None => "Not a setting Workbench recognises. Check the spelling.".to_string(),
+            };
+            problems.push(Problem::new(key, Severity::Warn, message));
             continue;
         };
         // Null is "unset": the key is not written and Workbench uses its default (§04). Only a
@@ -410,6 +410,18 @@ fn check_path(
 
 /// Path settings Workbench reads from rather than writes to.
 const INPUT_PATHS: &[&str] = &["input_dir", "input_csv"];
+
+/// Settings Workbench's docs still list but its code no longer reads, and what replaced them.
+fn retired_setting(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "strict_check" => "Workbench no longer reads this. Use perform_soft_checks (its opposite).",
+        "exit_on_first_missing_file_during_check" => {
+            "Workbench no longer reads this. Use perform_soft_checks to keep --check going."
+        }
+        "drupal_8" => "Workbench no longer reads this; it detects the Drupal version itself.",
+        _ => return None,
+    })
+}
 
 /// `~` and `~/…` as Workbench's `os.path.expanduser` reads them.
 fn expand_home(raw: &str) -> std::path::PathBuf {
@@ -749,6 +761,17 @@ mod tests {
         let default_dir = check_path("input_csv", "meta.csv", Some(&tree.root), None);
         assert_eq!(default_dir.severity, Severity::Warn);
         assert!(default_dir.message.contains("input_data"));
+    }
+
+    #[test]
+    fn retired_settings_name_their_replacement() {
+        let draft = ConfigDraft::from_yaml("task: create\nstrict_check: true\n").unwrap();
+        assert!(
+            validate(&draft, &ValidationContext::default())
+                .iter()
+                .any(|p| p.key.as_deref() == Some("strict_check")
+                    && p.message.contains("perform_soft_checks"))
+        );
     }
 
     #[test]

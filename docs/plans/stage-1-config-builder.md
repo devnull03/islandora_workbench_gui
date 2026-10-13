@@ -405,3 +405,15 @@ the catalogue.
   case-insensitive. The template preview uses the config's own `input_csv` name. Reset
   buttons are hidden, not transparent, until the row is hovered, and the modified mark's slot
   is always reserved so labels do not shift when a row is edited.
+
+**Catalogue descriptions (plan 8.1–8.2, October 2026).** Every one of the 180 settings now has
+a one-line description. The 138 that had none were written from the upstream docs'
+configuration table (123 are documented there) and, for the other 15, from how Workbench's own
+code uses them — short, plain, and checked against the code where the docs disagree with it (the
+docs describe `run_scripts_threads` as `run_scripts_log_script_output`, and swap the two
+`csv_*_row_skip` settings; the code skips rows from `csv_start_row_skip` to `csv_stop_row_skip`
+inclusive). Units were added where a number needs one (`characters`, `seconds`), and
+`adaptive_pause_threshold` — a multiple of the average response time — no longer claims to be
+seconds. Every setting in the docs' table is in the catalogue except three Workbench no longer
+reads (`strict_check`, `exit_on_first_missing_file_during_check`, `drupal_8`); a config that still
+uses one gets a warning naming its replacement instead of "check the spelling".
