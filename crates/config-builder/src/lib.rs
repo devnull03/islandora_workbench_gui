@@ -28,7 +28,7 @@ use gpui_component::{
     button::ButtonVariants,
     h_flex,
     input::EditorState,
-    input::{Input, InputEvent, InputState},
+    input::{Input, InputEvent, InputState, TextareaState},
     label::Label,
     scroll::ScrollableElement,
     select::{SelectEvent, SelectState},
@@ -60,6 +60,11 @@ actions!(config_builder, [OpenConfigBuilder]);
 /// Compiled once — a `Regex::new` per row would be one compilation per setting per render.
 static INTEGER_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^-?\d*$").expect("a literal that is checked by the tests below"));
+
+/// What a `Shape::Decimal` field accepts while typed into: the integer pattern plus one point.
+static DECIMAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^-?\d*\.?\d*$").expect("a literal that is checked by the tests below")
+});
 
 /// Open windows, keyed by the config they are editing (`None` for an unsaved new config), so a
 /// second Edit on the same file focuses the window that already has it rather than opening a
@@ -204,6 +209,11 @@ pub struct ConfigBuilder {
     inputs: HashMap<SharedString, Entity<InputState>>,
     /// Dropdowns, keyed the same way.
     selects: HashMap<SharedString, Entity<SelectState<Vec<DetailSelectItem>>>>,
+    /// Multi-line YAML editors (`Shape::Yaml`), keyed the same way.
+    textareas: HashMap<SharedString, Entity<TextareaState>>,
+    /// Text in a YAML editor that does not parse, by setting key. The draft keeps the last good
+    /// value; this is what the row says instead.
+    yaml_errors: HashMap<String, String>,
 
     /// What the config is for, in the author's words. Not a Workbench setting — it lives in
     /// the config library beside the label, because the YAML schema has nowhere to put it.
@@ -337,6 +347,14 @@ pub(crate) fn workbench_dir(cx: &App) -> Option<PathBuf> {
         .map(|v| v.text().trim().to_string())
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
+}
+
+/// A YAML editor's text as a value: empty is unset, anything else must parse.
+fn parse_yaml_value(text: &str) -> Result<Value, String> {
+    if text.trim().is_empty() {
+        return Ok(Value::Null);
+    }
+    serde_yaml::from_str(text).map_err(|e| e.to_string())
 }
 
 /// Validate with what the builder knows about this machine.
@@ -564,6 +582,8 @@ impl ConfigBuilder {
             problems,
             inputs: HashMap::new(),
             selects: HashMap::new(),
+            textareas: HashMap::new(),
+            yaml_errors: HashMap::new(),
             search,
             search_selected: None,
             search_scroll: ScrollHandle::new(),
@@ -772,6 +792,81 @@ impl ConfigBuilder {
         self.inputs.insert(id, input.clone());
         input
     }
+    /// A decimal input for `id`: the number input's cache and handler with a pattern that
+    /// admits a fraction. No stepper — a step of 1 means nothing for a threshold of 2.5.
+    pub(crate) fn decimal_input(
+        &mut self,
+        id: SharedString,
+        setting_key: &str,
+        seed: &str,
+        placeholder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        if let Some(existing) = self.inputs.get(&id) {
+            return existing.clone();
+        }
+        let seed = seed.to_string();
+        let placeholder = placeholder.to_string();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(placeholder)
+                .pattern(DECIMAL_PATTERN.clone())
+                .default_value(seed)
+        });
+        let key = setting_key.to_string();
+        self._subscriptions.push(
+            cx.subscribe(&input, move |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.commit(&key, cx);
+                }
+            }),
+        );
+        self.inputs.insert(id, input.clone());
+        input
+    }
+
+    /// A multi-line YAML editor for `id`. Each change is parsed: good YAML replaces the value
+    /// (empty means unset), bad YAML is recorded in `yaml_errors` and leaves the draft alone.
+    pub(crate) fn yaml_input(
+        &mut self,
+        id: SharedString,
+        setting_key: &str,
+        seed: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<TextareaState> {
+        if let Some(existing) = self.textareas.get(&id) {
+            return existing.clone();
+        }
+        let seed = seed.to_string();
+        let state = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .auto_grow(3, 16)
+                .default_value(seed)
+        });
+        let key = setting_key.to_string();
+        self._subscriptions.push(
+            cx.subscribe(&state, move |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let text = state.read(cx).value().to_string();
+                    match parse_yaml_value(&text) {
+                        Ok(value) => {
+                            this.yaml_errors.remove(&key);
+                            this.draft.values.insert(key.clone(), value);
+                        }
+                        Err(error) => {
+                            this.yaml_errors.insert(key.clone(), error);
+                        }
+                    }
+                    this.revalidate(cx);
+                }
+            }),
+        );
+        self.textareas.insert(id, state.clone());
+        state
+    }
+
     /// A dropdown for `id`, seeded with `choices` and the current selection.
     pub(crate) fn select(
         &mut self,
@@ -821,6 +916,9 @@ impl ConfigBuilder {
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
         self.selects
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
+        self.textareas
+            .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
+        self.yaml_errors.remove(key);
     }
 
     // --- draft mutation --------------------------------------------------------------
@@ -839,6 +937,16 @@ impl ConfigBuilder {
 
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
         self.problems = validate_draft(&self.draft, cx);
+        for (key, error) in &self.yaml_errors {
+            self.problems.insert(
+                0,
+                Problem {
+                    key: Some(key.clone()),
+                    severity: Severity::Error,
+                    message: format!("Not valid YAML: {error}"),
+                },
+            );
+        }
         self.chrome.transition(BuilderChromeEvent::Edited);
         cx.notify();
     }
@@ -965,6 +1073,8 @@ impl ConfigBuilder {
                 // Every widget, including the name and description, is rebuilt from the draft.
                 self.inputs.clear();
                 self.selects.clear();
+                self.textareas.clear();
+                self.yaml_errors.clear();
                 self.last_chain_scan = None;
                 self.problems = validate_draft(&self.draft, cx);
                 self.chrome = BuilderChromeState {
@@ -1399,7 +1509,7 @@ mod tests {
     // shadow the one this needs.
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
-        INTEGER_PATTERN, discarded_draft, edit_config_file, ensure_required_settings,
+        DECIMAL_PATTERN, INTEGER_PATTERN, parse_yaml_value, discarded_draft, edit_config_file, ensure_required_settings,
         locked_source, new_config_path, slug,
     };
     use serde_yaml::Value;
@@ -1415,6 +1525,23 @@ mod tests {
         for bad in ["abc", "1.5", "1e3", "1 ", "--1", "1-"] {
             assert!(!INTEGER_PATTERN.is_match(bad), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn the_decimal_pattern_admits_one_point() {
+        for ok in ["", "2", "2.", "2.5", ".5", "-0.25"] {
+            assert!(DECIMAL_PATTERN.is_match(ok), "{ok:?}");
+        }
+        for bad in ["2.5.1", "a", "1e3", "2,5"] {
+            assert!(!DECIMAL_PATTERN.is_match(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn yaml_editor_text_is_parsed_or_refused() {
+        assert_eq!(parse_yaml_value("  "), Ok(Value::Null));
+        assert!(parse_yaml_value("a: [1, 2]").unwrap().is_mapping());
+        assert!(parse_yaml_value("a: [1, 2").is_err());
     }
 
     #[test]

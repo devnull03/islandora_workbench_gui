@@ -57,11 +57,39 @@ pub struct ValidationContext<'a> {
 type Rule = fn(&ConfigDraft, &ValidationContext) -> Option<Problem>;
 
 const RULES: &[Rule] = &[
+    task_needs_its_settings,
     rollback_dir_needed,
     missing_files_are_only_logged,
     adaptive_pause_costs_time,
     secondary_task_cannot_be_self,
 ];
+
+/// Settings a task cannot run without, from upstream `check_input` (`workbench_utils.py`,
+/// "Check for presence of required config keys, which varies by task"). `host`, `username`
+/// and `password` are there too; the app supplies those.
+const TASK_REQUIRES: &[(&[&str], &str)] = &[
+    (&["add_media", "update_media", "update_media_by_node"], "media_type"),
+    (&["create_terms", "update_terms"], "vocab_id"),
+    (&["get_data_from_view", "get_media_report_from_view"], "view_path"),
+];
+
+/// Workbench's `--check` exits with "required configuration option … missing" for these; say it
+/// on the row instead, before anything runs.
+fn task_needs_its_settings(draft: &ConfigDraft, _: &ValidationContext) -> Option<Problem> {
+    let task = draft.values.get("task")?.as_str()?;
+    TASK_REQUIRES
+        .iter()
+        .filter(|(tasks, _)| tasks.contains(&task))
+        .map(|(_, key)| *key)
+        .find(|key| draft.values.get(*key).is_none_or(Value::is_null))
+        .map(|key| {
+            Problem::new(
+                "task",
+                Severity::Error,
+                format!("A {task} task needs {key}. Add it with the search above."),
+            )
+        })
+}
 
 /// `timestamp_rollback` writes per-run rollback files, and it has nowhere to write them
 /// without `rollback_dir`. Mockup `1b` calls this out as the one hard error.
@@ -209,11 +237,18 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
             Some(s) if s.chars().count() == 1 => None,
             _ => wrong("a single character"),
         },
-        Shape::String
-        | Shape::Enum
-        | Shape::Url
-        | Shape::FilePath
-        | Shape::TemplateString => (!value.is_string()).then(|| wrong("text")).flatten(),
+        // Workbench formats these into URLs and requests, so a number reads the same as its
+        // digits: `media_use_tid: 17` (a term ID) and `google_sheets_gid: 1867618389` are both
+        // in its own docs.
+        Shape::String | Shape::Url => (!value.is_string() && !value.is_number())
+            .then(|| wrong("text"))
+            .flatten(),
+        Shape::Enum | Shape::FilePath | Shape::TemplateString => {
+            (!value.is_string()).then(|| wrong("text")).flatten()
+        }
+        Shape::Decimal => (!value.is_number()).then(|| wrong("a number")).flatten(),
+        // Any YAML is structurally valid here; Workbench's --check judges the content.
+        Shape::Yaml => None,
         // A nullable enum is unset by being absent or null, so null is the point of it.
         Shape::NullableEnum => (!value.is_string() && !value.is_null())
             .then(|| wrong("text, or nothing"))
@@ -410,6 +445,47 @@ mod tests {
         let draft = ConfigDraft::from_yaml("task: create\nhost: https://x.org\ninput_csv: a.csv\n")
             .unwrap();
         assert!(validate(&draft, &ValidationContext::default()).is_empty());
+    }
+
+    /// Upstream `check_input`: these tasks exit without their setting.
+    #[test]
+    fn tasks_report_the_setting_they_need() {
+        for (yaml, missing) in [
+            ("task: add_media\n", "media_type"),
+            ("task: update_terms\n", "vocab_id"),
+            ("task: get_media_report_from_view\n", "view_path"),
+        ] {
+            let draft = ConfigDraft::from_yaml(yaml).unwrap();
+            let problems = validate(&draft, &ValidationContext::default());
+            assert!(
+                problems
+                    .iter()
+                    .any(|p| p.severity == Severity::Error && p.message.contains(missing)),
+                "{yaml}"
+            );
+        }
+        let draft = ConfigDraft::from_yaml("task: create_terms\nvocab_id: tags\n").unwrap();
+        assert_eq!(errors(&draft), Vec::<String>::new());
+    }
+
+    /// Values Workbench's own documentation uses must not be flagged.
+    #[test]
+    fn documented_values_pass() {
+        let draft = ConfigDraft::from_yaml(
+            "task: run_scripts\nmedia_use_tid: 17\ngoogle_sheets_gid: 1867618389\n\
+             subdelimiter: '%%%'\nadaptive_pause_threshold: 2.5\n\
+             view_parameters: ['date=20231202']\n\
+             media_type_file_fields: [{my_custom_media: field_media_file}]\n\
+             models: [{'https://schema.org/DigitalDocument': [pdf, doc]}]\n\
+             paragraph_fields: {field_p: {type: x, field_order: [a, b]}}\n",
+        )
+        .unwrap();
+        assert_eq!(errors(&draft), Vec::<String>::new());
+        assert!(
+            validate(&draft, &ValidationContext::default())
+                .iter()
+                .all(|p| !p.message.starts_with("Not a setting"))
+        );
     }
 
     #[test]

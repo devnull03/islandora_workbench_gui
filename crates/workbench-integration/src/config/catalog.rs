@@ -11,8 +11,8 @@ use std::sync::LazyLock;
 use serde::Deserialize;
 use serde_yaml::Value;
 
-/// The sixteen YAML value shapes a setting can take, and therefore the sixteen editors the
-/// builder can render. Mirrors `SHAPES` in `scripts/gen-config-catalog.py`; adding one means
+/// The YAML value shapes a setting can take, and therefore the editors the builder can render
+/// (mockup `1c`'s sixteen, plus `Decimal` and `Yaml`). Mirrors `SHAPES` in `scripts/gen-config-catalog.py`; adding one means
 /// adding it in both places plus an arm in the `config-builder` crate's editors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,6 +49,11 @@ pub enum Shape {
     TemplateString,
     /// Points at another config file: `secondary_tasks: [pages.yml]`
     ConfigRef,
+    /// A number that may have a fraction: `adaptive_pause_threshold: 2.5`
+    Decimal,
+    /// Nested structure no table editor represents faithfully, edited as YAML text:
+    /// `paragraph_fields: {field_x: {type: …, field_order: […]}}`
+    Yaml,
 }
 
 impl Shape {
@@ -70,6 +75,8 @@ impl Shape {
             Shape::CommandList => "commands",
             Shape::TemplateString => "template",
             Shape::ConfigRef => "config",
+            Shape::Decimal => "number",
+            Shape::Yaml => "YAML",
         }
     }
 }

@@ -353,3 +353,31 @@ patched in (every other line untouched; the child got host and credentials only)
 at its first network request because no Islandora server was running. Before Phase 1 the same
 file failed in the app with ``missing field `host` ``, and Workbench itself fails a bare builder
 config with `KeyError: 'host'`.
+
+## Workbench parity — catalogue and validation (October 2026)
+
+Checked against upstream Workbench source (`976eeaf`) and its documentation
+(`islandora_workbench_docs`). Method: every YAML example in the docs (133 snippets) was run
+through `validate`, and every `config["…"]` key the Workbench source reads was compared with
+the catalogue.
+
+- `task` offers all **18** tasks upstream accepts (was 10): adds `update_media_by_node`,
+  `get_media_report_from_view`, `create_terms`, `update_terms`, `create_redirects`,
+  `add_alt_text`, `update_alt_text`, `run_scripts`.
+- New settings: `media_type`, `vocab_id`, `view_path`, `user_prompts`,
+  `paged_content_additional_page_media`, `model`, `models`, `username`, `password`,
+  `credentials_key_file_path`, `paragraph_fields`; `path_to_workbench_script` is no longer
+  hidden (the docs' workflow examples set it). Regenerating also picked up upstream's new
+  `exit_on_recovery_mode_parent_lookup_failure` and `hocr` in the media types. 180 settings.
+- Shapes corrected where the docs' own examples were rejected: `view_parameters` is a list of
+  strings, `media_type_file_fields` a list of one-key maps, `subdelimiter` may be several
+  characters (`'%%%'`), `adaptive_pause_threshold` is a decimal (`2.5`), and text/URL settings
+  accept numbers (`media_use_tid: 17`, `google_sheets_gid: 1867618389`) — kept as numbers on
+  save rather than turned into quoted strings.
+- Two new shapes: `decimal` (pattern-checked field, integer stays integer) and `yaml` (a
+  mono multi-line editor for structure no table represents, e.g. `paragraph_fields`; text that
+  does not parse is an error on the row and never replaces the last good value).
+- New rule from upstream `check_input`: `add_media`/`update_media`/`update_media_by_node` need
+  `media_type`, the term tasks need `vocab_id`, the View tasks need `view_path`.
+- After this, the only docs snippets still flagged are not configs (Drupal role YAML, prose)
+  or are typos in the docs themselves (`ask: create`, `processors:`, `nodes_only: "true"`).

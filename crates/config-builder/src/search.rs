@@ -549,6 +549,8 @@ fn shape_glyph(shape: Shape) -> &'static str {
         Shape::ListOfStrings | Shape::ListOfNumbers | Shape::ListOfOneKeyMaps => "[]",
         Shape::Map | Shape::MapOfLists => "{}",
         Shape::CommandList => ">",
+        Shape::Decimal => "1.5",
+        Shape::Yaml => "{}",
     }
 }
 

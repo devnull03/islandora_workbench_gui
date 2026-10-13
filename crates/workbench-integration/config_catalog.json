@@ -1,6 +1,6 @@
 {
-  "workbench_ref": "dcb49fe777199276eace15b4b044dded3d8bab27",
-  "generated": "2026-08-30",
+  "workbench_ref": "976eeaf233d8d69d80c9e3c0d90b6c4a6153e954",
+  "generated": "2026-10-13",
   "settings": [
     {
       "key": "input_dir",
@@ -63,7 +63,7 @@
     },
     {
       "key": "subdelimiter",
-      "shape": "delimiter",
+      "shape": "string",
       "default": "|",
       "description": "Separates several values in one cell.",
       "group": "Input",
@@ -207,7 +207,7 @@
     },
     {
       "key": "adaptive_pause_threshold",
-      "shape": "integer",
+      "shape": "decimal",
       "default": 2,
       "description": "",
       "group": "HTTP",
@@ -689,7 +689,8 @@
             "tiff",
             "jp2",
             "zip",
-            "tar"
+            "tar",
+            "hocr"
           ]
         },
         {
@@ -751,7 +752,7 @@
     },
     {
       "key": "media_type_file_fields",
-      "shape": "map",
+      "shape": "list_of_one_key_maps",
       "default": {
         "file": "field_media_file",
         "document": "field_media_document",
@@ -887,6 +888,15 @@
       "description": "",
       "group": "Input",
       "required": false
+    },
+    {
+      "key": "path_to_workbench_script",
+      "shape": "file_path",
+      "default": null,
+      "description": "The workbench script secondary tasks are started with. Needed only when Workbench is run from somewhere other than its own folder.",
+      "group": "Scripts",
+      "required": false,
+      "browse": "file"
     },
     {
       "key": "oembed_providers",
@@ -1084,6 +1094,14 @@
       "required": false
     },
     {
+      "key": "exit_on_recovery_mode_parent_lookup_failure",
+      "shape": "boolean",
+      "default": true,
+      "description": "",
+      "group": "Advanced",
+      "required": false
+    },
+    {
       "key": "viewer_override_fieldname",
       "shape": "string",
       "default": "field_viewer_override",
@@ -1133,43 +1151,75 @@
       "choices": [
         [
           "create",
-          "create - Create new nodes"
+          "create - Create nodes from CSV"
         ],
         [
           "create_from_files",
-          "create_from_files - Create from files"
+          "create_from_files - Create nodes from a folder of files"
         ],
         [
           "update",
-          "update - Update existing nodes"
+          "update - Update node fields"
         ],
         [
           "delete",
-          "delete - Delete nodes"
+          "delete - Delete nodes and their media"
         ],
         [
           "add_media",
-          "add_media - Add media to nodes"
+          "add_media - Add media to existing nodes"
         ],
         [
           "update_media",
-          "update_media - Update existing media"
+          "update_media - Update media fields or replace files"
+        ],
+        [
+          "update_media_by_node",
+          "update_media_by_node - Update media, found by node ID"
         ],
         [
           "delete_media",
-          "delete_media - Delete media"
+          "delete_media - Delete media by media ID"
         ],
         [
           "delete_media_by_node",
-          "delete_media_by_node - Delete media by node"
+          "delete_media_by_node - Delete media by node ID"
         ],
         [
           "export_csv",
-          "export_csv - Export content to CSV"
+          "export_csv - Export node fields to CSV"
         ],
         [
           "get_data_from_view",
-          "get_data_from_view - Get data from view"
+          "get_data_from_view - Export from a Drupal View"
+        ],
+        [
+          "get_media_report_from_view",
+          "get_media_report_from_view - Media report from a View"
+        ],
+        [
+          "create_terms",
+          "create_terms - Populate a vocabulary from CSV"
+        ],
+        [
+          "update_terms",
+          "update_terms - Update vocabulary terms"
+        ],
+        [
+          "create_redirects",
+          "create_redirects - Create URL redirects"
+        ],
+        [
+          "add_alt_text",
+          "add_alt_text - Add alt text to images"
+        ],
+        [
+          "update_alt_text",
+          "update_alt_text - Update image alt text"
+        ],
+        [
+          "run_scripts",
+          "run_scripts - Run scripts on existing entities"
         ]
       ]
     },
@@ -1452,10 +1502,99 @@
     },
     {
       "key": "view_parameters",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "URL query strings sent to the View, e.g. date=20231202.",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "view_path",
+      "shape": "string",
+      "default": null,
+      "description": "Path of the Drupal View's REST export, e.g. /daily_nodes_created. Required by the View tasks.",
+      "group": "Export",
+      "required": false
+    },
+    {
+      "key": "media_type",
+      "shape": "string",
+      "default": null,
+      "description": "Media type for every file, overriding the per-extension mapping. Required by add_media and update_media.",
+      "group": "Media",
+      "required": false
+    },
+    {
+      "key": "vocab_id",
+      "shape": "string",
+      "default": null,
+      "description": "Machine name of the vocabulary create_terms and update_terms work on.",
+      "group": "Task",
+      "required": false
+    },
+    {
+      "key": "user_prompts",
+      "shape": "list_of_strings",
+      "default": null,
+      "description": "Yes/no questions asked before the run; any answer but y stops it. End each with (y/n).",
+      "group": "Prompts",
+      "required": false
+    },
+    {
+      "key": "paged_content_additional_page_media",
       "shape": "list_of_one_key_maps",
       "default": null,
-      "description": "",
-      "group": "Advanced",
+      "description": "Media Use term to file extension, for extra page files such as OCR text.",
+      "group": "Paged content",
+      "required": false
+    },
+    {
+      "key": "model",
+      "shape": "url",
+      "default": null,
+      "description": "Model term (ID or URI) for every node a create_from_files task makes.",
+      "group": "Create from files",
+      "required": false
+    },
+    {
+      "key": "models",
+      "shape": "map_of_lists",
+      "default": null,
+      "description": "Model term per file extension, for create_from_files.",
+      "group": "Create from files",
+      "required": false
+    },
+    {
+      "key": "username",
+      "shape": "string",
+      "default": null,
+      "description": "Drupal user for the run. The app supplies credentials from the server's credentials file instead.",
+      "group": "Credentials",
+      "required": false
+    },
+    {
+      "key": "password",
+      "shape": "string",
+      "default": null,
+      "description": "Stored in plain text in the config. Prefer the server's credentials file in Settings.",
+      "group": "Credentials",
+      "required": false
+    },
+    {
+      "key": "credentials_key_file_path",
+      "shape": "file_path",
+      "default": null,
+      "description": "Key for an encrypted credentials file, so Workbench does not prompt for it.",
+      "group": "Credentials",
+      "required": false,
+      "browse": "file"
+    },
+    {
+      "key": "paragraph_fields",
+      "shape": "yaml",
+      "default": null,
+      "description": "Structure of paragraph (entity reference revisions) fields in the input CSV.",
+      "group": "Fields",
       "required": false
     },
     {

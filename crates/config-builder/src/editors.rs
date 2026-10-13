@@ -48,7 +48,7 @@ pub fn empty_value(shape: Shape) -> Value {
         | Shape::ListOfOneKeyMaps
         | Shape::CommandList
         | Shape::ConfigRef => Value::Sequence(Vec::new()),
-        Shape::NullableEnum => Value::Null,
+        Shape::NullableEnum | Shape::Decimal | Shape::Yaml => Value::Null,
         _ => Value::String(String::new()),
     }
 }
@@ -131,6 +131,36 @@ pub(crate) fn parse_integer(text: &str) -> Value {
         .map_or(Value::Null, |n| Value::Number(n.into()))
 }
 
+/// A decimal field's text as YAML: a whole number stays an integer (`2`, not `2.0`), a
+/// fraction is a float, and empty or unparseable is unset — never a string.
+pub(crate) fn parse_decimal(text: &str) -> Value {
+    let text = text.trim();
+    if let Ok(n) = text.parse::<i64>() {
+        return Value::Number(n.into());
+    }
+    match text.parse::<f64>() {
+        Ok(f) if f.is_finite() => Value::Number(f.into()),
+        _ => Value::Null,
+    }
+}
+
+/// A text field's value, keeping the type the file had: `media_use_tid: 17` must not come back
+/// as `'17'` just because it passed through a text box. Only a value that was a number and
+/// still parses as one stays a number.
+pub(crate) fn parse_text_keeping_numbers(text: &str, previous: &Value) -> Value {
+    if previous.is_number() {
+        if let Ok(n) = text.trim().parse::<i64>() {
+            return Value::Number(n.into());
+        }
+        if let Ok(f) = text.trim().parse::<f64>()
+            && f.is_finite()
+        {
+            return Value::Number(f.into());
+        }
+    }
+    Value::String(text.to_string())
+}
+
 /// Parse a typed cell back into YAML. Numbers stay numbers so `500` does not become `"500"`.
 fn parse_scalar(text: &str, numeric: bool) -> Value {
     if numeric {
@@ -154,16 +184,22 @@ impl ConfigBuilder {
         match def.shape {
             Shape::Boolean => None, // the checkbox writes straight through
             Shape::Integer => Some(parse_integer(&self.input_value(&field_id(&[key]), cx))),
+            Shape::Decimal => Some(parse_decimal(&self.input_value(&field_id(&[key]), cx))),
+            // The YAML editor parses and writes the draft itself; text that does not parse
+            // must not replace a good value.
+            Shape::Yaml => None,
+            Shape::String | Shape::Url => Some(parse_text_keeping_numbers(
+                &self.input_value(&field_id(&[key]), cx),
+                current,
+            )),
             Shape::Enum | Shape::NullableEnum => match self.select_value(&field_id(&[key]), cx) {
                 Some(v) if v.is_empty() => Some(Value::Null),
                 Some(v) => Some(Value::String(v.to_string())),
                 None => Some(Value::Null),
             },
-            Shape::String
-            | Shape::Delimiter
-            | Shape::FilePath
-            | Shape::Url
-            | Shape::TemplateString => Some(Value::String(self.input_value(&field_id(&[key]), cx))),
+            Shape::Delimiter | Shape::FilePath | Shape::TemplateString => {
+                Some(Value::String(self.input_value(&field_id(&[key]), cx)))
+            }
             // Chips have no per-item widget to read: committing one and removing one both edit
             // the draft directly, the same way the switch does.
             Shape::ListOfStrings | Shape::ListOfNumbers => None,
@@ -532,6 +568,44 @@ impl ConfigBuilder {
             Shape::String | Shape::Url => {
                 let input = self.input(id, &key, &scalar_text(&value), "", window, cx);
                 Input::new(&input).w_full().into_any_element()
+            }
+
+            // Same field as an integer, with a pattern that admits one decimal point.
+            Shape::Decimal => {
+                let placeholder = scalar_text(&def.default);
+                let input =
+                    self.decimal_input(id, &key, &scalar_text(&value), &placeholder, window, cx);
+                h_flex()
+                    .gap(GAP_MD)
+                    .items_center()
+                    .child(
+                        div()
+                            .w(NUMBER_FIELD_W)
+                            .child(Input::new(&input).with_size(APP_CONTROL_SIZE).w_full()),
+                    )
+                    .children(def.unit.clone().map(|u| {
+                        Label::new(u)
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                    }))
+                    .into_any_element()
+            }
+
+            // Structure no table renders faithfully: the YAML itself, in mono. It is parsed on
+            // every change; text that does not parse leaves the last good value in the draft
+            // and says why under the field.
+            Shape::Yaml => {
+                let seed = if value.is_null() {
+                    String::new()
+                } else {
+                    serde_yaml::to_string(&value).unwrap_or_default()
+                };
+                let state = self.yaml_input(id, &key, &seed, window, cx);
+                gpui_component::input::Textarea::new(&state)
+                    .w_full()
+                    .font_family(cx.theme().mono_font_family.clone())
+                    .text_sm()
+                    .into_any_element()
             }
 
             Shape::TemplateString => {
@@ -1018,7 +1092,34 @@ fn normalise_to_mapping(value: &Value) -> Mapping {
 
 #[cfg(test)]
 mod tests {
-    use super::{Value, parse_integer};
+    use super::{Value, parse_decimal, parse_integer, parse_text_keeping_numbers};
+
+    #[test]
+    fn decimals_keep_integers_whole_and_reject_words() {
+        assert_eq!(parse_decimal("2"), Value::Number(2.into()));
+        assert_eq!(parse_decimal("2.5"), Value::Number(2.5.into()));
+        assert_eq!(parse_decimal(""), Value::Null);
+        assert_eq!(parse_decimal("."), Value::Null);
+    }
+
+    /// `media_use_tid: 17` survives the text box as a number; a URI stays text.
+    #[test]
+    fn text_fields_keep_a_number_a_number() {
+        let was_number = Value::Number(17.into());
+        assert_eq!(
+            parse_text_keeping_numbers("18", &was_number),
+            Value::Number(18.into())
+        );
+        assert_eq!(
+            parse_text_keeping_numbers("http://pcdm.org/use#Original", &was_number),
+            Value::String("http://pcdm.org/use#Original".into())
+        );
+        let was_text = Value::String("0".into());
+        assert_eq!(
+            parse_text_keeping_numbers("12", &was_text),
+            Value::String("12".into())
+        );
+    }
 
     /// P0-5: type then clear an integer ⇒ unset, never the string `""` that validation used to
     /// reject as "Expected a whole number".

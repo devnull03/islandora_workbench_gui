@@ -51,6 +51,8 @@ SHAPES = {
     "command_list",
     "template_string",
     "config_ref",
+    "decimal",
+    "yaml",
 }
 
 
