@@ -88,6 +88,15 @@ struct OpenBuilder {
 }
 
 impl ConfigBuilderWindows {
+    /// Every config with a live builder window, by the path it was opened with.
+    pub(crate) fn open_paths(&self) -> HashSet<PathBuf> {
+        self.open
+            .iter()
+            .filter(|(_, open)| open.view.upgrade().is_some())
+            .filter_map(|(key, _)| key.clone())
+            .collect()
+    }
+
     /// The live builder editing `path`, if one is open. Matched by file identity, not by the
     /// spelling the window was opened with.
     fn view_for(&self, path: &std::path::Path) -> Option<Entity<ConfigBuilder>> {
@@ -104,6 +113,8 @@ impl ConfigBuilderWindows {
 /// appearing must not squeeze the editors it exists to explain.
 pub(crate) const YAML_PANEL_WIDTH: Pixels = px(400.);
 const FALLBACK_EDITOR_WIDTH: Pixels = px(600.);
+/// How far each chain level's window is offset from its parent's.
+const CASCADE_STEP: Pixels = px(24.);
 const FALLBACK_EDITOR_HEIGHT: Pixels = px(800.);
 
 /// Open the builder on `path`, or on a blank draft when `path` is `None`.
@@ -169,7 +180,13 @@ fn open_config_builder_with_ancestors(
     } else {
         editor_size.width
     };
-    let bounds = Bounds::centered(None, size(width, editor_size.height), cx);
+    let mut bounds = Bounds::centered(None, size(width, editor_size.height), cx);
+    // `2a`: a child window cascades from its parent by one step per level so the chain reads
+    // as a stack; past level 3 the offsets would walk off a laptop screen, so it centres.
+    let depth = ancestors.len();
+    if (1..=3).contains(&depth) {
+        bounds.origin += point(CASCADE_STEP * depth as f32, CASCADE_STEP * depth as f32);
+    }
     let options = WindowOptions {
         titlebar: Some(TitleBar::title_bar_options()),
         window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -243,6 +260,9 @@ pub struct ConfigBuilder {
     /// Secondary-config graph is refreshed by `chain` at most every two seconds, rather than
     /// recursively parsing every linked YAML on every render.
     pub(crate) chain_nodes: Vec<SecondaryConfigNode>,
+    /// Why the last chain edit (link, relink, unlink) could not be made, shown in the chain
+    /// panel beside the attempt (`2a`).
+    pub(crate) chain_error: Option<SharedString>,
     pub(crate) collapsed_chain: HashSet<PathBuf>,
     pub(crate) last_chain_scan: Option<Instant>,
 
@@ -640,6 +660,7 @@ impl ConfigBuilder {
                 notice,
             },
             chain_nodes: Vec::new(),
+            chain_error: None,
             collapsed_chain: HashSet::new(),
             last_chain_scan: None,
             _subscriptions,

@@ -243,3 +243,15 @@ segments plus `+9` rather than as a truncation.
   problem. Click-a-counter-to-scroll is not built yet.
 - The search row's default preview truncated by byte (`&s[..24]`) and could panic on multibyte
   text; it now truncates by character.
+- [x] **2K chain gaps** (§3.3 items 1–8, Q6 answered with the recommended default — allow):
+  "● OPEN" appears only on configs that have a builder window; a config linked more than once
+  is legal and tagged `×N` (Workbench runs it once per appearance), and only true cycles are
+  rejected — in the graph, in `link_error`, and in the run-time rewrite, whose global visited
+  set wrongly treated a diamond as a loop (now an ancestry stack); broken steps offer
+  **Relink…** (`ConfigDraft::replace_secondary_task`); every healthy node has **Link under…**
+  next to **New under**; link errors show in the chain panel, not the title bar; run-order
+  chips open their config; top-level steps move up/down (`move_secondary_task`) — buttons
+  rather than drag, which the plan tied to a RowEditor reorder primitive that does not exist
+  yet; child windows cascade 24px per level, centred past level 3. The "orange frame" on child
+  windows is not drawn: GPUI exposes no window-border colour, and the breadcrumb and level
+  badge already mark a child.

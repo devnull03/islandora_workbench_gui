@@ -149,6 +149,53 @@ impl ConfigDraft {
         true
     }
 
+    /// Point the entry that resolves to `old` at `new` instead, in place — Relink for a config
+    /// that moved. Returns whether anything changed.
+    pub fn replace_secondary_task(
+        &mut self,
+        old: &Path,
+        new: &Path,
+        workbench_dir: Option<&Path>,
+    ) -> bool {
+        let owner = self.path.clone();
+        let new = std::path::absolute(new).unwrap_or_else(|_| new.to_path_buf());
+        let mut changed = false;
+        let tasks: Vec<PathBuf> = self
+            .secondary_tasks()
+            .into_iter()
+            .map(|entry| {
+                let resolved = resolve_secondary_task(&entry, owner.as_deref(), workbench_dir);
+                if super::chain::same_path(&resolved, old) {
+                    changed = true;
+                    new.clone()
+                } else {
+                    entry
+                }
+            })
+            .collect();
+        if changed {
+            self.set_secondary_tasks(&tasks);
+        }
+        changed
+    }
+
+    /// Move the entry at `index` one place earlier (`up`) or later in the run order. Returns
+    /// whether it moved.
+    pub fn move_secondary_task(&mut self, index: usize, up: bool) -> bool {
+        let mut tasks = self.secondary_tasks();
+        let target = if up {
+            index.checked_sub(1)
+        } else {
+            Some(index + 1).filter(|t| *t < tasks.len())
+        };
+        let Some(target) = target.filter(|_| index < tasks.len()) else {
+            return false;
+        };
+        tasks.swap(index, target);
+        self.set_secondary_tasks(&tasks);
+        true
+    }
+
     /// Stop running `child` after this config. Every entry that resolves to it goes, however
     /// it was spelled. Returns whether anything changed. The file itself is never touched.
     pub fn unlink_secondary_task(&mut self, child: &Path, workbench_dir: Option<&Path>) -> bool {
@@ -243,6 +290,26 @@ mod tests {
         assert!(root.unlink_secondary_task(&child, Some(&workbench)));
         assert_eq!(root.secondary_tasks(), vec![PathBuf::from("other.yml")]);
         assert!(!root.unlink_secondary_task(&child, Some(&workbench)));
+    }
+
+    #[test]
+    fn relink_and_reorder() {
+        let mut root =
+            ConfigDraft::from_yaml("task: create\nsecondary_tasks: [/a/one.yml, /a/two.yml]\n")
+                .unwrap();
+        assert!(root.replace_secondary_task(
+            Path::new("/a/two.yml"),
+            Path::new("/b/two.yml"),
+            None
+        ));
+        assert_eq!(
+            root.secondary_tasks(),
+            vec![PathBuf::from("/a/one.yml"), PathBuf::from("/b/two.yml")]
+        );
+        assert!(root.move_secondary_task(1, true));
+        assert_eq!(root.secondary_tasks()[0], PathBuf::from("/b/two.yml"));
+        assert!(!root.move_secondary_task(0, true));
+        assert!(!root.move_secondary_task(1, false));
     }
 
     /// P0-5: an unset (null) value keeps its row but is not written.

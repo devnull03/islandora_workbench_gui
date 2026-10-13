@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
-use std::collections::HashSet;
-
 use super::draft::resolve_secondary_task;
 use super::{chain, patch};
 
@@ -120,7 +118,7 @@ impl WorkbenchConfigHandler<Ready> {
             overrides,
             overrides.input_csv,
             workbench_dir,
-            &mut HashSet::new(),
+            &mut Vec::new(),
         )
     }
 
@@ -131,16 +129,20 @@ impl WorkbenchConfigHandler<Ready> {
         overrides: &RunOverrides<'_>,
         input_csv: Option<&Path>,
         workbench_dir: &Path,
-        visited: &mut HashSet<PathBuf>,
+        ancestry: &mut Vec<PathBuf>,
     ) -> anyhow::Result<()> {
         // A hand-written chain can loop (the builder refuses to make one). Workbench would run
-        // it forever; the rewrite must at least terminate.
-        if !visited.insert(chain::identity(&self.state.file_path)) {
+        // it forever; the rewrite must at least terminate. Only a config that is its own
+        // ancestor is a loop: the same config twice in a chain (a diamond, `×2`) is legal —
+        // Workbench simply runs it twice — and is patched twice, harmlessly.
+        let identity = chain::identity(&self.state.file_path);
+        if ancestry.contains(&identity) {
             anyhow::bail!(
                 "{} runs itself through secondary_tasks; remove the loop before running.",
                 self.state.file_path.display()
             );
         }
+        ancestry.push(identity);
         log::debug!(
             "[config] updating {:?}  host={:?}",
             self.state.file_path,
@@ -182,10 +184,11 @@ impl WorkbenchConfigHandler<Ready> {
                 let mut handler = WorkbenchConfigHandler::new(resolved.clone())
                     .load()
                     .map_err(|e| anyhow::anyhow!("secondary config {}: {e}", resolved.display()))?;
-                handler.apply(overrides, None, workbench_dir, visited)?;
+                handler.apply(overrides, None, workbench_dir, ancestry)?;
             }
         }
 
+        ancestry.pop();
         Ok(())
     }
 
@@ -387,6 +390,44 @@ media_use_tid: http://pcdm.org/use#OriginalFile   # keep
             .unwrap();
         let child = WorkbenchConfigHandler::new(child).load().unwrap();
         assert_eq!(child.host(), Some("https://islandora.dev"));
+    }
+
+    /// Q6: the same config twice (here, under two parents) is not a loop.
+    #[test]
+    fn a_diamond_chain_is_not_a_loop() {
+        let tree = TempTree::new();
+        let shared = tree.write("shared.yml", "task: add_media\n");
+        let left = tree.write(
+            "left.yml",
+            &format!("task: create\nsecondary_tasks: [{}]\n", shared.display()),
+        );
+        let right = tree.write(
+            "right.yml",
+            &format!("task: create\nsecondary_tasks: [{}]\n", shared.display()),
+        );
+        let root = tree.write(
+            "root.yml",
+            &format!(
+                "task: create\nsecondary_tasks: [{}, {}]\n",
+                left.display(),
+                right.display()
+            ),
+        );
+        WorkbenchConfigHandler::new(root)
+            .load()
+            .unwrap()
+            .update_config_fields(
+                &RunOverrides {
+                    host: "https://h.org",
+                    credentials_file_path: Path::new("/c.yml"),
+                    input_csv: Some(Path::new("/m.csv")),
+                    require_input_csv: true,
+                },
+                &tree.root,
+            )
+            .unwrap();
+        let shared = WorkbenchConfigHandler::new(shared).load().unwrap();
+        assert_eq!(shared.host(), Some("https://h.org"));
     }
 
     #[test]

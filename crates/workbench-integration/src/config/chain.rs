@@ -19,6 +19,9 @@ pub struct SecondaryConfigNode {
     pub settings: usize,
     pub children: Vec<SecondaryConfigNode>,
     pub error: Option<String>,
+    /// How many times this config appears in the whole chain. Above 1 the UI tags it `×N`:
+    /// Workbench runs it once per appearance (Component Spec §08; plan Q6).
+    pub times: usize,
 }
 
 /// Load the root's complete child graph. A node is still returned when it is missing, malformed,
@@ -27,17 +30,40 @@ pub struct SecondaryConfigNode {
 /// `workbench_dir` is the base relative entries resolve against at run time — see
 /// [`resolve_secondary_task`]. Every function here takes it for the same reason.
 pub fn child_nodes(root: &ConfigDraft, workbench_dir: Option<&Path>) -> Vec<SecondaryConfigNode> {
-    let mut seen = HashSet::new();
     let mut ancestry = Vec::new();
     if let Some(path) = root.path.as_deref() {
-        let key = identity(path);
-        seen.insert(key.clone());
-        ancestry.push(key);
+        ancestry.push(identity(path));
     }
-    root.resolved_secondary_tasks(workbench_dir)
+    let mut nodes: Vec<SecondaryConfigNode> = root
+        .resolved_secondary_tasks(workbench_dir)
         .into_iter()
-        .map(|path| load_node(path, &ancestry, &mut seen, workbench_dir))
-        .collect()
+        .map(|path| load_node(path, &ancestry, workbench_dir))
+        .collect();
+    let mut counts = std::collections::HashMap::new();
+    for node in &nodes {
+        count(node, &mut counts);
+    }
+    for node in &mut nodes {
+        apply_counts(node, &counts);
+    }
+    nodes
+}
+
+fn count(node: &SecondaryConfigNode, counts: &mut std::collections::HashMap<PathBuf, usize>) {
+    *counts.entry(identity(&node.path)).or_default() += 1;
+    for child in &node.children {
+        count(child, counts);
+    }
+}
+
+fn apply_counts(
+    node: &mut SecondaryConfigNode,
+    counts: &std::collections::HashMap<PathBuf, usize>,
+) {
+    node.times = counts.get(&identity(&node.path)).copied().unwrap_or(1);
+    for child in &mut node.children {
+        apply_counts(child, counts);
+    }
 }
 
 /// Flatten the graph in the order Workbench walks it: the root's children depth-first.
@@ -59,8 +85,9 @@ pub fn flattened_paths(root: &ConfigDraft, workbench_dir: Option<&Path>) -> Vec<
 }
 
 /// Explain why linking `candidate` below `owner` is unsafe. Missing files are allowed so a user
-/// can create a link before the child exists; cycles and duplicate references are rejected as
-/// soon as they can be proven.
+/// can create a link before the child exists; cycles are rejected as soon as they can be proven.
+/// A config that already runs elsewhere in the chain is *allowed* (Q6): Workbench runs it once
+/// per appearance and the tree tags it `×2`.
 pub fn link_error(
     owner: &ConfigDraft,
     candidate: &Path,
@@ -74,13 +101,6 @@ pub fn link_error(
     {
         return Some("A config can't run inside itself.".into());
     }
-    if child_nodes(owner, workbench_dir)
-        .iter()
-        .any(|node| contains_path(node, &candidate))
-    {
-        return Some("That config already runs in this chain.".into());
-    }
-
     // If the candidate already exists, inspect its descendants for the owner. This catches an
     // indirect cycle (A → B, then attempting to link A below B), not only a direct self-link.
     if candidate.is_file()
@@ -112,7 +132,6 @@ fn discover(path: &Path) -> Option<PathBuf> {
 fn load_node(
     path: PathBuf,
     ancestry: &[PathBuf],
-    seen: &mut HashSet<PathBuf>,
     workbench_dir: Option<&Path>,
 ) -> SecondaryConfigNode {
     let key = identity(&path);
@@ -123,13 +142,6 @@ fn load_node(
 
     if ancestry.contains(&key) {
         return broken(path, label, "This link points back to an ancestor config.");
-    }
-    if !seen.insert(key.clone()) {
-        return broken(
-            path,
-            label,
-            "This config is already linked elsewhere in the chain.",
-        );
     }
     // People write the entry the way they think of the file — `create-items.config` for
     // `create-items.config.yml`. Workbench does **not** resolve that (it opens the entry
@@ -162,7 +174,7 @@ fn load_node(
     let children = draft
         .resolved_secondary_tasks(workbench_dir)
         .into_iter()
-        .map(|child| load_node(child, &next_ancestry, seen, workbench_dir))
+        .map(|child| load_node(child, &next_ancestry, workbench_dir))
         .collect();
     SecondaryConfigNode {
         path,
@@ -175,6 +187,7 @@ fn load_node(
         settings: draft.values.len(),
         children,
         error: None,
+        times: 1,
     }
 }
 
@@ -186,15 +199,8 @@ fn broken(path: PathBuf, label: String, error: impl Into<String>) -> SecondaryCo
         settings: 0,
         children: Vec::new(),
         error: Some(error.into()),
+        times: 1,
     }
-}
-
-fn contains_path(node: &SecondaryConfigNode, target: &Path) -> bool {
-    same_path(&node.path, target)
-        || node
-            .children
-            .iter()
-            .any(|child| contains_path(child, target))
 }
 
 fn reaches_path(
@@ -297,12 +303,15 @@ mod tests {
         assert!(link_error(&root, &root_path, None).is_some());
         // Root → child → root is an indirect cycle even though the candidate is not root itself.
         assert!(link_error(&root, &child_path, None).is_some());
-        let child = ConfigDraft::load(&child_path).unwrap();
-        assert!(link_error(&child, &root_path, None).is_some());
+        // Linking root under child again is not a cycle (root runs nothing), but the same
+        // entry twice in one list is refused where links are written.
+        let mut child = ConfigDraft::load(&child_path).unwrap();
+        assert!(link_error(&child, &root_path, None).is_none());
+        assert!(!child.link_secondary_task(&root_path, None));
     }
 
     #[test]
-    fn missing_files_are_visible_and_duplicate_references_are_marked() {
+    fn missing_files_are_visible_and_repeats_are_counted() {
         let tree = TempTree::new();
         let missing = tree.root.join("missing.yml");
         let child = tree.write("child.yml", "task: update\n");
@@ -316,8 +325,20 @@ mod tests {
         );
         let root = ConfigDraft::load(&root_path).unwrap();
         let nodes = child_nodes(&root, None);
-        assert!(nodes[1].error.is_some());
+        // Q6: the same config twice is legal; both appearances say so.
+        assert!(
+            nodes
+                .iter()
+                .all(|node| node.error.is_none() && node.times == 2)
+        );
+        assert_eq!(flattened_paths(&root, None).len(), 2);
         assert!(link_error(&root, &missing, None).is_none());
-        assert!(link_error(&root, &child, None).is_some());
+        assert!(link_error(&root, &child, None).is_none());
+        let with_missing = ConfigDraft::from_yaml(&format!(
+            "task: create\nsecondary_tasks: [{}]\n",
+            missing.display()
+        ))
+        .unwrap();
+        assert!(child_nodes(&with_missing, None)[0].error.is_some());
     }
 }
