@@ -17,7 +17,7 @@ use gpui_component::{
     ActiveTheme as _, Sizable as _, WindowExt as _,
     button::ButtonVariants as _,
     h_flex,
-    input::{Input, InputState},
+    input::{Input, InputEvent, InputState},
     label::Label,
     v_flex,
 };
@@ -329,8 +329,11 @@ impl Workspace {
                     .filter(|p| !p.is_empty()),
                 _ => handler.text_setting(key).map(str::to_owned),
             },
+            |key| handler.setting(key).is_some_and(|v| !v.is_null()),
             |var| std::env::var_os(var).is_some(),
-        );
+            &wb_info.install_path,
+        )
+        .map_err(|e| anyhow::anyhow!(e))?;
         Ok(PreparedRun {
             wb_info,
             handler,
@@ -362,20 +365,28 @@ impl Workspace {
         self.pending_secret_run = Some((action, prepared));
         let input = cx.new(|cx| InputState::new(window, cx).masked(true));
         let workspace = cx.entity().downgrade();
-        window.open_dialog(cx, move |dialog, window, cx| {
-            input.update(cx, |state, cx| state.focus(window, cx));
+        // Enter runs, like the Run button.
+        self._secret_enter = Some(cx.subscribe_in(
+            &input,
+            window,
+            |this, input, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    let value = input.read(cx).value().to_string();
+                    window.close_dialog(cx);
+                    this.run_with_secret(value, window, cx);
+                }
+            },
+        ));
+        let dialog_input = input.clone();
+        window.open_dialog(cx, move |dialog, _, cx| {
+            let input = dialog_input.clone();
             let submit = {
                 let (input, workspace) = (input.clone(), workspace.clone());
                 move |window: &mut Window, cx: &mut App| {
                     let value = input.read(cx).value().to_string();
                     window.close_dialog(cx);
                     workspace
-                        .update(cx, |this, cx| {
-                            if let Some((action, mut prepared)) = this.pending_secret_run.take() {
-                                prepared.secret_value = Some(value);
-                                this.launch(action, prepared, window, cx);
-                            }
-                        })
+                        .update(cx, |this, cx| this.run_with_secret(value, window, cx))
                         .ok();
                 }
             };
@@ -383,6 +394,9 @@ impl Workspace {
             dialog
                 .title(secret.question())
                 .overlay(true)
+                // Closed only by Run or Cancel, so a pending run never lingers.
+                .overlay_closable(false)
+                .close_button(false)
                 .keyboard(false)
                 .child(
                     v_flex()
@@ -410,12 +424,28 @@ impl Workspace {
                             move |_, window, cx| {
                                 window.close_dialog(cx);
                                 cancel
-                                    .update(cx, |this, _| this.pending_secret_run = None)
+                                    .update(cx, |this, _| {
+                                        this.pending_secret_run = None;
+                                        this._secret_enter = None;
+                                    })
                                     .ok();
                             },
                         )),
                 )
         });
+        // Once, after the dialog has taken focus for itself.
+        window.defer(cx, move |window, cx| {
+            input.update(cx, |state, cx| state.focus(window, cx));
+        });
+    }
+
+    /// Launch the run waiting on its secret.
+    fn run_with_secret(&mut self, value: String, window: &mut Window, cx: &mut Context<Self>) {
+        self._secret_enter = None;
+        if let Some((action, mut prepared)) = self.pending_secret_run.take() {
+            prepared.secret_value = Some(value);
+            self.launch(action, prepared, window, cx);
+        }
     }
 
     /// Is `config_path` the last run's rollback config? Its own `input_csv` must stand.

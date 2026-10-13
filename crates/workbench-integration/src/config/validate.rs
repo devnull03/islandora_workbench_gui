@@ -298,6 +298,18 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
             .then(|| wrong("text, or nothing"))
             .flatten(),
         Shape::ListOfStrings if catalog::holds_term_ids(key) => match value {
+            // `"17"` is text to Workbench and matches no term; an ID must be a bare 17.
+            Value::Sequence(items)
+                if items
+                    .iter()
+                    .any(|v| v.as_str().is_some_and(|s| s.chars().all(|c| c.is_ascii_digit()))) =>
+            {
+                Some(Problem::new(
+                    key,
+                    Severity::Warn,
+                    "A term ID in quotes matches nothing; write it as a bare number.",
+                ))
+            }
             Value::Sequence(items)
                 if items.iter().all(|v| v.is_string() || v.is_i64() || v.is_u64()) =>
             {
@@ -786,6 +798,15 @@ mod tests {
         )
         .unwrap();
         assert!(errors(&draft).is_empty());
+        let quoted = ConfigDraft::from_yaml(
+            "task: delete_media_by_node\ndelete_media_by_node_media_use_tids: [\"17\"]\n",
+        )
+        .unwrap();
+        assert!(
+            validate(&quoted, &ValidationContext::default())
+                .iter()
+                .any(|p| p.severity == Severity::Warn && p.message.contains("bare number"))
+        );
     }
 
     #[test]

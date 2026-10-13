@@ -438,8 +438,8 @@ impl Workspace {
                     .into(),
             )
         };
-        window.open_dialog(cx, move |dialog, window, cx| {
-            input.update(cx, |state, cx| state.focus(window, cx));
+        let focus = input.clone();
+        window.open_dialog(cx, move |dialog, _, _| {
             let input_for_delete = input.clone();
             let this = this.clone();
             dialog
@@ -488,6 +488,10 @@ impl Workspace {
                                 }),
                         ),
                 )
+        });
+        // Once, after the dialog has taken focus for itself.
+        window.defer(cx, move |window, cx| {
+            focus.update(cx, |state, cx| state.focus(window, cx));
         });
     }
 }

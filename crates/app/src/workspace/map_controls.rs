@@ -53,6 +53,14 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // The save dialog is not modal everywhere, so a run may have started while it was open.
+        if !self.is_idle() {
+            return self.append_log(
+                "[ERROR] Wait for the current run to finish before changing the CSV ID map.",
+                window,
+                cx,
+            );
+        }
         let (info, db) = match (super::run::workbench_info(cx), self.map_db(cx)) {
             (Ok(info), Ok(db)) => (info, db),
             (Err(e), _) => return self.append_log(&format!("[ERROR] {e}"), window, cx),
@@ -130,8 +138,10 @@ impl Workspace {
             cx,
             "Remove map entries for deleted nodes?",
             format!(
-                "Every entry whose node no longer exists on {host} is deleted from the CSV ID \
-                 map. This asks the server about each node, so it can take a while."
+                "Workbench asks {host} about every node ID in the CSV ID map and deletes the \
+                 entries for nodes it no longer has. The map is not split by server: if it also \
+                 holds entries from another server, ones with the same node ID are deleted too. \
+                 This can take a while."
             ),
             "Remove",
             move |window, cx| {
@@ -148,8 +158,8 @@ impl Workspace {
     pub(super) fn ask_map_remove_before(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("2025-01-31"));
         let this = cx.entity().downgrade();
-        window.open_dialog(cx, move |dialog, window, cx| {
-            input.update(cx, |state, cx| state.focus(window, cx));
+        let focus = input.clone();
+        window.open_dialog(cx, move |dialog, _, _| {
             let (input_for_remove, this) = (input.clone(), this.clone());
             dialog
                 .title("Remove map entries before a date")
@@ -193,6 +203,10 @@ impl Workspace {
                                 }),
                         ),
                 )
+        });
+        // Once, after the dialog has taken focus for itself.
+        window.defer(cx, move |window, cx| {
+            focus.update(cx, |state, cx| state.focus(window, cx));
         });
     }
 }

@@ -74,6 +74,8 @@ pub struct Workspace {
     pending_toast: Option<gpui_component::notification::Notification>,
     /// A prepared run waiting for the password or key its dialog asks for.
     pending_secret_run: Option<(workbench_integration::WorkbenchAction, run::PreparedRun)>,
+    /// Enter in the secret dialog's field, while it is open.
+    _secret_enter: Option<Subscription>,
     /// The Workbench process running now, if any.
     running: Option<run::RunSession>,
     /// What the last finished run left behind (rollback config, contact sheet, first node…).
@@ -321,6 +323,7 @@ impl Workspace {
             processed_at: SharedString::default(),
             pending_toast: None,
             pending_secret_run: None,
+            _secret_enter: None,
             running: None,
             last_run: None,
             options_open: false,

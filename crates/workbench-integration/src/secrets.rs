@@ -42,28 +42,42 @@ impl Secret {
 
 /// What the config, as it will be run, leaves Workbench to ask for — following
 /// `WorkbenchConfig.get_password` step by step. `config_text` looks a setting up as text;
-/// `env_has` says whether a variable is already in the app's environment.
+/// `has_key` says whether the config sets a key at all (Workbench checks presence, so
+/// `password: 12345` counts); `env_has` says whether a variable is already in the app's
+/// environment; relative paths resolve against `workbench_dir`, where Workbench runs.
+///
+/// `Err` when Workbench could not log in whatever the user typed: no username and no
+/// credentials file means there is no one to log in as.
 pub fn secret_needed(
     config_text: impl Fn(&str) -> Option<String>,
+    has_key: impl Fn(&str) -> bool,
     env_has: impl Fn(&str) -> bool,
-) -> Option<Secret> {
-    if config_text("password").is_some() || env_has("ISLANDORA_WORKBENCH_PASSWORD") {
-        return None;
-    }
+    workbench_dir: &Path,
+) -> Result<Option<Secret>, String> {
     let username = config_text("username");
     let credentials = config_text("credentials_file_path");
-    match (&username, credentials) {
+    if username.is_none() && credentials.is_none() {
+        return Err(
+            "This server has no credentials file and the config names no username, so \
+             Workbench has no one to log in as. Set a credentials file for the server in \
+             Settings."
+                .into(),
+        );
+    }
+    if has_key("password") || env_has("ISLANDORA_WORKBENCH_PASSWORD") {
+        return Ok(None);
+    }
+    Ok(match (&username, credentials) {
         (None, Some(path)) => {
-            let encrypted = std::fs::read_to_string(expand_home(&path))
-                .is_ok_and(|text| text.lines().count() == 1);
-            let has_key = config_text("credentials_key_file_path").is_some()
+            let encrypted = credentials_file_is_encrypted(&resolve(&path, workbench_dir));
+            let has_key_file = has_key("credentials_key_file_path")
                 || env_has("ISLANDORA_WORKBENCH_ENCRYPTION_KEY");
-            (encrypted && !has_key).then_some(Secret::EncryptionKey {
+            (encrypted && !has_key_file).then_some(Secret::EncryptionKey {
                 credentials_file: path,
             })
         }
         _ => Some(Secret::Password { username }),
-    }
+    })
 }
 
 /// Whether a credentials file is a single-line (encrypted) one — the server Test cannot read it.
@@ -71,10 +85,18 @@ pub fn credentials_file_is_encrypted(path: &Path) -> bool {
     std::fs::read_to_string(path).is_ok_and(|text| text.lines().count() == 1)
 }
 
-fn expand_home(path: &str) -> std::path::PathBuf {
-    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => Path::new(&home).join(rest),
+/// `path` as Workbench opens it: `~` expanded, relative to the Workbench folder.
+pub fn resolve(path: &str, workbench_dir: &Path) -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    let expanded = match (path, path.strip_prefix("~/"), home) {
+        ("~", _, Some(home)) => std::path::PathBuf::from(home),
+        (_, Some(rest), Some(home)) => Path::new(&home).join(rest),
         _ => path.into(),
+    };
+    if expanded.is_absolute() {
+        expanded
+    } else {
+        workbench_dir.join(expanded)
     }
 }
 
@@ -99,43 +121,52 @@ mod tests {
         let sealed = tree.write("sealed.yml", "gAAAAABkZXhhbXBsZQ==\n");
         let (plain, sealed) = (plain.display().to_string(), sealed.display().to_string());
         let none = |_: &str| false;
+        let wb = tree.root.as_path();
+        let ask = |pairs: &[(&str, &str)], env: &dyn Fn(&str) -> bool| {
+            let has = |k: &str| pairs.iter().any(|(key, _)| *key == k);
+            secret_needed(lookup(pairs), has, env, wb)
+        };
 
-        // A password in the config, or in the environment: nothing to ask.
-        assert_eq!(secret_needed(lookup(&[("password", "x")]), none), None);
+        // A password in the config — any value, even a number — or in the environment.
         assert_eq!(
-            secret_needed(lookup(&[]), |v| v == "ISLANDORA_WORKBENCH_PASSWORD"),
-            None
+            ask(&[("password", "12345"), ("username", "a")], &none),
+            Ok(None)
+        );
+        assert_eq!(
+            ask(&[("username", "a")], &|v| v
+                == "ISLANDORA_WORKBENCH_PASSWORD"),
+            Ok(None)
         );
         // A plain credentials file answers it.
-        assert_eq!(
-            secret_needed(lookup(&[("credentials_file_path", &plain)]), none),
-            None
-        );
+        assert_eq!(ask(&[("credentials_file_path", &plain)], &none), Ok(None));
         // An encrypted one needs its key, unless a key file or the variable gives it.
         assert!(matches!(
-            secret_needed(lookup(&[("credentials_file_path", &sealed)]), none),
-            Some(Secret::EncryptionKey { .. })
+            ask(&[("credentials_file_path", &sealed)], &none),
+            Ok(Some(Secret::EncryptionKey { .. }))
         ));
         assert_eq!(
-            secret_needed(
-                lookup(&[
+            ask(
+                &[
                     ("credentials_file_path", &sealed),
                     ("credentials_key_file_path", "/k")
-                ]),
-                none
+                ],
+                &none
             ),
-            None
+            Ok(None)
         );
-        // A username with no password, or nothing at all: Workbench asks for the password.
-        assert_eq!(
-            secret_needed(lookup(&[("username", "admin")]), none),
-            Some(Secret::Password {
-                username: Some("admin".into())
-            })
-        );
+        // A relative credentials path is Workbench's, not the app's.
         assert!(matches!(
-            secret_needed(lookup(&[]), none),
-            Some(Secret::Password { username: None })
+            ask(&[("credentials_file_path", "sealed.yml")], &none),
+            Ok(Some(Secret::EncryptionKey { .. }))
         ));
+        // A username with no password: Workbench asks for the password.
+        assert_eq!(
+            ask(&[("username", "admin")], &none),
+            Ok(Some(Secret::Password {
+                username: Some("admin".into())
+            }))
+        );
+        // Nobody to log in as: refuse before launching rather than ask for a useless password.
+        assert!(ask(&[], &none).is_err());
     }
 }

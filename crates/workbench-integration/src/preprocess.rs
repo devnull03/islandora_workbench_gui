@@ -122,7 +122,7 @@ fn acquire(source: InputSource<'_>, output_dir: &Path) -> Result<PathBuf> {
 /// One worksheet as CSV text: every row, cells quoted where CSV needs it. Numbers that are whole
 /// are written without a trailing `.0`, as a person typing them into a CSV would.
 fn spreadsheet_to_csv(path: &Path, worksheet: Option<&str>) -> Result<String> {
-    use calamine::{Data, Reader, open_workbook_auto};
+    use calamine::{Data, DataType as _, Reader, open_workbook_auto};
     let mut book = open_workbook_auto(path)
         .with_context(|| format!("Couldn't open the spreadsheet {}", path.display()))?;
     let names = book.sheet_names().to_vec();
@@ -156,6 +156,18 @@ fn spreadsheet_to_csv(path: &Path, worksheet: Option<&str>) -> Result<String> {
                     Data::Float(f) if f.fract() == 0.0 && f.abs() < 1e15 => {
                         format!("{}", *f as i64)
                     }
+                    // A date cell is a day count underneath; write it as a date (EDTF and
+                    // Drupal date fields read `yyyy-mm-dd`), with the time only when it has one.
+                    Data::DateTime(_) => match cell.as_datetime() {
+                        Some(dt) if dt.time() == chrono::NaiveTime::MIN => {
+                            dt.format("%Y-%m-%d").to_string()
+                        }
+                        Some(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+                        None => cell.to_string(),
+                    },
+                    Data::DateTimeIso(text) | Data::DurationIso(text) => text.clone(),
+                    // A formula error (`#DIV/0!`) is not a value; leave the cell empty.
+                    Data::Error(_) => String::new(),
                     other => other.to_string(),
                 };
                 csv_field(&text)
@@ -313,6 +325,24 @@ fn capture(mut cmd: Command) -> Result<String> {
 }
 #[cfg(test)]
 mod tests {
+    /// A real workbook (made with openpyxl): the named worksheet, a date, a comma, a number.
+    #[test]
+    fn spreadsheets_convert_like_a_person_would_type_them() {
+        let book =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/items.xlsx");
+        let csv = super::spreadsheet_to_csv(&book, Some("Items")).unwrap();
+        assert_eq!(
+            csv,
+            "id,title,date\n1,\"First, with comma\",2024-03-05\n2,Second,2024-03-05T14:30:00\n"
+        );
+        // No worksheet named: the first one.
+        assert_eq!(
+            super::spreadsheet_to_csv(&book, None).unwrap(),
+            "ignore me\n"
+        );
+        assert!(super::spreadsheet_to_csv(&book, Some("Nope")).is_err());
+    }
+
     #[test]
     fn csv_fields_are_quoted_only_when_needed() {
         assert_eq!(super::csv_field("plain"), "plain");
