@@ -19,7 +19,8 @@ pub struct RunReport {
     pub contact_sheet: Option<PathBuf>,
     /// `CSV template saved at <path>.`
     pub csv_template: Option<PathBuf>,
-    /// `CSV export saved at <path>` (the `export_csv` task).
+    /// `CSV export saved at <path>` (`export_csv`) or `CSV file is available at <path>.` (the
+    /// View tasks, whose default name carries a timestamp nothing can predict).
     pub exported_csv: Option<PathBuf>,
 }
 
@@ -36,7 +37,9 @@ impl RunReport {
         if let Some(path) = sentence_path(line, "CSV template saved at ") {
             self.csv_template = Some(path);
         }
-        if let Some(path) = sentence_path(line, "CSV export saved at ") {
+        if let Some(path) = sentence_path(line, "CSV export saved at ")
+            .or_else(|| sentence_path(line, "CSV file is available at "))
+        {
             self.exported_csv = Some(path);
         }
     }
@@ -51,10 +54,11 @@ fn created_node_id(line: &str) -> Option<u64> {
     digits.parse().ok()
 }
 
-/// Where an export task writes its CSV: `export_csv_file_path` when the config sets it, else
-/// Workbench's default for the View tasks — `<input_dir>/<config name>.csv_file_with_…` (the
-/// config name up to its first full stop, as `os.path.basename(...).split(".")[0]`). The
-/// `export_csv` task prints its path instead ([`RunReport::exported_csv`]).
+/// Where an export task writes its CSV when the run's output does not say: the config's
+/// `export_csv_file_path`, else, for the media report, `<input_dir>/<config name>.csv_file_with_
+/// media_report_from_view` (the config name up to its first full stop). `export_csv` and
+/// `get_data_from_view` print their path ([`RunReport::exported_csv`]); the latter's default
+/// name is timestamped, so it is not guessed here.
 pub fn export_csv_path(
     task: &str,
     config_text: impl Fn(&str) -> Option<String>,
@@ -65,7 +69,6 @@ pub fn export_csv_path(
         return Some(crate::secrets::resolve(&path, workbench_dir));
     }
     let suffix = match task {
-        "get_data_from_view" => "csv_file_with_data_from_view",
         "get_media_report_from_view" => "csv_file_with_media_report_from_view",
         _ => return None,
     };
@@ -145,14 +148,19 @@ mod export_tests {
         let none = |_: &str| None;
         assert_eq!(
             export_csv_path(
-                "get_data_from_view",
+                "get_media_report_from_view",
                 none,
                 Path::new("/c/view.export.yml"),
                 wb
             ),
             Some(PathBuf::from(
-                "/wb/input_data/view.csv_file_with_data_from_view"
+                "/wb/input_data/view.csv_file_with_media_report_from_view"
             ))
+        );
+        // Timestamped by Workbench: read from its output instead.
+        assert_eq!(
+            export_csv_path("get_data_from_view", none, Path::new("/c/v.yml"), wb),
+            None
         );
         let set = |k: &str| (k == "export_csv_file_path").then(|| "out/x.csv".to_string());
         assert_eq!(
@@ -168,6 +176,11 @@ mod export_tests {
         assert_eq!(
             report.exported_csv,
             Some(PathBuf::from("/wb/input_data/a.csv_file_with_field_values"))
+        );
+        report.observe("CSV file is available at input_data/v_view_export_20261013.csv.");
+        assert_eq!(
+            report.exported_csv,
+            Some(PathBuf::from("input_data/v_view_export_20261013.csv"))
         );
     }
 }

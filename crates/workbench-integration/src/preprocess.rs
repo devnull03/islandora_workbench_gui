@@ -158,7 +158,20 @@ fn spreadsheet_to_csv(path: &Path, worksheet: Option<&str>) -> Result<String> {
                     }
                     // A date cell is a day count underneath; write it as a date (EDTF and
                     // Drupal date fields read `yyyy-mm-dd`), with the time only when it has one.
-                    Data::DateTime(_) => match cell.as_datetime() {
+                    // A duration (`[h]:mm`) is a span, not a date.
+                    Data::DateTime(d) if d.is_duration() => match d.as_duration() {
+                        Some(span) => {
+                            let secs = span.num_seconds();
+                            format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
+                        }
+                        None => cell.to_string(),
+                    },
+                    Data::DateTime(d) => match cell.as_datetime() {
+                        // Under one day: a time of day with no date (its "date" is Excel's
+                        // day zero, which calamine reports as 1899-12-30 or -31).
+                        Some(dt) if (0.0..1.0).contains(&d.as_f64()) => {
+                            dt.format("%H:%M:%S").to_string()
+                        }
                         Some(dt) if dt.time() == chrono::NaiveTime::MIN => {
                             dt.format("%Y-%m-%d").to_string()
                         }
@@ -348,6 +361,11 @@ mod tests {
             "ignore me\n"
         );
         assert!(super::spreadsheet_to_csv(&book, Some("Nope")).is_err());
+        // A time of day has no date; a duration is a span.
+        assert_eq!(
+            super::spreadsheet_to_csv(&book, Some("Times")).unwrap(),
+            "at,took\n14:30:00,26:05:00\n"
+        );
     }
 
     #[test]

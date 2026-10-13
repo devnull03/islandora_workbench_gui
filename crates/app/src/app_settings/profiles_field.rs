@@ -340,7 +340,8 @@ fn offer_import(profile: Profile, error: Entity<LastError>, window: AnyWindowHan
              To keep both, cancel and rename this one first.",
             "Replace",
             move |_, cx| {
-                // A run may have started while the dialog was open.
+                // A run may have started, or the profile become active, while the dialog was open.
+                let active = AppSettings::get(cx).active_profile == name;
                 if active && WindowLock::is_locked(cx) {
                     let added = AppSettings::update(cx, |s| s.import_profile(profile.clone()));
                     let message =

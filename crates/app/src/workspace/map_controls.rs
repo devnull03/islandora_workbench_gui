@@ -166,14 +166,23 @@ impl Workspace {
         let Some(config) = self.saved_config_select.read(cx).selected_value().cloned() else {
             return self.append_log("[ERROR] Choose a config first.", window, cx);
         };
+        // The script takes a comma-separated list, so a comma in the path would split it.
+        if config.contains(',') {
+            return self.append_log(
+                "[ERROR] The config's path contains a comma, which the map tool cannot take.",
+                window,
+                cx,
+            );
+        }
         let this = cx.entity().downgrade();
         ui::confirm_dialog(
             window,
             cx,
             "Remove this config's map entries?",
             format!(
-                "Every CSV ID map entry made by runs of {config} is deleted. Later runs can no \
-                 longer find those nodes as parents."
+                "CSV ID map entries Workbench recorded for {config} — run from this app — are \
+                 deleted; entries its secondary configs made are kept. Later runs can no longer \
+                 find those nodes as parents."
             ),
             "Remove",
             move |window, cx| {
@@ -228,11 +237,52 @@ impl Workspace {
                 return;
             };
             this.update_in(cx, |this, window, cx| {
-                this.run_map_tool(MapAction::MergeFrom(source), window, cx)
+                this.confirm_merge(source, window, cx)
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Merging appends every row of `source` (the table has no key), so merging a map into
+    /// itself, or twice, duplicates its entries. Refuse the first, ask before the rest.
+    fn confirm_merge(&mut self, source: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let target = match self.map_db(cx) {
+            Ok(target) => target,
+            Err(e) => return self.append_log(&format!("[ERROR] {e}"), window, cx),
+        };
+        let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => a == b,
+        };
+        if same(&source, &target) {
+            return self.append_log(
+                "[ERROR] That is the map this config already uses; merging it into itself would \
+                 duplicate every entry.",
+                window,
+                cx,
+            );
+        }
+        let this = cx.entity().downgrade();
+        ui::confirm_dialog(
+            window,
+            cx,
+            "Merge this map into the current one?",
+            format!(
+                "Every entry in {} is added to {}. Entries already there are not checked, so \
+                 merging the same map twice adds them twice.",
+                source.display(),
+                target.display()
+            ),
+            "Merge",
+            move |window, cx| {
+                let source = source.clone();
+                this.update(cx, |this, cx| {
+                    this.run_map_tool(MapAction::MergeFrom(source), window, cx)
+                })
+                .ok();
+            },
+        );
     }
 
     /// Remove the entries recorded before (or after) a date the user types.

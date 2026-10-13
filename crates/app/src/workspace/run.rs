@@ -321,7 +321,8 @@ impl Workspace {
                     .filter(|p| !p.is_empty()),
                 _ => handler.text_setting(key).map(str::to_owned),
             },
-            |key| handler.setting(key).is_some_and(|v| !v.is_null()),
+            // Workbench checks the key exists; `password:` with no value still counts.
+            |key| handler.setting(key).is_some(),
             |var| std::env::var_os(var).is_some(),
             &wb_info.install_path,
         )
@@ -364,6 +365,10 @@ impl Workspace {
             |this, input, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
                     let value = input.read(cx).value().to_string();
+                    // An empty answer cannot log in or decrypt anything.
+                    if value.is_empty() {
+                        return;
+                    }
                     window.close_dialog(cx);
                     this.run_with_secret(value, window, cx);
                 }
@@ -376,6 +381,9 @@ impl Workspace {
                 let (input, workspace) = (input.clone(), workspace.clone());
                 move |window: &mut Window, cx: &mut App| {
                     let value = input.read(cx).value().to_string();
+                    if value.is_empty() {
+                        return;
+                    }
                     window.close_dialog(cx);
                     workspace
                         .update(cx, |this, cx| this.run_with_secret(value, window, cx))
@@ -743,6 +751,7 @@ impl RunScan {
         };
         report.contact_sheet = report.contact_sheet.map(absolute).filter(|p| p.is_file());
         report.csv_template = report.csv_template.map(absolute).filter(|p| p.is_file());
+        report.exported_csv = report.exported_csv.map(absolute).filter(|p| p.is_file());
         ScanResult {
             report,
             log: Some(self.log).filter(|p| p.is_file()),

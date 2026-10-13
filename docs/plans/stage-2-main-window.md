@@ -259,3 +259,13 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   that is a Google Sheet URL is not flagged as a missing file. A sheet that answers with a
   sign-in page instead of a CSV says to share it. The ingest folder no longer gates Check, Run
   and the More menu — nothing there uses it. Spreadsheet dates are written `yyyy-mm-dd`.
+- *M9 audit fixes.* `get_data_from_view`'s default CSV name carries a timestamp, so its path is
+  read from Workbench's `CSV file is available at …` line rather than guessed (only the media
+  report's default name is predictable); printed export paths are resolved against the
+  Workbench folder. Merging a CSV ID map asks first and refuses to merge a map into itself
+  (the table has no key, so every row would be duplicated). Workbench's password check is
+  matched more closely: `password:` with no value counts as set; a credentials file plus
+  `ISLANDORA_WORKBENCH_PASSWORD` in the environment (which Workbench misreads) is refused
+  with an explanation; `~\` and USERPROFILE are honoured on Windows; the secret dialog
+  ignores an empty answer. Spreadsheet time-only cells become `14:30:00` and durations
+  `26:05:00`.

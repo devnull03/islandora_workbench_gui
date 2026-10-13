@@ -302,7 +302,7 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
             Value::Sequence(items)
                 if items
                     .iter()
-                    .any(|v| v.as_str().is_some_and(|s| s.chars().all(|c| c.is_ascii_digit()))) =>
+                    .any(|v| v.as_str().is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))) =>
             {
                 Some(Problem::new(
                     key,

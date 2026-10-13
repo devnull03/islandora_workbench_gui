@@ -64,6 +64,21 @@ pub fn secret_needed(
                 .into(),
         );
     }
+    // Workbench quirk (`get_credentials`): with a credentials file and no username, a password
+    // in the environment is taken *instead of* the file and then indexed as if it were the
+    // file's (username, password) pair — the login cannot work.
+    if username.is_none()
+        && credentials.is_some()
+        && !has_key("password")
+        && env_has("ISLANDORA_WORKBENCH_PASSWORD")
+    {
+        return Err(
+            "ISLANDORA_WORKBENCH_PASSWORD is set in this app's environment, and Workbench would \
+             use it in place of the server's credentials file and fail to log in. Unset it and \
+             start the app again."
+                .into(),
+        );
+    }
     if has_key("password") || env_has("ISLANDORA_WORKBENCH_PASSWORD") {
         return Ok(None);
     }
@@ -87,8 +102,14 @@ pub fn credentials_file_is_encrypted(path: &Path) -> bool {
 
 /// `path` as Workbench opens it: `~` expanded, relative to the Workbench folder.
 pub fn resolve(path: &str, workbench_dir: &Path) -> std::path::PathBuf {
-    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
-    let expanded = match (path, path.strip_prefix("~/"), home) {
+    // Python's `expanduser`: USERPROFILE on Windows, HOME elsewhere; `~/` and `~\`.
+    let home = if cfg!(windows) {
+        std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))
+    } else {
+        std::env::var_os("HOME")
+    };
+    let rest = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"));
+    let expanded = match (path, rest, home) {
         ("~", _, Some(home)) => std::path::PathBuf::from(home),
         (_, Some(rest), Some(home)) => Path::new(&home).join(rest),
         _ => path.into(),
@@ -168,5 +189,11 @@ mod tests {
         );
         // Nobody to log in as: refuse before launching rather than ask for a useless password.
         assert!(ask(&[], &none).is_err());
+        // A credentials file plus a password in the environment: Workbench misreads it.
+        assert!(
+            ask(&[("credentials_file_path", &plain)], &|v| v
+                == "ISLANDORA_WORKBENCH_PASSWORD")
+            .is_err()
+        );
     }
 }
