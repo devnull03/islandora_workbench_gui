@@ -56,6 +56,11 @@ pub fn secret_needed(
 ) -> Result<Option<Secret>, String> {
     let username = config_text("username");
     let credentials = config_text("credentials_file_path");
+    // Workbench checks whether `username` is present, not what it holds: an empty one skips the
+    // credentials file and logs in as nobody.
+    if username.is_none() && has_key("username") {
+        return Err("The config's username is empty. Give it a value or remove it.".into());
+    }
     if username.is_none() && credentials.is_none() {
         return Err(
             "This server has no credentials file and the config names no username, so \
@@ -189,6 +194,18 @@ mod tests {
         );
         // Nobody to log in as: refuse before launching rather than ask for a useless password.
         assert!(ask(&[], &none).is_err());
+        // An empty username is present to Workbench, so the credentials file is never read.
+        let empty = |k: &str| k == "username";
+        assert!(
+            secret_needed(
+                lookup(&[("credentials_file_path", &plain)]),
+                empty,
+                none,
+                wb
+            )
+            .unwrap_err()
+            .contains("username is empty")
+        );
         // A credentials file plus a password in the environment: Workbench misreads it.
         assert!(
             ask(&[("credentials_file_path", &plain)], &|v| v

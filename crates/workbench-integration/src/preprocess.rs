@@ -160,10 +160,7 @@ fn spreadsheet_to_csv(path: &Path, worksheet: Option<&str>) -> Result<String> {
                     // Drupal date fields read `yyyy-mm-dd`), with the time only when it has one.
                     // A duration (`[h]:mm`) is a span, not a date.
                     Data::DateTime(d) if d.is_duration() => match d.as_duration() {
-                        Some(span) => {
-                            let secs = span.num_seconds();
-                            format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
-                        }
+                        Some(span) => duration_text(span.num_seconds()),
                         None => cell.to_string(),
                     },
                     Data::DateTime(d) => match cell.as_datetime() {
@@ -343,8 +340,26 @@ fn capture(mut cmd: Command) -> Result<String> {
     );
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
+/// A span of seconds as `h:mm:ss`; a negative one (1904-based workbooks) as `-h:mm:ss`.
+fn duration_text(secs: i64) -> String {
+    let sign = if secs < 0 { "-" } else { "" };
+    let secs = secs.unsigned_abs();
+    format!(
+        "{sign}{}:{:02}:{:02}",
+        secs / 3600,
+        secs / 60 % 60,
+        secs % 60
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn negative_durations_keep_one_sign() {
+        assert_eq!(super::duration_text(-5400), "-1:30:00");
+        assert_eq!(super::duration_text(37 * 3600 + 5), "37:00:05");
+    }
+
     /// A real workbook (made with openpyxl): the named worksheet, a date, a comma, a number.
     #[test]
     fn spreadsheets_convert_like_a_person_would_type_them() {
