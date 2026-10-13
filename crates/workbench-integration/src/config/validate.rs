@@ -414,7 +414,9 @@ const INPUT_PATHS: &[&str] = &["input_dir", "input_csv"];
 /// Settings Workbench's docs still list but its code no longer reads, and what replaced them.
 fn retired_setting(key: &str) -> Option<&'static str> {
     Some(match key {
-        "strict_check" => "Workbench no longer reads this. Use perform_soft_checks (its opposite).",
+        "strict_check" => {
+            "Workbench no longer reads this. Use perform_soft_checks: true in place of strict_check: false."
+        }
         "exit_on_first_missing_file_during_check" => {
             "Workbench no longer reads this. Use perform_soft_checks to keep --check going."
         }

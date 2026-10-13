@@ -61,11 +61,11 @@
     },
     "export_file_media_use_term_id": { "shape": "url", "group": "Export", "description": "Media use term of the files to export." },
     "media_types": { "shape": "map_of_lists", "group": "Media", "description": "Media types and the file extensions each one takes." },
-    "media_fields": { "shape": "map", "group": "Media", "description": "Extra media field settings for custom media types." },
+    "media_fields": { "shape": "map", "group": "Media", "description": "Not used by Workbench. Use media_type_file_fields." },
     "media_type_file_fields": { "shape": "map", "group": "Media", "description": "The file field on each media type." },
     "media_track_file_fields": { "shape": "map", "group": "Media", "description": "The track (caption) file field on each media type that has one." },
     "oembed_providers": { "shape": "map_of_lists", "group": "Media", "description": "oEmbed media types and the URL prefixes each one accepts." },
-    "preprocessors": { "shape": "map", "group": "Scripts", "description": "Scripts applied to CSV values before they are sent to Drupal." },
+    "preprocessors": { "shape": "list_of_one_key_maps", "group": "Scripts", "description": "Scripts applied to CSV values before they are sent to Drupal.", "default": null },
 
     "id_field": {
       "group": "Input",
@@ -104,7 +104,7 @@
       "group": "Task",
       "description": "Keep going when a file named in the CSV isn't on disk."
     },
-    "perform_soft_checks": { "group": "Task", "description": "Let --check report every problem it finds instead of stopping at the first." },
+    "perform_soft_checks": { "group": "Task", "description": "Let --check log missing files, parent order, extension and EDTF errors and keep going." },
     "nodes_only": { "group": "Task", "description": "Create the nodes but not their media." },
 
     "log_file_path": {
@@ -143,7 +143,7 @@
       "group": "Rollback",
       "description": "Folder for rollback CSVs."
     },
-    "rollback_file_include_node_info": { "group": "Rollback", "description": "Add title, field_member_of and file columns to the rollback CSV." },
+    "rollback_file_include_node_info": { "group": "Rollback", "description": "Add the CSV ID, title, field_member_of and file columns to the rollback CSV." },
 
     "fixity_algorithm": {
       "shape": "nullable_enum",
@@ -162,13 +162,13 @@
     "http_retry_on_status_codes": { "group": "HTTP", "description": "HTTP status codes that are retried. Rarely needs changing." },
     "http_retry_allowed_methods": { "group": "HTTP", "description": "HTTP methods that are retried. Rarely needs changing." },
     "http_max_retries": { "group": "HTTP", "description": "How many times to retry a failed request. 0 turns retries off." },
-    "http_backoff_factor": { "group": "HTTP", "unit": "seconds", "description": "Sets how long Workbench waits between retries." },
+    "http_backoff_factor": { "group": "HTTP", "unit": "seconds", "description": "Sets how long Workbench waits between retries.", "shape": "decimal" },
     "http_cache_storage_expire_after": { "group": "HTTP", "unit": "seconds", "description": "How long cached responses are kept." },
     "enable_http_cache": { "group": "HTTP", "description": "Cache responses on this machine. Turn off while troubleshooting." },
     "allow_redirects": { "group": "HTTP", "description": "Follow HTTP redirects from the server." },
     "secure_ssl_only": { "group": "HTTP", "description": "Require valid SSL certificates. Turn off only for test servers." },
     "user_agent": { "group": "HTTP", "description": "User-Agent header sent with every request." },
-    "adaptive_pause_threshold": { "shape": "decimal", "group": "HTTP", "unit": "× average", "description": "How much slower than average a response must be before Workbench pauses." },
+    "adaptive_pause_threshold": { "shape": "decimal", "group": "HTTP", "unit": "× average", "description": "How many times slower than average a response must be before adaptive_pause kicks in (rounded down)." },
     "redirect_status_code": { "group": "HTTP", "description": "HTTP status code of redirects made by create_redirect." },
 
     "csv_value_templates": {
@@ -196,7 +196,7 @@
     },
     "paged_content_from_directories_parents_exist": { "group": "Paged content", "description": "The parents of pages created from subdirectories already exist in Drupal." },
     "paged_content_sequence_separator": { "group": "Paged content", "description": "Character between a page file's name and its sequence number." },
-    "paged_content_page_weight_multiplier": { "shape": "string", "group": "Paged content", "description": "Multiplies page sequence numbers to space out their weights." },
+    "paged_content_page_weight_multiplier": { "shape": "integer", "group": "Paged content", "description": "Multiplies page sequence numbers to space out their weights.", "default": 1 },
     "paged_content_ignore_files": { "group": "Paged content", "description": "File names or * patterns to skip when scanning page folders." },
 
     "export_csv_term_mode": {
@@ -251,7 +251,7 @@
     "standalone_media_url": { "group": "Advanced", "description": "Your Drupal has \"Standalone media URL\" turned on." },
     "require_entity_reference_views": { "group": "Advanced", "description": "Require a View for entity reference fields that use one. Turn off to skip." },
     "drupal_filesystem": { "group": "Advanced", "description": "Drupal file scheme for new files. Only Drupal 9.1 and older need it." },
-    "recovery_mode_starting_from_node_id": { "group": "Advanced", "description": "Last node created before an interrupted create. The app sets this when you resume." },
+    "recovery_mode_starting_from_node_id": { "group": "Advanced", "description": "Last node created before an interrupted create. The app sets this when you resume.", "shape": "integer", "default": null },
     "include_password_in_rollback_config_file": { "group": "Rollback", "description": "Copy the password into the rollback config." },
     "remove_password_from_config_file": { "group": "Rollback", "description": "Remove the password from this config once Workbench has read it." },
 
@@ -267,7 +267,7 @@
       "description": "Delete a node's media when the delete task removes the node."
     },
     "log_response_time": {
-      "description": "Log requests slower than the average of the last 20. For debugging."
+      "description": "Log each request's response time and the running average. For debugging."
     },
     "log_response_time_sample": {
       "description": "Log the response times the adaptive pause averages over."
@@ -294,25 +294,30 @@
       "description": "Add the source file and line number to each log entry."
     },
     "progress_bar": {
-      "description": "Show a progress bar instead of one line of output per row."
+      "description": "Show a progress bar instead of one line of output per row.",
+      "group": "Logging"
     },
     "show_percentage_of_csv_input_processed": {
-      "description": "Show how much of the CSV is done on each line of output."
+      "description": "Show how much of the CSV is done on each line of output.",
+      "group": "Logging"
     },
     "prompt_user_before_delete_task": {
-      "description": "Ask for confirmation before a delete task starts."
+      "description": "Ask for confirmation before a delete task starts.",
+      "group": "Prompts"
     },
     "use_node_title_for_media": {
-      "description": "Name media after their parent node's title."
+      "description": "Not used by Workbench. Use use_node_title_for_media_title."
     },
     "use_nid_in_media_title": {
       "description": "Name media after their parent's node ID, as \"123-Original File\"."
     },
     "use_node_title_for_media_title": {
-      "description": "Name media after their parent node's title (trimmed to 255 characters)."
+      "description": "Name media after their parent node's title."
     },
     "field_for_remote_filename": {
-      "description": "CSV column whose value names files downloaded from a URL."
+      "description": "CSV column whose value names files downloaded from a URL.",
+      "shape": "string",
+      "default": null
     },
     "remote_file_cookie_name": {
       "description": "Session cookie name sent when downloading remote files."
@@ -324,7 +329,9 @@
       "description": "Include each file's parent folder name in the stored file name."
     },
     "field_for_media_title": {
-      "description": "CSV column whose value becomes the media title."
+      "description": "CSV column whose value becomes the media title.",
+      "shape": "string",
+      "default": null
     },
     "delete_tmp_upload": {
       "description": "Delete the temporary copy of a remote file once its media exists."
@@ -345,10 +352,12 @@
       "description": "Only use parent IDs recorded during this run, not earlier sessions."
     },
     "ignore_duplicate_parent_ids": {
-      "description": "Ignore duplicate parent IDs in the CSV ID map instead of warning."
+      "description": "When a parent ID is in the CSV ID map more than once, use the newest entry."
     },
     "media_type_by_media_use": {
-      "description": "Media type to use for each media use term, for additional files."
+      "description": "Media type to use for each media use term, for additional files.",
+      "shape": "list_of_one_key_maps",
+      "default": null
     },
     "exit_on_recovery_mode_parent_lookup_failure": {
       "description": "Stop a resumed create when a parent can't be found."
@@ -438,8 +447,8 @@
       "default": null,
       "description": "Give every row the same value for a field."
     },
-    "csv_row_filters": { "shape": "list_of_one_key_maps", "group": "Input", "default": null, "description": "Only process rows that match these field:is:value or field:isnot:value filters." },
-    "csv_rows_to_process": { "shape": "list_of_strings", "group": "Input", "default": null, "description": "Only process the rows with these IDs." },
+    "csv_row_filters": { "shape": "list_of_strings", "group": "Input", "default": null, "description": "Only process rows matching filters written field:is:value or field:isnot:value." },
+    "csv_rows_to_process": { "shape": "yaml", "group": "Input", "default": null, "description": "Only process the rows with these IDs, listed here or in a file." },
     "csv_start_row_skip": { "shape": "integer", "group": "Input", "default": null, "description": "First row of a range to skip." },
     "csv_stop_row_skip": { "shape": "integer", "group": "Input", "default": null, "description": "Last row of a range to skip." },
     "additional_files": { "shape": "list_of_one_key_maps", "group": "Media", "default": null, "description": "CSV columns that create extra media, each with its media use term." },
@@ -450,9 +459,9 @@
       "description": "Text format for each formatted text field."
     },
     "media_types_override": { "shape": "map_of_lists", "group": "Media", "default": null, "description": "Media type to use for a file extension, overriding the default." },
-    "mimetype_extensions": { "shape": "list_of_one_key_maps", "group": "Media", "default": null, "description": "File extension for MIME types the default mapping gets wrong." },
+    "mimetype_extensions": { "shape": "map", "group": "Media", "default": null, "description": "File extension for MIME types the default mapping gets wrong." },
     "extensions_to_mimetypes": {
-      "shape": "list_of_one_key_maps",
+      "shape": "map",
       "group": "Media",
       "default": null,
       "description": "MIME type for file extensions the default mapping gets wrong."
@@ -600,13 +609,13 @@
       "description": "Structure of paragraph (entity reference revisions) fields in the input CSV."
     },
     "field_viewer_override_models": {
-      "shape": "list_of_strings",
+      "shape": "map_of_lists",
       "group": "Advanced",
       "default": null,
       "description": "Islandora Display term to set for each model."
     },
     "field_viewer_override_extensions": {
-      "shape": "list_of_strings",
+      "shape": "map_of_lists",
       "group": "Advanced",
       "default": null,
       "description": "Islandora Display term to set for each file extension."
@@ -632,7 +641,7 @@
       "browse": "file",
       "group": "Advanced",
       "default": null,
-      "description": "File that records a successful --check."
+      "description": "Lock file --check writes; a real run needs it, then deletes it."
     },
     "path_to_python": {
       "shape": "file_path",

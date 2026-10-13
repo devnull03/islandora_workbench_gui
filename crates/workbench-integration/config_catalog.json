@@ -108,7 +108,7 @@
       "key": "perform_soft_checks",
       "shape": "boolean",
       "default": false,
-      "description": "Let --check report every problem it finds instead of stopping at the first.",
+      "description": "Let --check log missing files, parent order, extension and EDTF errors and keep going.",
       "group": "Task",
       "required": false
     },
@@ -203,7 +203,7 @@
       "key": "log_response_time",
       "shape": "boolean",
       "default": false,
-      "description": "Log requests slower than the average of the last 20. For debugging.",
+      "description": "Log each request's response time and the running average. For debugging.",
       "group": "Logging",
       "required": false
     },
@@ -211,7 +211,7 @@
       "key": "adaptive_pause_threshold",
       "shape": "decimal",
       "default": 2,
-      "description": "How much slower than average a response must be before Workbench pauses.",
+      "description": "How many times slower than average a response must be before adaptive_pause kicks in (rounded down).",
       "group": "HTTP",
       "required": false,
       "unit": "× average"
@@ -285,7 +285,7 @@
       "shape": "boolean",
       "default": false,
       "description": "Show a progress bar instead of one line of output per row.",
-      "group": "Advanced",
+      "group": "Logging",
       "required": false
     },
     {
@@ -293,7 +293,7 @@
       "shape": "boolean",
       "default": false,
       "description": "Show how much of the CSV is done on each line of output.",
-      "group": "Input",
+      "group": "Logging",
       "required": false
     },
     {
@@ -301,7 +301,7 @@
       "shape": "boolean",
       "default": false,
       "description": "Ask for confirmation before a delete task starts.",
-      "group": "Advanced",
+      "group": "Prompts",
       "required": false
     },
     {
@@ -388,7 +388,7 @@
       "key": "use_node_title_for_media",
       "shape": "boolean",
       "default": false,
-      "description": "Name media after their parent node's title.",
+      "description": "Not used by Workbench. Use use_node_title_for_media_title.",
       "group": "Media",
       "required": false
     },
@@ -404,14 +404,14 @@
       "key": "use_node_title_for_media_title",
       "shape": "boolean",
       "default": false,
-      "description": "Name media after their parent node's title (trimmed to 255 characters).",
+      "description": "Name media after their parent node's title.",
       "group": "Media",
       "required": false
     },
     {
       "key": "field_for_remote_filename",
-      "shape": "boolean",
-      "default": false,
+      "shape": "string",
+      "default": null,
       "description": "CSV column whose value names files downloaded from a URL.",
       "group": "Advanced",
       "required": false
@@ -442,8 +442,8 @@
     },
     {
       "key": "field_for_media_title",
-      "shape": "boolean",
-      "default": false,
+      "shape": "string",
+      "default": null,
       "description": "CSV column whose value becomes the media title.",
       "group": "Media",
       "required": false
@@ -571,7 +571,7 @@
       "key": "rollback_file_include_node_info",
       "shape": "boolean",
       "default": false,
-      "description": "Add title, field_member_of and file columns to the rollback CSV.",
+      "description": "Add the CSV ID, title, field_member_of and file columns to the rollback CSV.",
       "group": "Rollback",
       "required": false
     },
@@ -627,7 +627,7 @@
     },
     {
       "key": "http_backoff_factor",
-      "shape": "integer",
+      "shape": "decimal",
       "default": 1,
       "description": "Sets how long Workbench waits between retries.",
       "group": "HTTP",
@@ -731,8 +731,8 @@
     },
     {
       "key": "preprocessors",
-      "shape": "map",
-      "default": {},
+      "shape": "list_of_one_key_maps",
+      "default": null,
       "description": "Scripts applied to CSV values before they are sent to Drupal.",
       "group": "Scripts",
       "required": false
@@ -747,8 +747,8 @@
     },
     {
       "key": "paged_content_page_weight_multiplier",
-      "shape": "string",
-      "default": "1",
+      "shape": "integer",
+      "default": 1,
       "description": "Multiplies page sequence numbers to space out their weights.",
       "group": "Paged content",
       "required": false
@@ -794,7 +794,7 @@
         "fits_technical_metadata": "field_media_file",
         "remote_video": "field_media_oembed_video"
       },
-      "description": "Extra media field settings for custom media types.",
+      "description": "Not used by Workbench. Use media_type_file_fields.",
       "group": "Media",
       "required": false
     },
@@ -994,7 +994,7 @@
       "key": "ignore_duplicate_parent_ids",
       "shape": "boolean",
       "default": true,
-      "description": "Ignore duplicate parent IDs in the CSV ID map instead of warning.",
+      "description": "When a parent ID is in the CSV ID map more than once, use the newest entry.",
       "group": "Advanced",
       "required": false
     },
@@ -1057,8 +1057,8 @@
     },
     {
       "key": "media_type_by_media_use",
-      "shape": "boolean",
-      "default": false,
+      "shape": "list_of_one_key_maps",
+      "default": null,
       "description": "Media type to use for each media use term, for additional files.",
       "group": "Media",
       "required": false
@@ -1091,8 +1091,8 @@
     },
     {
       "key": "recovery_mode_starting_from_node_id",
-      "shape": "boolean",
-      "default": false,
+      "shape": "integer",
+      "default": null,
       "description": "Last node created before an interrupted create. The app sets this when you resume.",
       "group": "Advanced",
       "required": false
@@ -1330,17 +1330,17 @@
     },
     {
       "key": "csv_row_filters",
-      "shape": "list_of_one_key_maps",
+      "shape": "list_of_strings",
       "default": null,
-      "description": "Only process rows that match these field:is:value or field:isnot:value filters.",
+      "description": "Only process rows matching filters written field:is:value or field:isnot:value.",
       "group": "Input",
       "required": false
     },
     {
       "key": "csv_rows_to_process",
-      "shape": "list_of_strings",
+      "shape": "yaml",
       "default": null,
-      "description": "Only process the rows with these IDs.",
+      "description": "Only process the rows with these IDs, listed here or in a file.",
       "group": "Input",
       "required": false
     },
@@ -1386,7 +1386,7 @@
     },
     {
       "key": "mimetype_extensions",
-      "shape": "list_of_one_key_maps",
+      "shape": "map",
       "default": null,
       "description": "File extension for MIME types the default mapping gets wrong.",
       "group": "Media",
@@ -1394,7 +1394,7 @@
     },
     {
       "key": "extensions_to_mimetypes",
-      "shape": "list_of_one_key_maps",
+      "shape": "map",
       "default": null,
       "description": "MIME type for file extensions the default mapping gets wrong.",
       "group": "Media",
@@ -1609,7 +1609,7 @@
     },
     {
       "key": "field_viewer_override_models",
-      "shape": "list_of_strings",
+      "shape": "map_of_lists",
       "default": null,
       "description": "Islandora Display term to set for each model.",
       "group": "Advanced",
@@ -1617,7 +1617,7 @@
     },
     {
       "key": "field_viewer_override_extensions",
-      "shape": "list_of_strings",
+      "shape": "map_of_lists",
       "default": null,
       "description": "Islandora Display term to set for each file extension.",
       "group": "Advanced",
@@ -1662,7 +1662,7 @@
       "key": "check_lock_file_path",
       "shape": "file_path",
       "default": null,
-      "description": "File that records a successful --check.",
+      "description": "Lock file --check writes; a real run needs it, then deletes it.",
       "group": "Advanced",
       "required": false,
       "browse": "file"

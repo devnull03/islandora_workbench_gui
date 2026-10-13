@@ -417,3 +417,18 @@ inclusive). Units were added where a number needs one (`characters`, `seconds`),
 seconds. Every setting in the docs' table is in the catalogue except three Workbench no longer
 reads (`strict_check`, `exit_on_first_missing_file_during_check`, `drupal_8`); a config that still
 uses one gets a warning naming its replacement instead of "check the spelling".
+
+**M7 audit fixes.** Checked against Workbench's code, seven descriptions were wrong and are
+corrected: `log_response_time` logs every request (the "slower than average" filter is
+adaptive_pause's), `use_node_title_for_media` and `media_fields` are read by nothing upstream
+and now say so, `use_node_title_for_media_title` does not truncate, `perform_soft_checks` only
+softens four kinds of check, `ignore_duplicate_parent_ids` uses the newest map entry, and
+`adaptive_pause_threshold` only matters with `adaptive_pause` and is rounded down. Nine shapes
+the generator had inferred from a `False`/`{}`/`"1"` default are fixed to what the code reads:
+`csv_row_filters` (strings `field:is:value`), `mimetype_extensions` / `extensions_to_mimetypes`
+(maps), `field_viewer_override_models` / `_extensions` (map of lists), `preprocessors` and
+`media_type_by_media_use` (lists of one-key maps), `recovery_mode_starting_from_node_id` and
+`paged_content_page_weight_multiplier` (integers), `field_for_media_title` /
+`field_for_remote_filename` (strings), `http_backoff_factor` (decimal); `csv_rows_to_process`
+takes YAML because it may be a list or a file path. Each matches the docs' own examples.
+Console-output settings moved to Logging, the delete prompt to Prompts.
