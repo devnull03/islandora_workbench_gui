@@ -322,6 +322,40 @@ fn link_saved_child(
     Ok(())
 }
 
+/// A file name for a label: lowercase `[a-z0-9_-]`, runs of anything else collapsed to one
+/// `_`. The label is free text in the header, so it can hold `../`, `:`, or nothing at all;
+/// none of that may reach the file system (plan 1.8, P0-8).
+fn slug(label: &str) -> String {
+    let mut slug = String::new();
+    for c in label.trim().chars().flat_map(char::to_lowercase) {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            slug.push(c);
+        } else if !slug.ends_with('_') {
+            slug.push('_');
+        }
+    }
+    let slug = slug.trim_matches(['_', '-']);
+    if slug.is_empty() {
+        "new_config".to_string()
+    } else {
+        slug.to_string()
+    }
+}
+
+/// Where a never-saved draft is written: `<dir>/<slug>.yml`, or `<slug>-2.yml`, `-3`, … when
+/// that file already exists. A new draft must never overwrite a config it did not load — two
+/// drafts labelled the same used to replace each other silently.
+fn new_config_path(dir: &std::path::Path, label: &str) -> PathBuf {
+    let stem = slug(label);
+    let mut candidate = dir.join(format!("{stem}.yml"));
+    let mut n = 2;
+    while candidate.exists() {
+        candidate = dir.join(format!("{stem}-{n}.yml"));
+        n += 1;
+    }
+    candidate
+}
+
 /// The config library's description for `path`, if the library knows the file.
 fn library_description(path: &std::path::Path, cx: &App) -> Option<String> {
     let file_path = path.to_string_lossy().to_string();
@@ -776,12 +810,7 @@ impl ConfigBuilder {
                     .get("workbench_path")
                     .map(|v| format!("{}/g/config", v.text()))
             })?;
-        let stem = if self.draft.label.trim().is_empty() {
-            "new_config".to_string()
-        } else {
-            self.draft.label.trim().replace(' ', "_").to_lowercase()
-        };
-        Some(PathBuf::from(dir).join(format!("{stem}.yml")))
+        Some(new_config_path(std::path::Path::new(&dir), &self.draft.label))
     }
 
     /// Save, asking first when the file on disk has comments the save would drop (plan Q8:
@@ -1260,7 +1289,7 @@ mod tests {
     // shadow the one this needs.
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
-        INTEGER_PATTERN, discarded_draft, ensure_required_settings,
+        INTEGER_PATTERN, discarded_draft, ensure_required_settings, new_config_path, slug,
     };
     use serde_yaml::Value;
 
@@ -1350,6 +1379,31 @@ mod tests {
         assert!(fresh.is_blank());
         assert!(fresh.values.contains_key("task"));
 
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// P0-8: a label never reaches the file system unsanitised.
+    #[test]
+    fn labels_become_safe_file_names() {
+        assert_eq!(slug("Main batch items"), "main_batch_items");
+        assert_eq!(slug("../../etc/passwd"), "etc_passwd");
+        assert_eq!(slug("a:b"), "a_b");
+        assert_eq!(slug("  "), "new_config");
+        assert_eq!(slug("Übersicht — pages"), "bersicht_pages");
+        assert_eq!(slug("create-items_v2"), "create-items_v2");
+    }
+
+    /// P0-8: two new drafts with the same label get two files.
+    #[test]
+    fn a_new_config_never_overwrites_an_existing_file() {
+        let dir = std::env::temp_dir().join(format!("builder-slug-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = new_config_path(&dir, "Pages");
+        assert_eq!(first, dir.join("pages.yml"));
+        std::fs::write(&first, "task: create\n").unwrap();
+        assert_eq!(new_config_path(&dir, "Pages"), dir.join("pages-2.yml"));
+        std::fs::write(dir.join("pages-2.yml"), "task: create\n").unwrap();
+        assert_eq!(new_config_path(&dir, "pages"), dir.join("pages-3.yml"));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

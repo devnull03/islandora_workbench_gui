@@ -315,3 +315,8 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   its required settings (the old Discard emptied the form, `task` included); it is enabled only
   while the draft may differ from the file. Q8's warning lands here too: the first save over a
   loaded file that has comments asks "Save over <name>?" before dropping them.
+- [x] **1.8 (P0-8)** A new config's file name is `slug(label)`: lowercase `[a-z0-9_-]`, anything
+  else collapsed to `_`, empty → `new_config`, so `../../x` or `a:b` cannot escape or break the
+  library folder. An existing file is never overwritten by a draft that did not load it: the
+  name gets `-2`, `-3`, …. The plan's "Save as…" path prompt is not built — the suffix already
+  removes the overwrite, and a prompt is one more modal on the most common action.
