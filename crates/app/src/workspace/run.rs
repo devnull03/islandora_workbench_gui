@@ -448,6 +448,22 @@ impl Workspace {
             rollback_config: None,
             output_csv: None,
         });
+        // Component Spec: a toast for run outcomes only — never validation, never saves.
+        if let Some(run) = self.last_run.as_ref()
+            && !matches!(
+                run.action,
+                WorkbenchAction::PrintConfig | WorkbenchAction::CsvTemplate
+            )
+        {
+            let message = super::run_controls::last_run_summary(run);
+            self.pending_toast = Some(if run.cancelled {
+                gpui_component::notification::Notification::warning(message)
+            } else if run.succeeded {
+                gpui_component::notification::Notification::success(message)
+            } else {
+                gpui_component::notification::Notification::error(message)
+            });
+        }
         cx.notify();
 
         cx.spawn(async move |this, cx| {

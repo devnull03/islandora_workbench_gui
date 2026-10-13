@@ -203,6 +203,13 @@ fn open_config_builder_with_ancestors(
     ancestors: Vec<PathBuf>,
     cx: &mut App,
 ) {
+    // Deferred: Edit and New are clicked inside the main window's update, and that window
+    // cannot be updated again from within it — so neither focusing it (a docked builder) nor
+    // docking into it would work.
+    cx.defer(move |cx| open_now(path, ancestors, cx));
+}
+
+fn open_now(path: Option<PathBuf>, ancestors: Vec<PathBuf>, cx: &mut App) {
     if let Some(handle) = path.as_deref().and_then(|path| {
         cx.global::<ConfigBuilderWindows>()
             .find(path)
@@ -221,9 +228,11 @@ fn open_config_builder_with_ancestors(
     }
     let depth = ancestors.len();
     let key = path.clone();
+    let with_yaml = AppSettings::bool_or("builder_show_yaml", true, cx);
     open_builder_window(
         key,
         depth,
+        with_yaml,
         move |window, cx| ConfigBuilder::new(path, ancestors, window, cx),
         cx,
     )
@@ -235,12 +244,12 @@ fn open_config_builder_with_ancestors(
 pub(crate) fn open_builder_window(
     key: Option<PathBuf>,
     depth: usize,
+    with_yaml: bool,
     build: impl FnOnce(&mut Window, &mut Context<ConfigBuilder>) -> ConfigBuilder + 'static,
     cx: &mut App,
 ) -> Task<Option<Entity<ConfigBuilder>>> {
-    // The starting width has to agree with whether the YAML panel is showing, or the window
-    // opens the wrong size and the first toggle corrects it with a visible jump.
-    let with_yaml = AppSettings::bool_or("builder_show_yaml", true, cx);
+    // The starting width has to agree with whether the YAML panel is showing (`with_yaml`),
+    // or the window opens the wrong size and the first toggle corrects it with a visible jump.
     // The editable side opens at the size the user last left a builder at, else the spec's
     // 800×760 (§02). YAML is an additional right-hand surface, never width stolen from the
     // form the user is trying to edit.
@@ -271,6 +280,11 @@ pub(crate) fn open_builder_window(
         let mut view = None;
         let opened = cx.open_window(options, |window, cx| {
             let builder = cx.new(|cx| build(window, cx));
+            let weak = builder.downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
+                weak.upgrade()
+                    .is_none_or(|builder| may_close_builder(&builder, window, cx))
+            });
             view = Some(builder.clone());
             cx.new(|cx| Root::new(builder, window, cx))
         });
@@ -286,11 +300,19 @@ pub(crate) fn open_builder_window(
 }
 
 pub struct ConfigBuilder {
+    /// The profile active when this builder opened: its library gets the entry on save.
+    pub(crate) profile: String,
     /// Where this builder is shown: its own window, or the main window's right dock.
     pub(crate) host: BuilderHost,
     /// While a floating builder sits over the main window's right edge: when it got there, so
     /// it docks once it has been still there for a moment (`dock::window_moved`).
     pub(crate) snap: Option<Instant>,
+    /// This builder's window bounds at the last bounds event, to tell a move from a resize.
+    pub(crate) last_bounds: Option<Bounds<Pixels>>,
+    /// The pending "still over the edge?" check; replacing it cancels the last one.
+    pub(crate) snap_task: Option<Task<()>>,
+    /// Focused when the builder opens, so its shortcuts work before anything is clicked.
+    focus_handle: FocusHandle,
     pub(crate) draft: ConfigDraft,
     /// Existing config that owns this draft when it was opened via “Add under”.
     pub(crate) parent_path: Option<PathBuf>,
@@ -586,7 +608,26 @@ impl ConfigBuilder {
             });
             return Ok(());
         }
-        edit_config_file(owner, |draft| edit(draft, base))
+        let result = edit_config_file(owner, |draft| edit(draft, base));
+        ConfigFilesChanged::bump(cx);
+        result
+    }
+}
+
+/// Bumped whenever the builder writes a config file, so views that summarise configs (the main
+/// window's step 2) know to read them again instead of checking the disk every frame.
+#[derive(Default)]
+pub struct ConfigFilesChanged(pub u64);
+
+impl Global for ConfigFilesChanged {}
+
+impl ConfigFilesChanged {
+    pub fn generation(cx: &App) -> u64 {
+        cx.try_global::<Self>().map_or(0, |changed| changed.0)
+    }
+
+    fn bump(cx: &mut App) {
+        cx.default_global::<Self>().0 += 1;
     }
 }
 
@@ -718,6 +759,7 @@ impl ConfigBuilder {
             .unwrap_or_default();
         let loaded_numbers = numeric_keys(&draft);
         let snapshot = BuilderSnapshot {
+            profile: AppSettings::get(cx).active_profile.clone(),
             draft,
             description,
             ancestors,
@@ -746,6 +788,7 @@ impl ConfigBuilder {
     /// (`dock`). The widgets are rebuilt from the draft, which is the source of truth anyway.
     pub(crate) fn snapshot(&self) -> BuilderSnapshot {
         BuilderSnapshot {
+            profile: self.profile.clone(),
             draft: self.draft.clone(),
             description: self.description.clone(),
             ancestors: self.ancestors.clone(),
@@ -763,6 +806,7 @@ impl ConfigBuilder {
         cx: &mut Context<Self>,
     ) -> Self {
         let BuilderSnapshot {
+            profile,
             draft,
             description,
             ancestors,
@@ -842,12 +886,18 @@ impl ConfigBuilder {
         ];
 
         let problems = validate_draft(&draft, cx);
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
         Self {
+            profile,
             host,
             draft,
             description,
             parent_path: ancestors.last().cloned(),
             snap: None,
+            last_bounds: None,
+            snap_task: None,
+            focus_handle,
             ancestors,
             problems,
             inputs: HashMap::new(),
@@ -1445,6 +1495,8 @@ impl ConfigBuilder {
         let description = self.description.clone();
 
         // Add or update the library entry, matched on the file it points at.
+        // In the profile the builder was opened under, even if another is active now.
+        let profile = self.profile.clone();
         AppSettings::update(cx, |s| {
             let entry = TaskConfig {
                 label: label.clone().into(),
@@ -1452,14 +1504,12 @@ impl ConfigBuilder {
                 file_path: file_path.clone(),
                 description: description.clone().into(),
             };
-            match s.task_configs.iter_mut().find(|c| c.file_path == file_path) {
-                Some(existing) => *existing = entry,
-                None => s.task_configs.push(entry),
-            }
+            s.upsert_library_entry(&profile, entry);
         });
 
         let was_new = self.draft.path.is_none();
         self.draft.mark_saved(&path);
+        ConfigFilesChanged::bump(cx);
         if was_new {
             let view = cx.entity().downgrade();
             cx.global_mut::<ConfigBuilderWindows>().register(
@@ -1502,6 +1552,7 @@ impl Render for ConfigBuilder {
             .size_full()
             .app_font(cx)
             .key_context("ConfigBuilder")
+            .track_focus(&self.focus_handle)
             .on_action(cx.listener(|this, _: &ToggleBuilderDock, _, cx| {
                 this.toggle_dock(cx);
                 cx.stop_propagation();
@@ -1670,7 +1721,17 @@ impl ConfigBuilder {
             save,
             depth,
         } = self.title_parts(cx);
+        // Linux draws its own ✕ here, which would otherwise close without asking.
+        let this = cx.entity().downgrade();
         TitleBar::new()
+            .on_close_window(move |_, window, cx| {
+                if this
+                    .upgrade()
+                    .is_none_or(|builder| may_close_builder(&builder, window, cx))
+                {
+                    window.remove_window();
+                }
+            })
             .child(
                 h_flex()
                     .flex_1()
@@ -1884,6 +1945,30 @@ fn locked_source(key: &str, in_file: Option<&Value>) -> String {
         "input_csv" => "Processed CSV from step 1".into(),
         _ => "The app".into(),
     }
+}
+
+/// Whether a builder window may close now. With unsaved edits it asks first, and closes the
+/// window itself if the user agrees.
+fn may_close_builder(builder: &Entity<ConfigBuilder>, window: &mut Window, cx: &mut App) -> bool {
+    if !builder.read(cx).chrome.is_dirty() {
+        return true;
+    }
+    let title = ui_title(&builder.read(cx).draft);
+    let builder = builder.clone();
+    ui::confirm_dialog(
+        window,
+        cx,
+        format!("Close {title} without saving?"),
+        "Your edits since the last save are lost. The file on disk is not changed.",
+        "Close without saving",
+        move |window, cx| {
+            builder.update(cx, |builder, _| {
+                builder.chrome.save = BuilderTitleSaveState::Clean;
+            });
+            window.remove_window();
+        },
+    );
+    false
 }
 
 /// A draft's name as the user sees it: its label, else its file's name, else "New config".

@@ -57,6 +57,7 @@ pub(crate) enum BuilderHost {
 
 /// Everything a builder holds that is not a widget.
 pub(crate) struct BuilderSnapshot {
+    pub(crate) profile: String,
     pub(crate) draft: ConfigDraft,
     pub(crate) description: String,
     pub(crate) ancestors: Vec<PathBuf>,
@@ -75,6 +76,29 @@ pub struct BuilderDock {
 impl Global for BuilderDock {}
 
 impl BuilderDock {
+    /// The main window and its builder pane, while the main window is open.
+    pub fn main(cx: &App) -> Option<(AnyWindowHandle, Entity<BuilderPane>)> {
+        Self::get(cx)
+    }
+
+    /// The main window closed: forget it, and drop the docked builder with it, so nothing
+    /// tries to dock into a window that is gone or edits a builder nobody can see.
+    pub fn uninstall(cx: &mut App) {
+        if let Some(pane) = cx
+            .try_global::<BuilderDock>()
+            .and_then(|dock| dock.pane.as_ref()?.upgrade())
+        {
+            pane.update(cx, |pane, cx| {
+                pane.docked = None;
+                pane.floated = None;
+                pane._floated_release = None;
+                pane.snap_preview = None;
+                cx.notify();
+            });
+        }
+        cx.set_global(BuilderDock::default());
+    }
+
     fn get(cx: &App) -> Option<(AnyWindowHandle, Entity<BuilderPane>)> {
         let dock = cx.try_global::<BuilderDock>()?;
         Some((dock.window?, dock.pane.as_ref()?.upgrade()?))
@@ -366,7 +390,8 @@ pub(crate) fn dock(view: Entity<ConfigBuilder>, cx: &mut App) {
     let Some((main, pane)) = BuilderDock::get(cx) else {
         return;
     };
-    if view.read(cx).host == BuilderHost::Docked {
+    // Chain children always keep their own window (plan 5.7).
+    if view.read(cx).host == BuilderHost::Docked || !view.read(cx).ancestors.is_empty() {
         return;
     }
     if let Some(current) = pane.read(cx).docked.clone() {
@@ -377,7 +402,7 @@ pub(crate) fn dock(view: Entity<ConfigBuilder>, cx: &mut App) {
         .window_of(&view.downgrade());
     let snapshot = view.read(cx).snapshot();
     let key = snapshot.draft.path.clone();
-    let _ = main.update(cx, |_, window, cx| {
+    let docked_ok = main.update(cx, |_, window, cx| {
         let docked = cx.new(|cx| ConfigBuilder::restore(snapshot, BuilderHost::Docked, window, cx));
         cx.global_mut::<ConfigBuilderWindows>().register(
             key,
@@ -390,6 +415,10 @@ pub(crate) fn dock(view: Entity<ConfigBuilder>, cx: &mut App) {
         });
         window.activate_window();
     });
+    // The floating window goes only once its draft is safely in the dock.
+    if docked_ok.is_err() {
+        return;
+    }
     if let Some(floating) = floating {
         let _ = floating.update(cx, |_, window, _| window.remove_window());
     }
@@ -403,9 +432,11 @@ pub(crate) fn float(view: Entity<ConfigBuilder>, cx: &mut App) {
     let snapshot = view.read(cx).snapshot();
     let key = snapshot.draft.path.clone();
     let depth = snapshot.ancestors.len();
+    let with_yaml = snapshot.chrome.yaml_visible();
     let opening = open_builder_window(
         key,
         depth,
+        with_yaml,
         move |window, cx| ConfigBuilder::restore(snapshot, BuilderHost::Window, window, cx),
         cx,
     );
@@ -431,7 +462,8 @@ impl ConfigBuilder {
         let view = cx.entity();
         match self.host {
             BuilderHost::Docked => cx.defer(move |cx| float(view, cx)),
-            BuilderHost::Window => cx.defer(move |cx| dock(view, cx)),
+            BuilderHost::Window if self.ancestors.is_empty() => cx.defer(move |cx| dock(view, cx)),
+            BuilderHost::Window => {}
         }
     }
 
@@ -475,6 +507,19 @@ pub(crate) fn window_moved(
         return;
     };
     let bounds = window.bounds();
+    // Only a move arms the snap: a resize (or tiling a window beside the main one) changes
+    // the size too, and a maximized or chained window never docks.
+    let moved_only = this
+        .last_bounds
+        .replace(bounds)
+        .is_some_and(|last| last.size == bounds.size && last.origin != bounds.origin);
+    if !moved_only || window.is_maximized() || window.is_fullscreen() || !this.ancestors.is_empty()
+    {
+        if this.snap.take().is_some() {
+            pane.update(cx, |pane, cx| pane.set_snap_preview(None, cx));
+        }
+        return;
+    }
     let display = window.display(cx).map(|d| d.id());
     let main_state = main
         .update(cx, |_, main_window, cx| {
@@ -498,7 +543,7 @@ pub(crate) fn window_moved(
     let moved_at = Instant::now();
     this.snap = Some(moved_at);
     let view = cx.entity().downgrade();
-    cx.spawn(async move |_, cx| {
+    this.snap_task = Some(cx.spawn(async move |_, cx| {
         cx.background_executor().timer(SNAP_SETTLE).await;
         cx.update(|cx| {
             let Some(view) = view.upgrade() else {
@@ -510,18 +555,18 @@ pub(crate) fn window_moved(
             }
             dock(view, cx);
         });
-    })
-    .detach();
+    }));
 }
 
-/// The floating window's left edge is within [`SNAP_DISTANCE`] of the main window's right
-/// edge (either side of it), and the two overlap vertically.
+/// The floating window's left edge has been dragged over the main window's right edge — inside
+/// it, by up to [`SNAP_DISTANCE`] — and the two overlap vertically. Merely touching the edge
+/// (two windows tiled side by side) is not enough.
 fn over_right_edge(floating: Bounds<Pixels>, main: Bounds<Pixels>) -> bool {
     let edge = main.origin.x + main.size.width;
     let left = floating.origin.x;
     let vertical = floating.origin.y < main.origin.y + main.size.height
         && main.origin.y < floating.origin.y + floating.size.height;
-    vertical && left >= edge - SNAP_DISTANCE && left <= edge + SNAP_DISTANCE
+    vertical && left < edge && left >= edge - SNAP_DISTANCE
 }
 
 /// The share of the main window the dock will take, from its saved width, clamped as the
@@ -556,12 +601,15 @@ mod tests {
     fn snapping_needs_the_left_edge_at_the_right_edge() {
         let main = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(700.)));
         let at = |x: f32, y: f32| Bounds::new(point(px(x), px(y)), size(px(800.), px(600.)));
-        assert!(over_right_edge(at(1010., 50.), main));
+        assert!(over_right_edge(at(990., 50.), main));
         assert!(over_right_edge(at(980., 50.), main));
+        // Tiled exactly beside it, or just outside: not a drop.
+        assert!(!over_right_edge(at(1000., 50.), main));
+        assert!(!over_right_edge(at(1010., 50.), main));
         assert!(!over_right_edge(at(1100., 50.), main));
         assert!(!over_right_edge(at(500., 50.), main));
-        // Beside the window but entirely below it.
-        assert!(!over_right_edge(at(1000., 800.), main));
+        // Over the edge's line but entirely below the window.
+        assert!(!over_right_edge(at(990., 800.), main));
     }
 
     #[test]

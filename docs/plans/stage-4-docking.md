@@ -98,3 +98,21 @@ display.
   onto the edge shows the target and docks; ✕ with edits prompts and closes.
 - Not done: the run controls do not compress to a rail when the builder is docked — the
   workspace simply narrows (it already reflows to its minimum width).
+
+**M5 audit fixes (October 2026).**
+- Edit/New are clicked inside the main window's own update, where that window cannot be
+  updated again: opening is now deferred, so Edit on a docked file focuses it (it used to open
+  a second builder on the same file) and "Open the builder docked" takes effect.
+- Docking removes the floating window only once the draft is in the dock; the main window's
+  release uninstalls the dock and drops its builder, so nothing docks into a closed window or
+  edits a hidden builder.
+- Snapping arms only on a move (same size), only with the window dragged *into* the main
+  window's edge (two windows tiled side by side touch it without docking), never for a
+  maximized window or a chain child, and keeps one replaceable timer per builder.
+- Chain children cannot be docked by `Ctrl+\` or the snap either.
+- A floated window is sized from the builder's own YAML state, not the Settings default.
+- The builder has a focus handle, focused when it opens, so `Ctrl+\` works before anything is
+  clicked; a global handler catches the action when nothing focused handles it.
+- Still open (Low): a refused widget value is not carried across dock/float; the 60% clamp
+  is applied on layout changes, not when the window shrinks; preview toggles persist the layout.
+

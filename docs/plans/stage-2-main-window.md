@@ -192,3 +192,19 @@ ignores Skip user prompts for destructive actions; quick delete refuses a URL th
 the selected server; the log scan after a run moved to a background thread and the results
 strip reads no files while rendering; a run whose session is dropped (app quit) is killed;
 Windows `open_file` uses Explorer rather than `cmd /C start` (cmd re-parses `&`/`^`).
+
+**Phase 6 follow-ups (October 2026).**
+- 6.1 The input-source dropdown shows a mono `plugin` tag before its caret (`2c`), through a
+  `tag` on `DetailSelectItem` that only the closed trigger draws.
+- 6.2 Step 1 says `last run 11:52` (local time of the last Process) instead of "this session".
+- 6.3 Step 2 shows `↳ N` beside the config when it runs N configs after it. The summary line
+  and the badge are re-read when the builder writes a config file (`ConfigFilesChanged`
+  generation), not only when the selection changes — they used to go stale after a save.
+- 6.5 Closing the main window — OS close, the Linux client-side ✕ (gpui-component's closes
+  without asking, so the title bar now routes it through the same check) or Quit — is refused
+  while a run holds the window lock and asks first when the docked builder has unsaved edits.
+  Builder windows ask the same way before closing with unsaved edits.
+- 6.6 A toast (gpui-component notification, bottom-right; the library's 5 s rather than the
+  spec's 4 s) reports each run outcome — Check, Run, quick delete — and nothing else.
+- Preprocessing now holds the window lock like a run, and a Process with no Workbench folder
+  set says so instead of leaving the step stuck in its busy state.

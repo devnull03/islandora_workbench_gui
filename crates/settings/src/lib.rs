@@ -452,6 +452,10 @@ pub struct AppSettings {
     pub active_profile_index: usize,
     /// Bumped on every profile switch, so views seeded from settings know to re-seed.
     pub profile_generation: u64,
+    /// The last Test result of servers in profiles not active now, by URL and credentials
+    /// file, so switching away and back keeps them. Session-only: results go stale, and a
+    /// profile file is no place for them.
+    pub(crate) check_cache: HashMap<(String, String), CheckResult>,
     /// Schema version last read from disk (`settings_version` in JSON). See [`SETTINGS_SCHEMA_VERSION`].
     #[allow(dead_code)] // migrations / future UI; written on each save via `db`
     pub settings_schema_version: u32,
@@ -470,6 +474,7 @@ impl Default for AppSettings {
             profiles: Vec::new(),
             active_profile_index: 0,
             profile_generation: 0,
+            check_cache: HashMap::new(),
             settings_schema_version: SETTINGS_SCHEMA_VERSION,
         }
     }

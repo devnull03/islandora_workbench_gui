@@ -167,9 +167,9 @@ impl Workspace {
                             .child(div().flex_1())
                             .child(
                                 Label::new(if processed {
-                                    "last run this session"
+                                    SharedString::from(format!("last run {}", self.processed_at))
                                 } else {
-                                    "last run —"
+                                    "last run —".into()
                                 })
                                 .text_xs()
                                 .text_color(muted),
@@ -192,6 +192,17 @@ impl Workspace {
                         .disabled(!idle)
                         .w_full(),
                 )
+                // `2c`: `↳ 2` beside the config when it runs others after it.
+                .when(self.config_chain > 0, |row| {
+                    row.child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_color(cx.theme().colors.warning)
+                            .child(format!("↳ {}", self.config_chain)),
+                    )
+                })
                 .child(
                     app_button("edit-config")
                         .outline()

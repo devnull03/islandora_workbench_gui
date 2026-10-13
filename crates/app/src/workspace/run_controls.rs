@@ -479,7 +479,7 @@ impl Workspace {
 }
 
 /// "Check passed", "Run stopped after 2 nodes — cancelled", … in words, not exit codes.
-fn last_run_summary(run: &LastRun) -> String {
+pub(super) fn last_run_summary(run: &LastRun) -> String {
     let nodes = match run.report.nodes_created {
         0 => String::new(),
         1 => " · 1 node created".to_string(),

@@ -26,16 +26,29 @@ impl BarRegistry for TitleBarRegistry {
     }
 }
 
+/// What the title bar's own close button does (Linux client-side decorations draw one, and
+/// gpui-component's closes the window outright, skipping `on_window_should_close`).
+type CloseHandler = std::rc::Rc<dyn Fn(&mut Window, &mut App)>;
+
 #[derive(IntoElement)]
 pub struct AppTitleBar {
     title: SharedString,
+    on_close: Option<CloseHandler>,
 }
 
 impl AppTitleBar {
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
             title: title.into(),
+            on_close: None,
         }
+    }
+
+    /// Run `f` instead of closing when the title bar's close button is pressed, so the window
+    /// can ask first. `f` closes the window itself when it may.
+    pub fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_close = Some(std::rc::Rc::new(f));
+        self
     }
 }
 
@@ -62,6 +75,9 @@ impl RenderOnce for AppTitleBar {
             .unwrap_or_default();
 
         TitleBar::new()
+            .when_some(self.on_close, |bar, on_close| {
+                bar.on_close_window(move |_, window, cx| on_close(window, cx))
+            })
             .text_xs()
             .text_color(cx.theme().foreground)
             .child(

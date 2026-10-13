@@ -11,14 +11,16 @@
 //! to truncate it. [`DetailSelectItem::from_choice`] splits that back apart.
 
 use gpui::prelude::FluentBuilder as _;
-use gpui::{App, IntoElement, ParentElement, SharedString, Styled, Window, div, px};
+use gpui::{
+    AnyElement, App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
+};
 use gpui_component::{
-    ActiveTheme, Sizable as _,
+    ActiveTheme, Sizable as _, h_flex,
     select::{Select, SelectItem, SelectState},
     v_flex,
 };
 
-use crate::APP_CONTROL_SIZE;
+use crate::{APP_CONTROL_SIZE, tokens::GAP_SM};
 
 /// §05: past this the menu scrolls rather than growing.
 const MENU_MAX_H: f32 = 280.;
@@ -32,6 +34,9 @@ pub struct DetailSelectItem {
     /// The label is a literal — a YAML value, a filename — rather than prose, so it is set in the
     /// mono family (§05: "Plex Mono when it is a bare YAML value").
     pub mono: bool,
+    /// A mono tag shown in the closed trigger before the caret — `2c`'s `plugin` on the source
+    /// dropdown, saying the choice swaps in a plugin's own fields.
+    pub tag: Option<SharedString>,
 }
 
 impl DetailSelectItem {
@@ -43,6 +48,7 @@ impl DetailSelectItem {
             value: value.into(),
             divider_above: false,
             mono: false,
+            tag: None,
         }
     }
 
@@ -74,6 +80,11 @@ impl DetailSelectItem {
         self
     }
 
+    pub fn tag(mut self, tag: impl Into<SharedString>) -> Self {
+        self.tag = Some(tag.into());
+        self
+    }
+
     pub fn divider_above(mut self, divider: bool) -> Self {
         self.divider_above = divider;
         self
@@ -101,6 +112,26 @@ impl SelectItem for DetailSelectItem {
     }
     fn value(&self) -> &Self::Value {
         &self.value
+    }
+
+    fn display_title(&self) -> Option<AnyElement> {
+        let tag = self.tag.clone()?;
+        Some(
+            h_flex()
+                .w_full()
+                .min_w(px(0.))
+                .gap(GAP_SM)
+                .items_center()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .truncate()
+                        .child(self.label.clone()),
+                )
+                .child(TriggerTag(tag))
+                .into_any_element(),
+        )
     }
 
     fn render(&self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
@@ -146,6 +177,22 @@ impl SelectItem for DetailSelectItem {
     fn matches(&self, query: &str) -> bool {
         let q = query.to_lowercase();
         self.label.to_lowercase().contains(&q) || self.subtitle.to_lowercase().contains(&q)
+    }
+}
+
+/// The trigger's mono tag. An element of its own because `display_title` has no access to the
+/// theme; this reads it when it renders.
+#[derive(IntoElement)]
+struct TriggerTag(SharedString);
+
+impl RenderOnce for TriggerTag {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        div()
+            .flex_none()
+            .text_xs()
+            .font_family(cx.theme().mono_font_family.clone())
+            .text_color(cx.theme().muted_foreground)
+            .child(self.0)
     }
 }
 

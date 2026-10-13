@@ -56,11 +56,17 @@ fn row_input(
     cx: &mut App,
 ) -> Entity<InputState> {
     let seed = seed.to_string();
-    window.use_keyed_state(key.into(), cx, move |window, cx| {
+    window.use_keyed_state(profile_scoped(key, cx), cx, move |window, cx| {
         InputState::new(window, cx)
             .placeholder(placeholder)
             .default_value(seed)
     })
+}
+
+/// `key` for the active profile: a profile switch starts every row closed and every field
+/// re-seeded, so nothing typed against one profile's row is saved into another's.
+fn profile_scoped(key: impl Into<SharedString>, cx: &App) -> SharedString {
+    format!("{}@{}", key.into(), AppSettings::get(cx).profile_generation).into()
 }
 
 fn value_of(input: &Entity<InputState>, cx: &App) -> SharedString {
@@ -150,7 +156,7 @@ fn config_row(
     let task = {
         let seed = config.task_name.clone();
         window.use_keyed_state(
-            SharedString::from(format!("cfg-task-{id}")),
+            profile_scoped(SharedString::from(format!("cfg-task-{id}")), cx),
             cx,
             move |window, cx| {
                 // The catalogue's `task` choices — all eighteen Workbench accepts — rather than a
@@ -251,9 +257,11 @@ fn config_row(
 
 pub fn saved_configs_field() -> SettingItem {
     SettingItem::render(|_options, window, cx| {
-        let open = window.use_keyed_state(SharedString::from("config-open-row"), cx, |_, _| {
-            OpenRow::default()
-        });
+        let open = window.use_keyed_state(
+            profile_scoped(SharedString::from("config-open-row"), cx),
+            cx,
+            |_, _| OpenRow::default(),
+        );
         let configs = AppSettings::get(cx).task_configs.clone();
         let mut rows: Vec<AnyElement> = configs
             .iter()
@@ -398,10 +406,14 @@ fn server_row(
         window,
         cx,
     );
-    let confirm = window.use_keyed_state(SharedString::from(format!("srv-confirm-{id}")), cx, {
-        let seed = config.needs_confirmation;
-        move |_, _| seed
-    });
+    let confirm = window.use_keyed_state(
+        profile_scoped(SharedString::from(format!("srv-confirm-{id}")), cx),
+        cx,
+        {
+            let seed = config.needs_confirmation;
+            move |_, _| seed
+        },
+    );
 
     let (l, u, c, cf) = (label.clone(), url.clone(), creds.clone(), confirm.clone());
     let close = open.clone();
@@ -477,9 +489,11 @@ fn server_row(
 
 pub fn saved_servers_field() -> SettingItem {
     SettingItem::render(|_options, window, cx| {
-        let open = window.use_keyed_state(SharedString::from("server-open-row"), cx, |_, _| {
-            OpenRow::default()
-        });
+        let open = window.use_keyed_state(
+            profile_scoped(SharedString::from("server-open-row"), cx),
+            cx,
+            |_, _| OpenRow::default(),
+        );
         let servers = AppSettings::get(cx).server_configs.clone();
         let mut rows: Vec<AnyElement> = servers
             .iter()
@@ -500,21 +514,34 @@ pub fn saved_servers_field() -> SettingItem {
 // --- shared actions ---------------------------------------------------------------------
 
 /// Run the two-stage check off the main thread and record what it found.
+///
+/// The result is matched back to the server by URL and credentials file, and dropped if the
+/// profile changed meanwhile — an index could name another profile's server by then.
 fn test_server(index: usize, url: String, credentials_file: String, cx: &mut App) {
+    let generation = AppSettings::get(cx).profile_generation;
     cx.spawn(async move |cx| {
+        let (check_url, check_credentials) = (url.clone(), credentials_file.clone());
         let result = cx
             .background_executor()
             .spawn(async move {
-                let path = (!credentials_file.is_empty()).then(|| PathBuf::from(credentials_file));
-                check_server(&url, path.as_deref())
+                let path =
+                    (!check_credentials.is_empty()).then(|| PathBuf::from(check_credentials));
+                check_server(&check_url, path.as_deref())
             })
             .await;
         cx.update(|cx| {
-            AppSettings::set_server_check(
-                index,
-                CheckResult::now(result.reachable, result.credentials_ok, result.message),
-                cx,
-            );
+            let settings = AppSettings::get(cx);
+            let same = settings.profile_generation == generation
+                && settings.server_configs.get(index).is_some_and(|s| {
+                    s.server_url.as_ref() == url && s.credentials_file.as_ref() == credentials_file
+                });
+            if same {
+                AppSettings::set_server_check(
+                    index,
+                    CheckResult::now(result.reachable, result.credentials_ok, result.message),
+                    cx,
+                );
+            }
         });
     })
     .detach();

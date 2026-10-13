@@ -51,10 +51,13 @@ pub fn server_config_items(configs: &[ServerConfig]) -> Vec<DetailSelectItem> {
 
 pub fn source_items() -> Vec<DetailSelectItem> {
     vec![
+        // `2c`: each source is an input plugin with fields of its own; the trigger says so.
         DetailSelectItem::new(SOURCE_SHEET, "Google Sheet → CSV")
-            .subtitle("Fetch a published sheet"),
+            .subtitle("Fetch a published sheet")
+            .tag("plugin"),
         DetailSelectItem::new(SOURCE_CSV, "CSV file")
             .subtitle("A CSV already on this machine")
+            .tag("plugin")
             .divider_above(true),
     ]
 }

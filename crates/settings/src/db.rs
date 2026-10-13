@@ -207,6 +207,7 @@ impl From<PersistSettings> for AppSettings {
             profiles: p.profiles,
             active_profile_index: p.active_profile_index,
             profile_generation: 0,
+            check_cache: Default::default(),
             settings_schema_version: p.settings_version,
         }
     }
@@ -263,6 +264,16 @@ pub fn load_app_settings() -> Result<AppSettings> {
 
     let persist: PersistSettings =
         serde_json::from_str(&json).context("Deserialize persisted settings")?;
+    // Written by a newer build: this one would drop whatever it does not know (profiles, once)
+    // on its next save. Keep the newer row aside first, once, so it can be recovered.
+    if persist.settings_version > SETTINGS_SCHEMA_VERSION {
+        let backup = format!("{SETTINGS_KEY}_from_v{}", persist.settings_version);
+        conn.execute(
+            "INSERT OR IGNORE INTO settings_kv(key, json) VALUES (?1, ?2)",
+            params![backup, json],
+        )
+        .context("Back up newer settings")?;
+    }
     Ok(persist.into())
 }
 

@@ -258,6 +258,7 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "base64",
+ "chrono",
  "config-builder",
  "dirs",
  "gpui",

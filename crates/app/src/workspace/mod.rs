@@ -25,6 +25,7 @@ use workbench_integration::{
 
 use settings::AppSettings;
 use ui::DetailSelectItem;
+use window_wrapper::WindowLock;
 
 use self::sources::{
     ProcessorChoice, SOURCE_CSV, SOURCE_SHEET, server_config_items, task_config_items,
@@ -61,6 +62,12 @@ pub struct Workspace {
     /// what "Open processed" reveals. Cleared when the source or processor changes, because
     /// the file no longer reflects them; changing the config or server does not clear it.
     processed_csv: Option<PathBuf>,
+    /// When `processed_csv` was made, local `HH:MM` (`2c`'s "last run 11:52"). Only read while
+    /// `processed_csv` is set.
+    processed_at: SharedString,
+    /// A run's outcome waiting to be shown as a toast; pushed from `render`, which is where the
+    /// window is.
+    pending_toast: Option<gpui_component::notification::Notification>,
     /// The Workbench process running now, if any.
     running: Option<run::RunSession>,
     /// What the last finished run left behind (rollback config, contact sheet, first node…).
@@ -107,7 +114,10 @@ pub struct Workspace {
     /// `14 settings · runs 2 secondary configs · edited today`, and the config it describes.
     /// Cached because building it reads the file, which must not happen once per frame.
     config_summary: Option<SharedString>,
-    summarised_config: Option<SharedString>,
+    /// How many configs the selected one runs after it, for step 2's `↳ N` badge.
+    config_chain: usize,
+    /// The config the summary describes, and the builder's write generation it was read at.
+    summarised_config: Option<(SharedString, u64)>,
 
     /// Keep input/select subscriptions alive so typing and selections re-validate buttons.
     _subscriptions: Vec<Subscription>,
@@ -170,6 +180,13 @@ impl Workspace {
         });
 
         let mut _subscriptions = Vec::new();
+        // A profile switched from Settings has to reach this window now, not at its next
+        // unrelated redraw; `render` applies it.
+        _subscriptions.push(cx.observe_global::<AppSettings>(|this, cx| {
+            if AppSettings::get(cx).profile_generation != this.seen_profile_generation {
+                cx.notify();
+            }
+        }));
 
         // `Change`: typing / paste. `Focus`/`Blur` keep action readiness current.
         // Defer `notify` so readiness reads input state after GPUI applies the edit (paste/IME).
@@ -276,6 +293,8 @@ impl Workspace {
             op: Operation::None,
             stage: WorkflowStage::Unfilled,
             processed_csv: None,
+            processed_at: SharedString::default(),
+            pending_toast: None,
             running: None,
             last_run: None,
             options_open: false,
@@ -302,6 +321,7 @@ impl Workspace {
             synced_script_values: Vec::new(),
             last_script_scan: Instant::now(),
             config_summary: None,
+            config_chain: 0,
             summarised_config: None,
             _subscriptions,
         }
@@ -405,15 +425,42 @@ impl Workspace {
         self.input_source_select.update(cx, |state, cx| {
             state.set_selected_value(&SharedString::from(source), window, cx);
         });
+        // The scripts folder is a profile setting: list the new folder's scripts before
+        // selecting one of them, or the selection misses and falls back to the built-in.
+        let script_items = sources::processor_items(cx);
+        self.synced_script_values = script_items.iter().map(|i| i.value.clone()).collect();
+        self.last_script_scan = Instant::now();
         self.processor_select.update(cx, |state, cx| {
+            state.set_items(script_items, window, cx);
             state.set_selected_value(&SharedString::from(processor), window, cx);
         });
-        // Force the config and server lists to repopulate, applying the profile's defaults.
-        for select in [&self.saved_config_select, &self.server_select] {
-            select.update(cx, |state, cx| state.set_selected_index(None, window, cx));
-        }
-        self.synced_task_labels.clear();
-        self.synced_server_labels.clear();
+        // Replace the config and server lists outright — including with empty ones, so a new
+        // profile never shows the last profile's servers — and apply the profile's defaults.
+        let settings = AppSettings::get(cx);
+        let (task_configs, server_configs) = (
+            settings.task_configs.clone(),
+            settings.server_configs.clone(),
+        );
+        let (default_task, default_server) = (
+            settings.default_task_config.clone(),
+            settings.default_server.clone(),
+        );
+        self.synced_task_labels = task_keys(&task_configs);
+        self.synced_server_labels = server_keys(&server_configs);
+        self.saved_config_select.update(cx, |state, cx| {
+            state.set_items(task_config_items(&task_configs), window, cx);
+            state.set_selected_index(None, window, cx);
+            if let Some(value) = &default_task {
+                state.set_selected_value(value, window, cx);
+            }
+        });
+        self.server_select.update(cx, |state, cx| {
+            state.set_items(server_config_items(&server_configs), window, cx);
+            state.set_selected_index(None, window, cx);
+            if let Some(value) = &default_server {
+                state.set_selected_value(value, window, cx);
+            }
+        });
         self.summarised_config = None;
         self.config_summary = None;
         self.processed_csv = None;
@@ -452,9 +499,8 @@ impl Workspace {
         let server_configs = settings.server_configs.clone();
         let default_task = settings.default_task_config.clone();
         let default_server = settings.default_server.clone();
-        let task_labels: Vec<SharedString> = task_configs.iter().map(|t| t.label.clone()).collect();
-        let server_labels: Vec<SharedString> =
-            server_configs.iter().map(|s| s.label.clone()).collect();
+        let task_labels = task_keys(&task_configs);
+        let server_labels = server_keys(&server_configs);
 
         if task_labels != self.synced_task_labels {
             let first_population = self.synced_task_labels.is_empty();
@@ -505,12 +551,16 @@ impl Workspace {
     /// Rebuild the config summary line when the selection changes — reading and parsing the file
     /// is far too expensive to do once per frame.
     fn sync_config_summary(&mut self, cx: &App) {
-        let selected = self.saved_config_select.read(cx).selected_value();
-        if selected == self.summarised_config.as_ref() {
+        let selected = self.saved_config_select.read(cx).selected_value().cloned();
+        let generation = config_builder::ConfigFilesChanged::generation(cx);
+        let key = selected.clone().map(|path| (path, generation));
+        if key == self.summarised_config {
             return;
         }
-        self.summarised_config = selected.cloned();
-        self.config_summary = selected.and_then(|path| describe_config(Path::new(path.as_ref())));
+        self.summarised_config = key;
+        let described = selected.and_then(|path| describe_config(Path::new(path.as_ref())));
+        self.config_chain = described.as_ref().map_or(0, |(_, chain)| *chain);
+        self.config_summary = described.map(|(summary, _)| summary);
     }
 
     fn process_metadata(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -523,12 +573,18 @@ impl Workspace {
         };
         let language_url = language_url_from_server_base(server_url.as_ref());
 
-        self.op = Operation::Preprocessing;
-        cx.notify();
-
         let Some(input_data_dir) = workbench_input_data_dir(cx) else {
+            self.append_log(
+                "[ERROR] Set the Workbench folder in Settings before processing.",
+                window,
+                cx,
+            );
             return;
         };
+        self.op = Operation::Preprocessing;
+        // Busy like a run: no profile switch underneath it (the switch is refused while locked).
+        WindowLock::set(true, cx);
+        cx.notify();
         let source_key = self.source_key(cx);
         let source_value = self.source_field(cx).read(cx).value().to_string();
         let processor = self.processor_choice(cx);
@@ -546,6 +602,7 @@ impl Workspace {
                 Err(e) => {
                     self.append_log(&format!("[ERROR] {e}"), window, cx);
                     self.op = Operation::None;
+                    WindowLock::set(false, cx);
                     cx.notify();
                     return;
                 }
@@ -594,6 +651,8 @@ impl Workspace {
                                 this.append_log(&line, window, cx);
                             }
                             this.processed_csv = Some(res.metadata_csv.clone());
+                            this.processed_at =
+                                chrono::Local::now().format("%H:%M").to_string().into();
                             this.stage = WorkflowStage::SourceProcessed;
                         }
                         Err(e) => {
@@ -601,6 +660,7 @@ impl Workspace {
                         }
                     }
                     this.op = Operation::None;
+                    WindowLock::set(false, cx);
                     cx.notify();
                 });
             });
@@ -621,6 +681,14 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_select_items(window, cx);
+        if let Some(note) = self.pending_toast.take() {
+            // After the frame: the notification list lives on the window's root, which is
+            // mid-render here.
+            window.defer(cx, move |window, cx| {
+                use gpui_component::WindowExt as _;
+                window.push_notification(note, cx);
+            });
+        }
 
         // The three steps have intrinsic heights, so a short window can need more room than it
         // has. `min_h(relative(1.))` keeps the column stretching to fill a tall window while
@@ -683,10 +751,27 @@ impl Panel for Workspace {
     }
 }
 
+/// What the config list shows, compared to decide whether to rebuild it: label and file, so two
+/// entries with the same label (across profiles, say) still count as a change.
+fn task_keys(configs: &[settings::TaskConfig]) -> Vec<SharedString> {
+    configs
+        .iter()
+        .map(|c| format!("{}\u{0}{}", c.label, c.file_path).into())
+        .collect()
+}
+
+/// The server list's equivalent of [`task_keys`].
+fn server_keys(configs: &[settings::ServerConfig]) -> Vec<SharedString> {
+    configs
+        .iter()
+        .map(|c| format!("{}\u{0}{}", c.label, c.server_url).into())
+        .collect()
+}
+
 /// `14 settings · runs 2 secondary configs · edited today` — the config row's summary line in
 /// mockup `2c`. Returns `None` when the file is gone or unreadable, which the row shows as a
 /// broken selection rather than as a summary of nothing.
-fn describe_config(path: &Path) -> Option<SharedString> {
+fn describe_config(path: &Path) -> Option<(SharedString, usize)> {
     let draft = ConfigDraft::load(path).ok()?;
     let mut parts = vec![format!("{} settings", draft.values.len())];
 
@@ -700,7 +785,7 @@ fn describe_config(path: &Path) -> Option<SharedString> {
     if let Some(edited) = edited_ago(path) {
         parts.push(edited);
     }
-    Some(parts.join(" · ").into())
+    Some((parts.join(" · ").into(), chained))
 }
 
 /// Relative rather than a date: "edited today" is what the mockup shows, and it needs no date

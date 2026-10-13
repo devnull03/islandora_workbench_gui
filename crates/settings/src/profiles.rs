@@ -166,7 +166,10 @@ impl AppSettings {
                 server_url: s.url.clone().into(),
                 credentials_file: s.credentials_file.clone().into(),
                 needs_confirmation: s.needs_confirmation,
-                last_check: None,
+                last_check: self
+                    .check_cache
+                    .get(&(s.url.clone(), s.credentials_file.clone()))
+                    .cloned(),
             })
             .collect();
         self.task_configs = profile
@@ -213,6 +216,36 @@ impl AppSettings {
     }
 
     /// Make `name` the active profile. The outgoing one is saved as it stands.
+    /// Add or update a config-library entry, matched on its file, in profile `profile` —
+    /// the live lists when it is the active one, its stored snapshot otherwise. A builder
+    /// opened under one profile and saved after a switch still files its config there.
+    pub fn upsert_library_entry(&mut self, profile: &str, entry: TaskConfig) {
+        if profile == self.active_profile {
+            match self
+                .task_configs
+                .iter_mut()
+                .find(|c| c.file_path == entry.file_path)
+            {
+                Some(existing) => *existing = entry,
+                None => self.task_configs.push(entry),
+            }
+            return;
+        }
+        let Some(stored) = self.profiles.iter_mut().find(|p| p.name == profile) else {
+            return;
+        };
+        let config = ProfileConfig {
+            label: entry.label.to_string(),
+            task: entry.task_name.to_string(),
+            file: entry.file_path.to_string(),
+            description: entry.description.to_string(),
+        };
+        match stored.configs.iter_mut().find(|c| c.file == config.file) {
+            Some(existing) => *existing = config,
+            None => stored.configs.push(config),
+        }
+    }
+
     pub fn switch_profile(&mut self, name: &str) -> Result<(), String> {
         if name == self.active_profile {
             return Ok(());
@@ -222,6 +255,17 @@ impl AppSettings {
             return Err(format!("There is no profile called {name}."));
         };
         let incoming = all.remove(index);
+        for server in &self.server_configs {
+            if let Some(check) = &server.last_check {
+                self.check_cache.insert(
+                    (
+                        server.server_url.to_string(),
+                        server.credentials_file.to_string(),
+                    ),
+                    check.clone(),
+                );
+            }
+        }
         self.profiles = all;
         self.active_profile_index = index;
         self.load_profile(&incoming);
@@ -342,6 +386,55 @@ mod tests {
             last_check: None,
         });
         s
+    }
+
+    /// A save from a builder opened under another profile lands in that profile's library.
+    #[test]
+    fn library_entries_go_to_the_profile_they_came_from() {
+        let mut s = settings();
+        let other = s.add_profile("Other", None).unwrap();
+        s.switch_profile(&other).unwrap();
+        let entry = TaskConfig {
+            label: "Items".into(),
+            task_name: "create".into(),
+            file_path: "/lib/items.yml".into(),
+            description: "".into(),
+        };
+        s.upsert_library_entry(DEFAULT_PROFILE, entry.clone());
+        assert!(s.task_configs.is_empty());
+        s.upsert_library_entry(DEFAULT_PROFILE, entry);
+        s.switch_profile(DEFAULT_PROFILE).unwrap();
+        assert_eq!(s.task_configs.len(), 1);
+    }
+
+    /// A server's Test result survives switching away and back, without being stored in the
+    /// profile (which is what an export writes).
+    #[test]
+    fn test_results_survive_a_round_trip() {
+        let mut s = settings();
+        s.server_configs[0].last_check = Some(crate::CheckResult::now(true, Some(true), "ok"));
+        let other = s.add_profile("Other", None).unwrap();
+        s.switch_profile(&other).unwrap();
+        assert!(!export_yaml(&s.all_profiles()[0]).unwrap().contains("ok"));
+        s.switch_profile(DEFAULT_PROFILE).unwrap();
+        assert!(s.server_configs[0].last_check.is_some());
+    }
+
+    /// Deleting a profile listed before the active one keeps the active one where it was in
+    /// the list, and renaming the active profile renames only it.
+    #[test]
+    fn delete_before_the_active_profile_and_rename_it() {
+        let mut s = settings();
+        s.add_profile("B", None).unwrap();
+        s.add_profile("C", None).unwrap();
+        s.switch_profile("C").unwrap();
+        assert_eq!(s.profile_names(), vec!["Default", "B", "C"]);
+        s.delete_profile("Default").unwrap();
+        assert_eq!(s.profile_names(), vec!["B", "C"]);
+        assert_eq!(s.active_profile, "C");
+        s.rename_profile("C", "Main").unwrap();
+        assert_eq!(s.profile_names(), vec!["B", "Main"]);
+        assert!(s.rename_profile("Main", "B").is_err());
     }
 
     #[test]

@@ -94,3 +94,23 @@ library folder (`config_library_dir`) and its config list; the YAML files stay m
 - The Settings footer names the active profile.
 - Also: the config-library add row in Settings offered 10 hard-coded tasks; it now uses the
   catalogue's 18.
+
+**M4 audit fixes (October 2026).**
+- A switch replaces the config, server and preprocess-script lists outright, even with empty
+  ones — a new, empty profile used to keep showing the previous profile's servers, and picking
+  one bypassed its "always confirm". The script list is rebuilt from the new profile's scripts
+  folder before its script is selected, so the selection no longer falls back to the built-in.
+  Lists are compared by label *and* file/URL.
+- A builder files its config into the library of the profile it was opened under, even after a
+  switch (`AppSettings::upsert_library_entry`).
+- Settings rows open for editing, and their fields, are keyed by profile generation: a switch
+  closes them instead of letting a save write one profile's values into another's.
+- A server Test result is matched back by URL and credentials file and dropped if the profile
+  changed meanwhile. Results survive switching away and back (a session cache, never exported).
+- Switching is refused during preprocessing too (it now holds the window lock), and the main
+  window redraws as soon as a switch is made from Settings.
+- Settings written by a newer schema are copied aside (`app_settings_v1_from_vN`) before this
+  build loads them, since its next save would drop what it does not know.
+- Still open (Low): the profile bar is inside the scrolling column rather than its own slot,
+  card facts are one line rather than chips, Manage profiles does not land on the Profiles
+  page, import always adds ("X 2") rather than offering to replace.

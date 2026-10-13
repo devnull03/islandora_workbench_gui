@@ -38,7 +38,7 @@ use crate::{
     workspace::{LogViewer, Workspace},
 };
 use config_builder::{
-    ConfigBuilderWindows, OpenConfigBuilder, ToggleBuilderDock, install_builder_dock,
+    BuilderDock, ConfigBuilderWindows, OpenConfigBuilder, ToggleBuilderDock, install_builder_dock,
     open_config_builder,
 };
 
@@ -49,6 +49,7 @@ pub struct App {
     _main_window_bounds_sub: Subscription,
     _ping_log_sub: Subscription,
     _window_lock_sub: Subscription,
+    _release: Subscription,
 }
 
 impl App {
@@ -97,28 +98,11 @@ impl App {
 
         // Block the OS close button while an ingest run is in progress, and ask before a docked
         // builder's unsaved edits go with the window (plan 5, accept).
-        window.on_window_should_close(cx, move |window, cx| {
-            if WindowLock::is_locked(cx) {
-                return false;
-            }
-            if !builder_pane.read(cx).has_unsaved_changes(cx) {
-                return true;
-            }
-            let pane = builder_pane.clone();
-            ui::confirm_dialog(
-                window,
-                cx,
-                "Close with unsaved builder edits?",
-                "The docked Config Builder has edits that are not saved. Closing the window \
-                 discards them.",
-                "Discard and close",
-                move |window, cx| {
-                    pane.update(cx, |pane, cx| pane.discard_docked(cx));
-                    window.remove_window();
-                },
-            );
-            false
+        window.on_window_should_close(cx, |window, cx| {
+            may_close(window, cx, |window, _| window.remove_window())
         });
+        // Closing however it happens: the docked builder and the dock's hook go with the window.
+        let _release = cx.on_release(|_, cx| BuilderDock::uninstall(cx));
 
         let focus_handle = cx.focus_handle();
         if window.focused(cx).is_none() {
@@ -132,6 +116,7 @@ impl App {
             _main_window_bounds_sub,
             _ping_log_sub,
             _window_lock_sub,
+            _release,
         }
     }
 }
@@ -139,6 +124,7 @@ impl App {
 impl Render for App {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dialog_layer = Root::render_dialog_layer(window, cx);
+        let notification_layer = Root::render_notification_layer(window, cx);
 
         div()
             .id("workbench-root")
@@ -158,7 +144,13 @@ impl Render for App {
             .child(
                 v_flex()
                     .size_full()
-                    .child(AppTitleBar::new("Islandora Workbench"))
+                    .child(
+                        AppTitleBar::new("Islandora Workbench").on_close(|window, cx| {
+                            if may_close(window, cx, |window, _| window.remove_window()) {
+                                window.remove_window();
+                            }
+                        }),
+                    )
                     .child(
                         // `min_h(0)` is load-bearing: a flex item's min height defaults to its
                         // content, so without it a tall workspace refuses to shrink and shoves
@@ -175,7 +167,39 @@ impl Render for App {
                     .child(self.status_bar.clone()),
             )
             .children(dialog_layer)
+            .children(notification_layer)
     }
+}
+
+/// Whether the main window may close (or the app quit) now. While a run holds the window
+/// lock, never; with unsaved edits in the docked builder, not until the user agrees — then
+/// `proceed` runs. `true` means nothing stands in the way and the caller goes ahead.
+fn may_close(
+    window: &mut Window,
+    cx: &mut gpui::App,
+    proceed: impl Fn(&mut Window, &mut gpui::App) + 'static,
+) -> bool {
+    if WindowLock::is_locked(cx) {
+        return false;
+    }
+    let Some((_, pane)) = BuilderDock::main(cx) else {
+        return true;
+    };
+    if !pane.read(cx).has_unsaved_changes(cx) {
+        return true;
+    }
+    ui::confirm_dialog(
+        window,
+        cx,
+        "Close with unsaved builder edits?",
+        "The docked Config Builder has edits that are not saved. Closing discards them.",
+        "Discard and close",
+        move |window, cx| {
+            pane.update(cx, |pane, cx| pane.discard_docked(cx));
+            proceed(window, cx);
+        },
+    );
+    false
 }
 
 fn main() {
@@ -260,8 +284,24 @@ fn main() {
             cx.open_url(&action.url);
         });
 
+        // Ctrl+\ when no focused view handled it (nothing focused after a pop out, say).
+        cx.on_action(|_: &ToggleBuilderDock, cx| {
+            if let Some((_, pane)) = BuilderDock::main(cx) {
+                pane.update(cx, |pane, cx| pane.toggle(cx));
+            }
+        });
+        // Quit asks the same question as closing the main window.
         cx.on_action(|_: &Quit, cx| {
-            cx.quit();
+            let Some((main, _)) = BuilderDock::main(cx) else {
+                cx.quit();
+                return;
+            };
+            let quit_now = main
+                .update(cx, |_, window, cx| may_close(window, cx, |_, cx| cx.quit()))
+                .unwrap_or(true);
+            if quit_now {
+                cx.quit();
+            }
         });
 
         // Help ▸ … — the report path. Nothing is uploaded: both routes put the text in front of
