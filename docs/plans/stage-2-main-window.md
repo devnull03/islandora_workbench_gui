@@ -242,3 +242,12 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   (`calamine`) before the processor runs, so the built-in preprocessor and scripts work on it
   like any CSV. This covers Workbench's own Excel input (`excel_worksheet`) from step 1.
   The worksheet is a profile setting (`source_worksheet`).
+- *CSV ID → node ID map.* The More menu runs Workbench's own
+  `scripts/manage_csv_to_node_id_map.py` in its Python: **Export the CSV ID map…** (saves and
+  opens a CSV), **Remove map entries before a date…** and **Remove map entries for deleted
+  nodes…** (against the selected server). The database is found the way Workbench finds it
+  (`csv_id_to_node_id_map_path`, else `csv_id_to_node_id_map_dir` — the system temp folder by
+  default — plus `csv_id_to_node_id_map_filename`); output goes to the log, and the window is
+  locked while it runs. Text dialogs (these and quick delete) now focus their field on open.
+- *Islandora 7 export* is out of scope: `get_islandora_7_content.py` moved out of Workbench into
+  its own repository (`mjordan/i7_import`) in October 2025.

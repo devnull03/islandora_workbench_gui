@@ -6,6 +6,7 @@
 mod check;
 pub mod config;
 mod invocation;
+pub mod map_tool;
 pub mod outcome;
 mod preprocess;
 mod provision;

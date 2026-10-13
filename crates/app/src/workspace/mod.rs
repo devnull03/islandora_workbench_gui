@@ -1,4 +1,5 @@
 mod log_viewer;
+mod map_controls;
 mod preprocess_log;
 mod run;
 mod run_controls;

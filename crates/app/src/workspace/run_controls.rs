@@ -110,6 +110,19 @@ impl Workspace {
                         ))
                         .separator()
                         .item(item(
+                            "Export the CSV ID map…",
+                            Rc::new(|this, window, cx| this.ask_map_export(window, cx)),
+                        ))
+                        .item(item(
+                            "Remove map entries before a date…",
+                            Rc::new(|this, window, cx| this.ask_map_remove_before(window, cx)),
+                        ))
+                        .item(item(
+                            "Remove map entries for deleted nodes…",
+                            Rc::new(|this, window, cx| this.ask_map_remove_deleted(window, cx)),
+                        ))
+                        .separator()
+                        .item(item(
                             "Open the Workbench folder",
                             Rc::new(|this, window, cx| {
                                 if let Ok(info) = super::run::workbench_info(cx) {
@@ -425,7 +438,8 @@ impl Workspace {
                     .into(),
             )
         };
-        window.open_dialog(cx, move |dialog, _, _| {
+        window.open_dialog(cx, move |dialog, window, cx| {
+            input.update(cx, |state, cx| state.focus(window, cx));
             let input_for_delete = input.clone();
             let this = this.clone();
             dialog
