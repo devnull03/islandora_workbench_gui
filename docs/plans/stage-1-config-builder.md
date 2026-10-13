@@ -320,3 +320,12 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   library folder. An existing file is never overwritten by a draft that did not load it: the
   name gets `-2`, `-3`, …. The plan's "Save as…" path prompt is not built — the suffix already
   removes the overwrite, and a prompt is one more modal on the most common action.
+- [x] **1.9 (P0-9)** Chain edits have one path, `ConfigBuilder::apply_chain_edit(owner, edit)`:
+  this window's draft when `owner` is the config open here; else the draft of another open
+  builder window on `owner` (which is marked edited, so its next Save keeps the change); else
+  the file. `ConfigBuilderWindows` now records each window's view (`OpenBuilder { window,
+  view }`), matched by file identity. Unlink and "link after first save" both use it, through
+  `ConfigDraft::{link,unlink}_secondary_task`. This also fixed a case the audit missed:
+  unlinking a **top-level** node of a saved root edited the root's file on disk behind its own
+  open draft, so the next Save put the link back. Only the file fall-back has a unit test; the
+  window routing needs a GPUI test context (plan 9.2).

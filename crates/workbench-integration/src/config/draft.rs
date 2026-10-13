@@ -148,6 +148,26 @@ impl ConfigDraft {
         self.set_secondary_tasks(&tasks);
         true
     }
+
+    /// Stop running `child` after this config. Every entry that resolves to it goes, however
+    /// it was spelled. Returns whether anything changed. The file itself is never touched.
+    pub fn unlink_secondary_task(&mut self, child: &Path, workbench_dir: Option<&Path>) -> bool {
+        let owner = self.path.clone();
+        let before = self.secondary_tasks();
+        let kept: Vec<PathBuf> = before
+            .iter()
+            .filter(|entry| {
+                let resolved = resolve_secondary_task(entry, owner.as_deref(), workbench_dir);
+                !super::chain::same_path(&resolved, child)
+            })
+            .cloned()
+            .collect();
+        if kept.len() == before.len() {
+            return false;
+        }
+        self.set_secondary_tasks(&kept);
+        true
+    }
 }
 
 /// Where a `secondary_tasks` entry points.
@@ -208,6 +228,21 @@ mod tests {
                 .unwrap()
                 .is_blank()
         );
+    }
+
+    #[test]
+    fn unlinking_removes_every_spelling_of_the_child() {
+        let tree = TempTree::new();
+        let workbench = tree.root.join("wb");
+        let child = tree.write("wb/pages.yml", "task: create\n");
+        let mut root = ConfigDraft::from_yaml(&format!(
+            "task: create\nsecondary_tasks: [pages.yml, {}, other.yml]\n",
+            child.display()
+        ))
+        .unwrap();
+        assert!(root.unlink_secondary_task(&child, Some(&workbench)));
+        assert_eq!(root.secondary_tasks(), vec![PathBuf::from("other.yml")]);
+        assert!(!root.unlink_secondary_task(&child, Some(&workbench)));
     }
 
     /// P0-5: an unset (null) value keeps its row but is not written.

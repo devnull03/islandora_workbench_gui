@@ -66,10 +66,30 @@ static INTEGER_PATTERN: LazyLock<Regex> =
 /// rival copy with a divergent draft.
 #[derive(Default)]
 pub struct ConfigBuilderWindows {
-    open: HashMap<Option<PathBuf>, AnyWindowHandle>,
+    open: HashMap<Option<PathBuf>, OpenBuilder>,
 }
 
 impl Global for ConfigBuilderWindows {}
+
+/// One registered builder window, and the view in it — the view is how a chain edit made in
+/// another window reaches this window's draft instead of the file under it (plan 1.9).
+#[derive(Clone)]
+struct OpenBuilder {
+    window: AnyWindowHandle,
+    view: WeakEntity<ConfigBuilder>,
+}
+
+impl ConfigBuilderWindows {
+    /// The live builder editing `path`, if one is open. Matched by file identity, not by the
+    /// spelling the window was opened with.
+    fn view_for(&self, path: &std::path::Path) -> Option<Entity<ConfigBuilder>> {
+        self.open
+            .iter()
+            .filter_map(|(key, open)| Some((key.as_deref()?, open)))
+            .find(|(key, _)| workbench_integration::config::chain::same_path(key, path))
+            .and_then(|(_, open)| open.view.upgrade())
+    }
+}
 
 /// Width of the read-only YAML preview, and of the editor column beside it. The window is sized
 /// as the sum, and grows and shrinks by the panel's width when it is shown or hidden — the panel
@@ -101,7 +121,12 @@ fn open_config_builder_with_ancestors(
     ancestors: Vec<PathBuf>,
     cx: &mut App,
 ) {
-    if let Some(handle) = cx.global::<ConfigBuilderWindows>().open.get(&path).copied() {
+    if let Some(handle) = cx
+        .global::<ConfigBuilderWindows>()
+        .open
+        .get(&path)
+        .map(|open| open.window)
+    {
         if handle
             .update(cx, |_, window, _| window.activate_window())
             .is_ok()
@@ -146,15 +171,21 @@ fn open_config_builder_with_ancestors(
 
     cx.spawn(async move |cx| {
         let key = path.clone();
+        let mut view = None;
         let opened = cx.open_window(options, |window, cx| {
-            let view = cx.new(|cx| ConfigBuilder::new(path, ancestors, window, cx));
-            cx.new(|cx| Root::new(view, window, cx))
+            let builder = cx.new(|cx| ConfigBuilder::new(path, ancestors, window, cx));
+            view = Some(builder.downgrade());
+            cx.new(|cx| Root::new(builder, window, cx))
         });
-        if let Ok(handle) = opened {
+        if let (Ok(handle), Some(view)) = (opened, view) {
             cx.update(|cx| {
-                cx.global_mut::<ConfigBuilderWindows>()
-                    .open
-                    .insert(key, handle.into());
+                cx.global_mut::<ConfigBuilderWindows>().open.insert(
+                    key,
+                    OpenBuilder {
+                        window: handle.into(),
+                        view,
+                    },
+                );
             });
         }
     })
@@ -308,18 +339,64 @@ pub(crate) fn workbench_dir(cx: &App) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Link a freshly saved child under `parent` on disk. The entry is absolute, the same as a
-/// link made with the file picker.
-fn link_saved_child(
-    parent: &std::path::Path,
-    child: &std::path::Path,
-    workbench_dir: Option<&std::path::Path>,
+/// Apply a `secondary_tasks` edit to a config that no builder window has open: load, edit,
+/// and save only if the edit changed something.
+fn edit_config_file(
+    path: &std::path::Path,
+    edit: impl FnOnce(&mut ConfigDraft) -> bool,
 ) -> Result<(), String> {
-    let mut draft = ConfigDraft::load(parent).map_err(|error| error.to_string())?;
-    if draft.link_secondary_task(child, workbench_dir) {
-        draft.save(parent).map_err(|error| error.to_string())?;
+    let mut draft = ConfigDraft::load(path)
+        .map_err(|error| format!("Couldn't open {}: {error}", path.display()))?;
+    if edit(&mut draft) {
+        draft
+            .save(path)
+            .map_err(|error| format!("Couldn't save {}: {error}", path.display()))?;
     }
     Ok(())
+}
+
+impl ConfigBuilder {
+    /// The one path a chain edit takes (plan 1.9, P0-9). `edit` changes the `secondary_tasks`
+    /// of the config at `owner` and reports whether it changed anything. It is applied to:
+    ///
+    /// 1. this window's own draft, when `owner` is the config open here — including a
+    ///    top-level node of a saved root, which used to be edited on disk behind the draft;
+    /// 2. the draft of another open builder window on `owner`, which is marked edited, so its
+    ///    next Save keeps the change instead of overwriting it with a stale draft;
+    /// 3. otherwise the file itself.
+    pub(crate) fn apply_chain_edit(
+        &mut self,
+        owner: &std::path::Path,
+        edit: impl FnOnce(&mut ConfigDraft, Option<&std::path::Path>) -> bool,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let base = workbench_dir(cx);
+        let base = base.as_deref();
+        self.last_chain_scan = None;
+        if self
+            .draft
+            .path
+            .as_deref()
+            .is_some_and(|path| workbench_integration::config::chain::same_path(path, owner))
+        {
+            if edit(&mut self.draft, base) {
+                self.forget_widgets("secondary_tasks");
+                self.revalidate(cx);
+            }
+            return Ok(());
+        }
+        if let Some(view) = cx.global::<ConfigBuilderWindows>().view_for(owner) {
+            view.update(cx, |builder, cx| {
+                if edit(&mut builder.draft, base) {
+                    builder.forget_widgets("secondary_tasks");
+                    builder.last_chain_scan = None;
+                    builder.revalidate(cx);
+                }
+            });
+            return Ok(());
+        }
+        edit_config_file(owner, |draft| edit(draft, base))
+    }
 }
 
 /// A file name for a label: lowercase `[a-z0-9_-]`, runs of anything else collapsed to one
@@ -810,7 +887,10 @@ impl ConfigBuilder {
                     .get("workbench_path")
                     .map(|v| format!("{}/g/config", v.text()))
             })?;
-        Some(new_config_path(std::path::Path::new(&dir), &self.draft.label))
+        Some(new_config_path(
+            std::path::Path::new(&dir),
+            &self.draft.label,
+        ))
     }
 
     /// Save, asking first when the file on disk has comments the save would drop (plan Q8:
@@ -949,18 +1029,27 @@ impl ConfigBuilder {
         let was_new = self.draft.path.is_none();
         self.draft.mark_saved(&path);
         if was_new {
+            let view = cx.entity().downgrade();
             let windows = cx.global_mut::<ConfigBuilderWindows>();
             windows.open.remove(&None);
-            windows
-                .open
-                .insert(Some(path.clone()), window.window_handle());
+            windows.open.insert(
+                Some(path.clone()),
+                OpenBuilder {
+                    window: window.window_handle(),
+                    view,
+                },
+            );
         }
         let mut link_notice = None;
-        if was_new
-            && let Some(parent) = self.parent_path.clone()
-            && let Err(error) = link_saved_child(&parent, &path, workbench_dir(cx).as_deref())
-        {
-            link_notice = Some(format!("Saved, but couldn't link child: {error}"));
+        if was_new && let Some(parent) = self.parent_path.clone() {
+            let child = path.clone();
+            if let Err(error) = self.apply_chain_edit(
+                &parent,
+                move |draft, base| draft.link_secondary_task(&child, base),
+                cx,
+            ) {
+                link_notice = Some(format!("Saved, but couldn't link child: {error}"));
+            }
         }
         self.draft.label = label;
         self.chrome.transition(BuilderChromeEvent::Saved {
@@ -1289,7 +1378,8 @@ mod tests {
     // shadow the one this needs.
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
-        INTEGER_PATTERN, discarded_draft, ensure_required_settings, new_config_path, slug,
+        INTEGER_PATTERN, discarded_draft, edit_config_file, ensure_required_settings,
+        new_config_path, slug,
     };
     use serde_yaml::Value;
 
@@ -1369,8 +1459,14 @@ mod tests {
             .insert("log_file_path".into(), Value::String("x.log".into()));
         let back = discarded_draft(&edited).unwrap();
         assert_eq!(back.path.as_deref(), Some(path.as_path()));
-        assert_eq!(back.values.get("task").and_then(Value::as_str), Some("update"));
-        assert_eq!(back.values.get("id_field").and_then(Value::as_str), Some("pid"));
+        assert_eq!(
+            back.values.get("task").and_then(Value::as_str),
+            Some("update")
+        );
+        assert_eq!(
+            back.values.get("id_field").and_then(Value::as_str),
+            Some("pid")
+        );
         assert!(!back.values.contains_key("log_file_path"));
 
         let mut unsaved = ConfigDraft::from_yaml("task: create\nid_field: id\n").unwrap();
@@ -1404,6 +1500,35 @@ mod tests {
         assert_eq!(new_config_path(&dir, "Pages"), dir.join("pages-2.yml"));
         std::fs::write(dir.join("pages-2.yml"), "task: create\n").unwrap();
         assert_eq!(new_config_path(&dir, "pages"), dir.join("pages-3.yml"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// P0-9's fall-back branch: with no window open on the owner, the file is edited — and
+    /// left alone when the edit changes nothing.
+    #[test]
+    fn a_chain_edit_with_no_open_window_goes_to_the_file() {
+        let dir = std::env::temp_dir().join(format!("builder-chain-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let child = dir.join("pages.yml");
+        std::fs::write(&child, "task: create\n").unwrap();
+        let parent = dir.join("root.yml");
+        std::fs::write(
+            &parent,
+            format!("task: create\nsecondary_tasks: [{}]\n", child.display()),
+        )
+        .unwrap();
+
+        edit_config_file(&parent, |draft| draft.unlink_secondary_task(&child, None)).unwrap();
+        let reloaded = ConfigDraft::load(&parent).unwrap();
+        assert!(reloaded.secondary_tasks().is_empty());
+
+        let modified = std::fs::metadata(&parent).unwrap().modified().unwrap();
+        edit_config_file(&parent, |_| false).unwrap();
+        assert_eq!(
+            std::fs::metadata(&parent).unwrap().modified().unwrap(),
+            modified
+        );
+        assert!(edit_config_file(&dir.join("missing.yml"), |_| true).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

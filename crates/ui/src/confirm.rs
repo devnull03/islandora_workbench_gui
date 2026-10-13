@@ -6,11 +6,7 @@
 //! button, and the action is the danger skin with a verb on it ("Discard", never "OK").
 
 use gpui::{App, SharedString, Window};
-use gpui_component::{
-    WindowExt as _,
-    button::ButtonVariant,
-    dialog::DialogButtonProps,
-};
+use gpui_component::{WindowExt as _, button::ButtonVariant, dialog::DialogButtonProps};
 
 use crate::tokens::CONFIRM_DIALOG_W;
 

@@ -1,7 +1,7 @@
 //! Recursive `secondary_tasks` editor (mockups `1d` and `2a`).
 
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
@@ -384,36 +384,31 @@ impl ConfigBuilder {
         }
     }
 
+    /// Unlink `child` from whichever config runs it. `parent` is `None` only for a top-level
+    /// node of a never-saved draft, which can only be this window's own.
     fn unlink_node(&mut self, parent: Option<PathBuf>, child: PathBuf, cx: &mut Context<Self>) {
-        if let Some(parent) = parent {
-            let Ok(mut draft) = config::ConfigDraft::load(&parent) else {
-                self.chrome.transition(BuilderChromeEvent::Failed {
-                    title: "Unlink failed".into(),
-                    detail: format!("Couldn't open {} to unlink the child.", parent.display())
-                        .into(),
-                });
-                cx.notify();
-                return;
-            };
-            let base = workbench_dir(cx);
-            let mut tasks = draft.secondary_tasks();
-            tasks.retain(|path| !same_path(&draft, path, &child, base.as_deref()));
-            draft.set_secondary_tasks(&tasks);
-            if let Err(error) = draft.save(&parent) {
-                self.chrome.transition(BuilderChromeEvent::Failed {
-                    title: "Unlink failed".into(),
-                    detail: format!("Couldn't save {}: {error}", parent.display()).into(),
-                });
+        let result = match parent {
+            Some(parent) => self.apply_chain_edit(
+                &parent,
+                move |draft, base| draft.unlink_secondary_task(&child, base),
+                cx,
+            ),
+            None => {
+                let base = workbench_dir(cx);
+                if self.draft.unlink_secondary_task(&child, base.as_deref()) {
+                    self.forget_widgets("secondary_tasks");
+                    self.last_chain_scan = None;
+                    self.revalidate(cx);
+                }
+                Ok(())
             }
-        } else {
-            let base = workbench_dir(cx);
-            let mut tasks = self.draft.secondary_tasks();
-            tasks.retain(|path| !same_path(&self.draft, path, &child, base.as_deref()));
-            self.draft.set_secondary_tasks(&tasks);
-            self.forget_widgets("secondary_tasks");
-            self.revalidate(cx);
+        };
+        if let Err(detail) = result {
+            self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Unlink failed".into(),
+                detail: detail.into(),
+            });
         }
-        self.last_chain_scan = None;
         cx.notify();
     }
 
@@ -496,15 +491,4 @@ fn flattened_labels(nodes: &[SecondaryConfigNode]) -> Vec<String> {
         visit(node, &mut labels);
     }
     labels
-}
-
-/// Does `owner`'s entry `left` name the file `right`? Resolved by the run-time rule.
-fn same_path(
-    owner: &config::ConfigDraft,
-    left: &Path,
-    right: &Path,
-    workbench_dir: Option<&Path>,
-) -> bool {
-    let left = config::resolve_secondary_task(left, owner.path.as_deref(), workbench_dir);
-    config::chain::same_path(&left, right)
 }
