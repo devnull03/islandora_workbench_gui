@@ -202,8 +202,12 @@ fn csv_field(text: &str) -> String {
 /// picks a worksheet; here the link does, the way Google writes it (`#gid=…` or `?gid=…`) —
 /// without it the export is always the first worksheet.
 fn fetch_sheet(url: &str) -> Result<String> {
-    let export = sheet_export_url(url)?;
-    let response = ureq::get(&export)
+    fetch_csv(&sheet_export_url(url)?)
+}
+
+/// Download `export`, which must answer with a CSV.
+fn fetch_csv(export: &str) -> Result<String> {
+    let response = ureq::get(export)
         .timeout(std::time::Duration::from_secs(60))
         .call()
         .with_context(|| format!("Couldn't fetch the sheet from {export}"))?;
@@ -354,6 +358,43 @@ fn duration_text(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// Answer one HTTP request on a local port with `content_type` and `body`.
+    fn serve_once(content_type: &'static str, body: &'static str) -> String {
+        use std::io::{Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 1024];
+            let _ = stream.read(&mut request);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+        });
+        format!("http://{address}/export?format=csv")
+    }
+
+    #[test]
+    fn a_sheet_must_come_back_as_csv() {
+        let csv = serve_once("text/csv; charset=utf-8", "id,title\n1,One\n");
+        assert_eq!(super::fetch_csv(&csv).unwrap(), "id,title\n1,One\n");
+        // An unshared sheet answers with Google's sign-in page.
+        let page = serve_once("text/html; charset=utf-8", "<html>Sign in</html>");
+        let error = super::fetch_csv(&page).unwrap_err().to_string();
+        assert!(error.contains("did not come back as a CSV"), "{error}");
+    }
+
+    #[test]
+    fn a_link_without_a_worksheet_exports_the_first() {
+        let first = "https://docs.google.com/spreadsheets/d/abc123/edit";
+        assert!(!super::sheet_export_url(first).unwrap().contains("gid"));
+        assert_eq!(super::sheet_gid("x?usp=sharing&gid=7#x"), Some("7".into()));
+        assert_eq!(super::sheet_gid("x#gid="), None);
+    }
+
     #[test]
     fn negative_durations_keep_one_sign() {
         assert_eq!(super::duration_text(-5400), "-1:30:00");

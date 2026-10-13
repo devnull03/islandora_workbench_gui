@@ -102,6 +102,42 @@ pub fn flattened_paths(root: &ConfigDraft, workbench_dir: Option<&Path>) -> Vec<
     output
 }
 
+/// The config names Workbench records in the CSV ID map for a run of `root`: the root as it was
+/// given (`root_arg`), then every `secondary_tasks` entry in the chain exactly as written —
+/// Workbench starts each secondary run with `--config <entry>` and records that string.
+/// Unreadable configs end their branch; a cycle is walked once.
+pub fn recorded_config_files(
+    root: &ConfigDraft,
+    root_arg: &str,
+    workbench_dir: Option<&Path>,
+) -> Vec<String> {
+    fn walk(
+        draft: &ConfigDraft,
+        workbench_dir: Option<&Path>,
+        seen: &mut HashSet<PathBuf>,
+        output: &mut Vec<String>,
+    ) {
+        for entry in draft.secondary_tasks() {
+            let name = entry.to_string_lossy().into_owned();
+            if !output.contains(&name) {
+                output.push(name);
+            }
+            let path = resolve_secondary_task(&entry, draft.path.as_deref(), workbench_dir);
+            if !seen.insert(identity(&path)) {
+                continue;
+            }
+            if let Ok(child) = ConfigDraft::load(&path) {
+                walk(&child, workbench_dir, seen, output);
+            }
+        }
+    }
+
+    let mut output = vec![root_arg.to_string()];
+    let mut seen: HashSet<PathBuf> = root.path.as_deref().map(identity).into_iter().collect();
+    walk(root, workbench_dir, &mut seen, &mut output);
+    output
+}
+
 /// Explain why linking `candidate` below `owner` is unsafe. Missing files are allowed so a user
 /// can create a link before the child exists; cycles are rejected as soon as they can be proven.
 /// A config that already runs elsewhere in the chain is *allowed* (Q6): Workbench runs it once
@@ -270,6 +306,32 @@ pub fn same_path(left: &Path, right: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::config::test_support::TempTree;
+
+    #[test]
+    fn the_map_records_each_entry_as_written() {
+        let tree = TempTree::new();
+        tree.write("grand.yml", "task: update\nsecondary_tasks: [root.yml]\n");
+        tree.write(
+            "child.yml",
+            "task: add_media\nsecondary_tasks: [grand.yml]\n",
+        );
+        let root_path = tree.write(
+            "root.yml",
+            "task: create\nsecondary_tasks: [child.yml, missing.yml]\n",
+        );
+        let root = ConfigDraft::load(&root_path).unwrap();
+        let arg = root_path.display().to_string();
+        assert_eq!(
+            recorded_config_files(&root, &arg, Some(&tree.root)),
+            vec![
+                arg.clone(),
+                "child.yml".to_string(),
+                "grand.yml".to_string(),
+                "root.yml".to_string(),
+                "missing.yml".to_string(),
+            ]
+        );
+    }
 
     #[test]
     fn nested_graph_flattens_depth_first() {

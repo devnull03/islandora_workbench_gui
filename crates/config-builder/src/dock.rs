@@ -151,6 +151,11 @@ impl BuilderPane {
         self.docked.is_none() && self.floated_view().is_none() && self.snap_preview.is_none()
     }
 
+    /// Whether the dock is open only to show where a dragged builder would land.
+    pub fn is_previewing(&self) -> bool {
+        self.snap_preview.is_some()
+    }
+
     /// The dock's width while a builder is docked in it — the main window lays its steps out
     /// in what is left.
     pub fn docked_width(&self, cx: &App) -> Option<Pixels> {

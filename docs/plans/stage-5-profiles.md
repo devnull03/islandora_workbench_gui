@@ -117,4 +117,4 @@ library folder (`config_library_dir`) and its config list; the YAML files stay m
 - The profile bar is its own band between the title bar and the steps (`table_head`, bottom
   border, 9/14 padding), so it stays put while they scroll. Importing a profile whose name is
   taken asks to replace it in place (the active one is reloaded; refused while a run uses it).
-- Still open (Low): card facts are one line rather than chips.
+- Card facts (servers, configs, source) are a row of chips.

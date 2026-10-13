@@ -118,6 +118,7 @@ display.
   the window shrinks and after a restored layout; and the run controls compress to a rail
   (Source · Ingest dir · Config · Server, then the run actions and last run) when the docked
   builder leaves the steps under `RAIL_BREAKPOINT_W` (560 px). Revalidating because Settings
-  changed no longer marks an open builder as edited. Still open (Low): preview toggles
-  persist the layout.
+  changed no longer marks an open builder as edited. The snap preview's opening and
+  closing of the dock is no longer saved as the layout, and an unchanged layout is not
+  rewritten.
 

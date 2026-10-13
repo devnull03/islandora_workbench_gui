@@ -105,10 +105,14 @@ impl MainDock {
         let _layout_sub = cx.subscribe_in(
             &dock_area,
             window,
-            |_this, area, event: &DockEvent, window, cx| {
+            |this, area, event: &DockEvent, window, cx| {
                 if matches!(event, DockEvent::LayoutChanged) {
                     Self::clamp_builder_width(area, window, cx);
-                    Self::persist_layout(area, cx);
+                    // The snap preview opens and closes the dock while a builder is dragged;
+                    // that is not an arrangement the user chose.
+                    if !this.builder_pane.read(cx).is_previewing() {
+                        Self::persist_layout(area, cx);
+                    }
                 }
             },
         );
@@ -159,7 +163,15 @@ impl MainDock {
 
     fn persist_layout(dock_area: &Entity<DockArea>, cx: &mut App) {
         let state = dock_area.read(cx).dump(cx);
-        if let Ok(json) = serde_json::to_string(&state) {
+        let Ok(json) = serde_json::to_string(&state) else {
+            return;
+        };
+        // The event fires on every edit, most of which leave the saved layout as it was.
+        let saved = AppSettings::get(cx)
+            .values
+            .get(LAYOUT_KEY)
+            .map(|v| v.text());
+        if saved.as_deref() != Some(json.as_str()) {
             AppSettings::set_text(LAYOUT_KEY, json.into(), cx);
         }
     }

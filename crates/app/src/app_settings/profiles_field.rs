@@ -106,7 +106,6 @@ fn profile_card(
     let name = profile.name.clone();
     let is_active = name == active;
     let editing = renaming.read(cx).0.as_deref() == Some(name.as_str());
-    let muted = cx.theme().colors.muted_foreground;
     let id = |what: &str| SharedString::from(format!("profile-{what}-{name}"));
 
     let title: AnyElement = if editing {
@@ -237,9 +236,11 @@ fn profile_card(
                 .child(actions),
         )
         .child(
-            Label::new(profiles::summary(profile))
-                .text_xs()
-                .text_color(muted),
+            h_flex().gap(GAP_SM).flex_wrap().children(
+                profiles::facts(profile)
+                    .into_iter()
+                    .map(|fact| app_tag().child(Label::new(fact).text_xs())),
+            ),
         )
         .into_any_element()
 }

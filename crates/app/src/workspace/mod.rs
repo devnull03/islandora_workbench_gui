@@ -45,6 +45,8 @@ use crate::helpers::workbench_input_data_dir;
 enum Operation {
     None,
     Preprocessing,
+    /// A run's config is being loaded and rewritten, off the UI thread.
+    Preparing,
     /// A Workbench process is running; [`Workspace::running`] says which and for what.
     Workbench,
 }

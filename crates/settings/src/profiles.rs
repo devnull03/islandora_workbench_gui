@@ -83,8 +83,9 @@ pub struct ProfileConfig {
     pub description: String,
 }
 
-/// A one-line summary for a profile card: `2 servers · 6 configs · source: CSV file`.
-pub fn summary(profile: &Profile) -> String {
+/// What a profile card shows about it, one chip each: `2 servers`, `6 configs`,
+/// `source: CSV file`.
+pub fn facts(profile: &Profile) -> Vec<String> {
     let plural = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
     let mut parts = vec![
         plural(profile.servers.len(), "server"),
@@ -100,7 +101,7 @@ pub fn summary(profile: &Profile) -> String {
             }
         ));
     }
-    parts.join(" · ")
+    parts
 }
 
 impl AppSettings {
@@ -545,8 +546,8 @@ mod tests {
     #[test]
     fn summaries_read_like_the_mockup() {
         assert_eq!(
-            summary(&settings().snapshot_profile()),
-            "1 server · 0 configs · source: CSV file"
+            facts(&settings().snapshot_profile()),
+            ["1 server", "0 configs", "source: CSV file"]
         );
     }
 }

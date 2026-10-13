@@ -163,6 +163,12 @@ mod tests {
                 == "ISLANDORA_WORKBENCH_PASSWORD"),
             Ok(None)
         );
+        // `password:` with no value is still present, so Workbench does not ask.
+        let password_key = |k: &str| k == "password" || k == "username";
+        assert_eq!(
+            secret_needed(lookup(&[("username", "a")]), password_key, none, wb),
+            Ok(None)
+        );
         // A plain credentials file answers it.
         assert_eq!(ask(&[("credentials_file_path", &plain)], &none), Ok(None));
         // An encrypted one needs its key, unless a key file or the variable gives it.

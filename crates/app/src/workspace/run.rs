@@ -212,28 +212,45 @@ impl Workspace {
             }
         }
 
-        let prepared = self.prepare_run(&action, &target, cx);
-        // Preparing writes host, credentials and input_csv into the config file.
-        config_builder::ConfigFilesChanged::bump(cx);
-        match prepared {
-            Ok(prepared) if prepared.secret.is_some() => {
-                self.ask_secret(action, prepared, window, cx)
-            }
-            Ok(prepared) => self.launch(action, prepared, window, cx),
+        let setup = match self.run_setup(&action, &target, cx) {
+            Ok(setup) => setup,
             Err(error) => {
                 self.append_log(&format!("[ERROR] {error}"), window, cx);
-                cx.notify();
+                return cx.notify();
             }
-        }
+        };
+        // Loading and rewriting the config, and reading the credentials file, happen off the UI
+        // thread; the workspace stays busy meanwhile so nothing else starts.
+        self.op = Operation::Preparing;
+        cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            let prepared = cx.background_spawn(async move { setup.prepare() }).await;
+            this.update_in(cx, |this, window, cx| {
+                this.op = Operation::None;
+                // Preparing writes host, credentials and input_csv into the config file.
+                config_builder::ConfigFilesChanged::bump(cx);
+                match prepared {
+                    Ok(prepared) if prepared.secret.is_some() => {
+                        this.ask_secret(action, prepared, window, cx)
+                    }
+                    Ok(prepared) => this.launch(action, prepared, window, cx),
+                    Err(error) => this.append_log(&format!("[ERROR] {error}"), window, cx),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
-    /// Everything that can fail before a process exists: settings, the config rewrite, options.
-    fn prepare_run(
+    /// What a run needs from the window — selections, settings, options — checked here; the
+    /// file work is [`RunSetup::prepare`].
+    fn run_setup(
         &self,
         action: &WorkbenchAction,
         target: &RunTarget,
         cx: &App,
-    ) -> anyhow::Result<PreparedRun> {
+    ) -> anyhow::Result<RunSetup> {
         let mut options = self.run_options(action, target, cx)?;
         let config_path = match target.config.clone() {
             Some(path) => path,
@@ -263,25 +280,72 @@ impl Workspace {
             .find(|s| s.server_url.as_ref() == server_url.as_str())
             .map(|s| PathBuf::from(s.credentials_file.as_ref()))
             .unwrap_or_default();
-
-        let mut handler = WorkbenchConfigHandler::new(config_path.clone())
-            .load()
-            .map_err(|e| anyhow::anyhow!("Failed to load config: {e}"))?;
         // The processed CSV belongs to the selected config's run, never to a rollback config
         // (which names the CSV of node IDs it deletes) or to the row-free modes.
         let reads_rows = matches!(action, WorkbenchAction::Check { .. } | WorkbenchAction::Run);
         let processed = if reads_rows && !self.running_rollback(action, &config_path) {
-            self.processed_csv.as_deref()
+            self.processed_csv.clone()
         } else {
             None
         };
+        let confirms = AppSettings::get(cx)
+            .server_configs
+            .iter()
+            .any(|s| s.server_url.as_ref() == server_url.as_str() && s.needs_confirmation);
+        // An "always confirm" server keeps the config's own prompts for anything that changes
+        // content, whatever the Options say — that is what the flag is for.
+        if confirms && action.is_destructive() {
+            options.skip_user_prompts = false;
+        }
+        Ok(RunSetup {
+            options,
+            config_path,
+            wb_info,
+            server_url,
+            credentials_file,
+            processed,
+            reads_rows,
+            confirms,
+        })
+    }
+}
+
+/// A run's inputs, gathered on the UI thread and prepared off it.
+struct RunSetup {
+    options: RunOptions,
+    config_path: PathBuf,
+    wb_info: WbInfo,
+    server_url: String,
+    credentials_file: PathBuf,
+    processed: Option<PathBuf>,
+    reads_rows: bool,
+    confirms: bool,
+}
+
+impl RunSetup {
+    /// Everything that touches the disk before a process exists: loading and rewriting the
+    /// config, and working out what Workbench will ask for.
+    fn prepare(self) -> anyhow::Result<PreparedRun> {
+        let RunSetup {
+            options,
+            config_path,
+            wb_info,
+            server_url,
+            credentials_file,
+            processed,
+            reads_rows,
+            confirms,
+        } = self;
+        let mut handler = WorkbenchConfigHandler::new(config_path.clone())
+            .load()
+            .map_err(|e| anyhow::anyhow!("Failed to load config: {e}"))?;
         // `create_from_files` reads `input_dir`, and the View tasks read Drupal: no CSV needed.
         let needs_csv =
             workbench_integration::config::catalog::task_reads_csv(handler.text_setting("task"));
         let overrides = RunOverrides {
             host: &server_url,
             credentials_file_path: &credentials_file,
-            input_csv: processed,
+            input_csv: processed.as_deref(),
             require_input_csv: reads_rows && needs_csv,
         };
         handler
@@ -303,15 +367,6 @@ impl Workspace {
                 .text_setting("output_csv")
                 .map(|p| workbench_integration::secrets::resolve(p, &wb_info.install_path)),
         };
-        let confirms = AppSettings::get(cx)
-            .server_configs
-            .iter()
-            .any(|s| s.server_url.as_ref() == server_url.as_str() && s.needs_confirmation);
-        // An "always confirm" server keeps the config's own prompts for anything that changes
-        // content, whatever the Options say — that is what the flag is for.
-        if confirms && action.is_destructive() {
-            options.skip_user_prompts = false;
-        }
         let secret = secret_needed(
             |key| match key {
                 // A typed field of the loaded config, not one of its other settings.
@@ -342,7 +397,9 @@ impl Workspace {
             secret_value: None,
         })
     }
+}
 
+impl Workspace {
     /// Ask for the password or key Workbench would otherwise ask a terminal for, then launch
     /// with it in the environment. Cancel starts nothing.
     fn ask_secret(

@@ -244,13 +244,16 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   The worksheet is a profile setting (`source_worksheet`).
 - *CSV ID → node ID map.* The More menu runs Workbench's own
   `scripts/manage_csv_to_node_id_map.py` in its Python, all seven of its operations: export the
-  map, export the rows with duplicate CSV IDs (`--nonunique csv_id`), merge another map into
-  this one, remove entries before or after a date, remove the selected config's entries, and
-  remove entries for nodes the selected server no longer has (the dialog warns that the map is
+  map, export the rows with a duplicate value in a chosen column (`--nonunique`: CSV ID, node
+  ID, parent CSV ID or parent node ID), merge another map into this one, remove entries before
+  or after a date, remove the selected config's entries — with its secondary configs', each
+  named the way Workbench records it (the `secondary_tasks` entry as written) — and remove
+  entries for nodes the selected server no longer has (the dialog warns that the map is
   not split by server). The database is found the way Workbench finds it
   (`csv_id_to_node_id_map_path`, else `csv_id_to_node_id_map_dir` — the system temp folder by
   default — plus `csv_id_to_node_id_map_filename`); output goes to the log, and the window is
-  locked while it runs. Text dialogs (these and quick delete) now focus their field on open.
+  locked while it runs. Loading the config to find the map happens off the UI thread, as does
+  a run's preparation (loading and rewriting the config, reading the credentials file). Text dialogs (these and quick delete) now focus their field on open.
 - *Islandora 7 export* is out of scope: `get_islandora_7_content.py` moved out of Workbench into
   its own repository (`mjordan/i7_import`) in October 2025.
 - *Smaller parity fixes.* An export's CSV is offered after the run: the `export_csv` task's
