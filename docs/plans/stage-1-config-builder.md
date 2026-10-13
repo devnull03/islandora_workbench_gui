@@ -329,3 +329,10 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   unlinking a **top-level** node of a saved root edited the root's file on disk behind its own
   open draft, so the next Save put the link back. Only the file fall-back has a unit test; the
   window routing needs a GPUI test context (plan 9.2).
+- [x] **1.10 (P0-10/11)** `validate` takes a `ValidationContext { workbench_dir }`, and the
+  self-link rule resolves each entry the way Workbench does and compares file identity
+  (`chain::same_path`) — two `main.yml`s in different folders are no longer an error. The plan
+  suggested `chain::link_error`; that also reports "already in the chain" for every existing
+  entry, so only its identity check is reused. App-supplied keys found in a loaded file are no
+  longer a footer warning with no row to click: the locked band says "set in file — replaced
+  by the ingest server" (or, for `input_csv`, "used unless step 1 processes a source").

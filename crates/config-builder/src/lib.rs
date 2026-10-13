@@ -42,7 +42,7 @@ use workbench_integration::config::{
     ConfigDraft,
     catalog::{self, SettingDef},
     chain::SecondaryConfigNode,
-    validate::{Problem, Severity, validate},
+    validate::{Problem, Severity, ValidationContext, validate},
 };
 
 use ui::AppFont as _;
@@ -339,6 +339,17 @@ pub(crate) fn workbench_dir(cx: &App) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Validate with what the builder knows about this machine.
+fn validate_draft(draft: &ConfigDraft, cx: &App) -> Vec<Problem> {
+    let workbench_dir = workbench_dir(cx);
+    validate(
+        draft,
+        &ValidationContext {
+            workbench_dir: workbench_dir.as_deref(),
+        },
+    )
+}
+
 /// Apply a `secondary_tasks` edit to a config that no builder window has open: load, edit,
 /// and save only if the edit changed something.
 fn edit_config_file(
@@ -544,7 +555,7 @@ impl ConfigBuilder {
             .and_then(|p| library_description(p, cx))
             .unwrap_or_default();
 
-        let problems = validate(&draft);
+        let problems = validate_draft(&draft, cx);
         Self {
             draft,
             description,
@@ -827,7 +838,7 @@ impl ConfigBuilder {
     }
 
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
-        self.problems = validate(&self.draft);
+        self.problems = validate_draft(&self.draft, cx);
         self.chrome.transition(BuilderChromeEvent::Edited);
         cx.notify();
     }
@@ -955,7 +966,7 @@ impl ConfigBuilder {
                 self.inputs.clear();
                 self.selects.clear();
                 self.last_chain_scan = None;
-                self.problems = validate(&self.draft);
+                self.problems = validate_draft(&self.draft, cx);
                 self.chrome = BuilderChromeState {
                     yaml: self.chrome.yaml,
                     ..Default::default()
@@ -1259,7 +1270,10 @@ impl ConfigBuilder {
             "you don't set these here",
         );
         for def in catalog::locked() {
-            band = band.entry(def.key.clone(), locked_source(&def.key));
+            band = band.entry(
+                def.key.clone(),
+                locked_source(&def.key, self.draft.values.get(&def.key)),
+            );
         }
         band.into_any_element()
     }
@@ -1340,14 +1354,21 @@ impl ConfigBuilder {
 ///
 /// A `match` rather than catalogue data: three keys, and the answer is about how *this app* runs
 /// Workbench, which the generated catalogue has no business knowing.
-fn locked_source(key: &str) -> &'static str {
+///
+/// A file loaded from disk may already set one of them. That is said here, in the band, rather
+/// than as a validation warning with no row to show it on (plan 1.10, P0-11).
+fn locked_source(key: &str, in_file: Option<&Value>) -> String {
+    let set_in_file = in_file.is_some_and(|value| !value.is_null());
     match key {
-        "host" => "Ingest server",
-        "credentials_file_path" => "App settings",
+        "host" if set_in_file => "set in file — replaced by the ingest server".into(),
+        "host" => "Ingest server".into(),
+        "credentials_file_path" if set_in_file => "set in file — replaced from app settings".into(),
+        "credentials_file_path" => "App settings".into(),
         // Plan Q2: the CSV step 1 produced, when it ran this session; otherwise the file's
         // own `input_csv` stands.
-        "input_csv" => "Processed CSV, or this file's value",
-        _ => "The app",
+        "input_csv" if set_in_file => "set in file — used unless step 1 processes a source".into(),
+        "input_csv" => "Processed CSV from step 1".into(),
+        _ => "The app".into(),
     }
 }
 
@@ -1379,7 +1400,7 @@ mod tests {
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
         INTEGER_PATTERN, discarded_draft, edit_config_file, ensure_required_settings,
-        new_config_path, slug,
+        locked_source, new_config_path, slug,
     };
     use serde_yaml::Value;
 
@@ -1530,5 +1551,18 @@ mod tests {
         );
         assert!(edit_config_file(&dir.join("missing.yml"), |_| true).is_err());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// P0-11: a value already in the file is stated in the locked band.
+    #[test]
+    fn locked_band_says_when_the_file_already_sets_a_key() {
+        let url = Value::String("https://x.org".into());
+        assert_eq!(locked_source("host", None), "Ingest server");
+        assert!(locked_source("host", Some(&url)).starts_with("set in file"));
+        assert!(locked_source("input_csv", Some(&url)).contains("unless step 1"));
+        assert_eq!(
+            locked_source("input_csv", Some(&Value::Null)),
+            "Processed CSV from step 1"
+        );
     }
 }

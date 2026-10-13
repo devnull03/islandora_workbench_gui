@@ -10,8 +10,8 @@ use std::path::Path;
 
 use serde_yaml::Value;
 
-use super::ConfigDraft;
 use super::catalog::{self, Shape};
+use super::{ConfigDraft, chain, draft::resolve_secondary_task};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
@@ -41,12 +41,20 @@ impl Problem {
     }
 }
 
+/// What validation needs to know beyond the draft itself.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ValidationContext<'a> {
+    /// The Workbench install directory: what relative `secondary_tasks` entries resolve
+    /// against at run time (see [`resolve_secondary_task`]). `None` until Settings has one.
+    pub workbench_dir: Option<&'a Path>,
+}
+
 /// A cross-field rule: settings only make sense together, so some problems have no single
 /// owner. Each rule reads the whole draft and returns at most one problem.
 ///
 /// Deliberately a plain slice rather than a trait or a registry — it is expected to grow one
 /// entry at a time, and a `fn` per rule is the smallest thing that reads clearly.
-type Rule = fn(&ConfigDraft) -> Option<Problem>;
+type Rule = fn(&ConfigDraft, &ValidationContext) -> Option<Problem>;
 
 const RULES: &[Rule] = &[
     rollback_dir_needed,
@@ -57,7 +65,7 @@ const RULES: &[Rule] = &[
 
 /// `timestamp_rollback` writes per-run rollback files, and it has nowhere to write them
 /// without `rollback_dir`. Mockup `1b` calls this out as the one hard error.
-fn rollback_dir_needed(draft: &ConfigDraft) -> Option<Problem> {
+fn rollback_dir_needed(draft: &ConfigDraft, _: &ValidationContext) -> Option<Problem> {
     if !as_bool(draft.values.get("timestamp_rollback")) {
         return None;
     }
@@ -71,7 +79,7 @@ fn rollback_dir_needed(draft: &ConfigDraft) -> Option<Problem> {
     ))
 }
 
-fn missing_files_are_only_logged(draft: &ConfigDraft) -> Option<Problem> {
+fn missing_files_are_only_logged(draft: &ConfigDraft, _: &ValidationContext) -> Option<Problem> {
     as_bool(draft.values.get("allow_missing_files")).then(|| {
         Problem::new(
             "allow_missing_files",
@@ -84,7 +92,7 @@ fn missing_files_are_only_logged(draft: &ConfigDraft) -> Option<Problem> {
 
 /// A pause of a few seconds is invisible on ten rows and adds an hour on a thousand. The row
 /// count is not known here, so the warning states the per-row cost instead of guessing.
-fn adaptive_pause_costs_time(draft: &ConfigDraft) -> Option<Problem> {
+fn adaptive_pause_costs_time(draft: &ConfigDraft, _: &ValidationContext) -> Option<Problem> {
     let secs = draft.values.get("adaptive_pause")?.as_i64()?;
     (secs >= 3).then(|| {
         Problem::new(
@@ -95,15 +103,18 @@ fn adaptive_pause_costs_time(draft: &ConfigDraft) -> Option<Problem> {
     })
 }
 
-/// A config that runs itself never terminates. The full cycle check across a nested chain is
-/// Stage 6; this catches the one-step case the flat list can produce.
-fn secondary_task_cannot_be_self(draft: &ConfigDraft) -> Option<Problem> {
+/// A config that runs itself never terminates. Deeper cycles are reported on the chain's own
+/// nodes ([`chain::child_nodes`]); this is the one-step case.
+///
+/// Compared by file identity, resolved the way Workbench resolves the entry — not by file
+/// name, which flagged two different `main.yml`s in different folders (plan 1.10, P0-10).
+fn secondary_task_cannot_be_self(draft: &ConfigDraft, cx: &ValidationContext) -> Option<Problem> {
     let path = draft.path.as_deref()?;
-    let name = path.file_name()?;
     draft
         .secondary_tasks()
         .iter()
-        .any(|t| t.file_name() == Some(name))
+        .map(|entry| resolve_secondary_task(entry, Some(path), cx.workbench_dir))
+        .any(|entry| chain::same_path(&entry, path))
         .then(|| {
             Problem::new(
                 "secondary_tasks",
@@ -114,7 +125,7 @@ fn secondary_task_cannot_be_self(draft: &ConfigDraft) -> Option<Problem> {
 }
 
 /// Every problem in the draft, most severe first.
-pub fn validate(draft: &ConfigDraft) -> Vec<Problem> {
+pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
     let mut problems = Vec::new();
 
     for def in catalog::catalog().iter().filter(|d| d.required) {
@@ -128,12 +139,10 @@ pub fn validate(draft: &ConfigDraft) -> Vec<Problem> {
     }
 
     for (key, value) in &draft.values {
+        // App-supplied keys present in a loaded file are shown in the builder's locked band
+        // ("set in file — replaced at run time"). A warning here had no row to attach to, so
+        // the footer counted "things to know" with nothing to click (plan 1.10, P0-11).
         if ConfigDraft::is_app_supplied(key) {
-            problems.push(Problem::new(
-                key,
-                Severity::Warn,
-                "The app writes this at run time; the value here will be replaced.",
-            ));
             continue;
         }
         let Some(def) = catalog::find(key) else {
@@ -175,7 +184,7 @@ pub fn validate(draft: &ConfigDraft) -> Vec<Problem> {
         }
     }
 
-    problems.extend(RULES.iter().filter_map(|rule| rule(draft)));
+    problems.extend(RULES.iter().filter_map(|rule| rule(draft, cx)));
     problems.sort_by_key(|p| std::cmp::Reverse(p.severity));
     problems
 }
@@ -292,7 +301,11 @@ mod tests {
     use super::*;
 
     fn errors(draft: &ConfigDraft) -> Vec<String> {
-        validate(draft)
+        errors_in(draft, &ValidationContext::default())
+    }
+
+    fn errors_in(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<String> {
+        validate(draft, cx)
             .into_iter()
             .filter(|p| p.severity == Severity::Error)
             .map(|p| p.key.unwrap_or_default())
@@ -364,12 +377,47 @@ mod tests {
         assert_eq!(errors(&draft), vec!["task".to_string()]);
     }
 
+    /// P0-10: two different files may share a name; only the same file is a self-link.
+    #[test]
+    fn self_link_is_by_file_not_by_name() {
+        let tree = crate::config::test_support::TempTree::new();
+        let mine = tree.write("a/main.yml", "task: create\n");
+        let other = tree.write("b/main.yml", "task: create\n");
+        let cx = ValidationContext::default();
+
+        let mut draft = ConfigDraft::load(&mine).unwrap();
+        draft.link_secondary_task(&other, None);
+        assert_eq!(errors_in(&draft, &cx), Vec::<String>::new());
+
+        draft.set_secondary_tasks(std::slice::from_ref(&mine));
+        assert_eq!(errors_in(&draft, &cx), vec!["secondary_tasks".to_string()]);
+
+        // A relative entry resolves against the Workbench directory, as at run time.
+        draft.set_secondary_tasks(&[std::path::PathBuf::from("main.yml")]);
+        let wb = ValidationContext {
+            workbench_dir: mine.parent(),
+        };
+        assert_eq!(errors_in(&draft, &wb), vec!["secondary_tasks".to_string()]);
+        let elsewhere = ValidationContext {
+            workbench_dir: other.parent(),
+        };
+        assert_eq!(errors_in(&draft, &elsewhere), Vec::<String>::new());
+    }
+
+    /// P0-11: app-supplied keys in a file are not a warning with nowhere to show it.
+    #[test]
+    fn app_supplied_keys_in_a_file_raise_nothing() {
+        let draft = ConfigDraft::from_yaml("task: create\nhost: https://x.org\ninput_csv: a.csv\n")
+            .unwrap();
+        assert!(validate(&draft, &ValidationContext::default()).is_empty());
+    }
+
     #[test]
     fn unknown_keys_warn_rather_than_fail() {
         let draft = ConfigDraft::from_yaml("task: create\nrolback_dir: ./x\n").unwrap();
         assert!(errors(&draft).is_empty());
         assert!(
-            validate(&draft)
+            validate(&draft, &ValidationContext::default())
                 .iter()
                 .any(|p| p.key.as_deref() == Some("rolback_dir") && p.severity == Severity::Warn)
         );
