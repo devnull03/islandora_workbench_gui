@@ -307,3 +307,11 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
 - [x] **1.6 (P0-6)** Templates are reachable. They showed only when the draft had no values,
   but every draft starts with `task`; they now show while `ConfigDraft::is_blank()` — no setting
   except an unset `task`. `apply_template` already worked from that state.
+- [x] **1.7 (P0-7)** `ui::confirm_dialog` is the spec's ConfirmDialog (§09): a thin layer over
+  gpui-component's `AlertDialog` — 420 px (`tokens::CONFIRM_DIALOG_W`), title as a question,
+  body saying what is kept, ghost Cancel, danger action with a verb. The builder now renders
+  `Root::render_dialog_layer`, which it never did, so no dialog could show in it. "Discard
+  draft" asks first and then re-reads a saved config from disk, or resets a never-saved one to
+  its required settings (the old Discard emptied the form, `task` included); it is enabled only
+  while the draft may differ from the file. Q8's warning lands here too: the first save over a
+  loaded file that has comments asks "Save over <name>?" before dropping them.

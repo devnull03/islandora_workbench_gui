@@ -89,3 +89,6 @@ pub const GLYPH_COL_W: Pixels = px(14.);
 /// Narrowest supported window. Every label and control row must survive this width without
 /// clipping; three call sites used to spell it out independently.
 pub const MIN_WINDOW_W: Pixels = px(520.);
+
+/// ConfirmDialog width (§09).
+pub const CONFIRM_DIALOG_W: Pixels = px(420.);

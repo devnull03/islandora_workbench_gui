@@ -8,6 +8,7 @@
 mod app_font;
 mod card;
 mod chips;
+mod confirm;
 mod controls;
 mod field_row;
 mod inline_message;
@@ -26,6 +27,7 @@ pub mod tokens;
 pub use app_font::AppFont;
 pub use card::{Card, CardTone};
 pub use chips::ChipList;
+pub use confirm::confirm_dialog;
 pub use controls::{
     APP_CONTROL_SIZE, APP_CONTROL_SIZE_SM, MAX_INLINE_ENUM_OPTIONS, add_row_button, app_button,
     app_tag, ghost_button, status_bar_button,

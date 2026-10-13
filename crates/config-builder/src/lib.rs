@@ -275,6 +275,15 @@ impl BuilderChromeState {
         }
     }
 
+    /// Possibly different from the file: edited since it was opened, saved or discarded, or
+    /// a save that failed.
+    pub(crate) fn is_dirty(&self) -> bool {
+        matches!(
+            self.save,
+            BuilderTitleSaveState::Dirty | BuilderTitleSaveState::Error(_)
+        )
+    }
+
     pub(crate) fn yaml_visible(&self) -> bool {
         self.yaml == BuilderYamlState::Visible
     }
@@ -311,6 +320,30 @@ fn link_saved_child(
         draft.save(parent).map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+/// The config library's description for `path`, if the library knows the file.
+fn library_description(path: &std::path::Path, cx: &App) -> Option<String> {
+    let file_path = path.to_string_lossy().to_string();
+    AppSettings::get(cx)
+        .task_configs
+        .iter()
+        .find(|c| c.file_path == file_path)
+        .map(|c| c.description.to_string())
+}
+
+/// What "Discard draft" returns to (plan 1.7, P0-7): the saved file, re-read from disk, or —
+/// for a config never saved — a fresh draft with only its required settings. Never an empty
+/// form: the old Discard cleared every value, `task` included, and on a saved config that
+/// looked like the file had been emptied.
+fn discarded_draft(current: &ConfigDraft) -> Result<ConfigDraft, String> {
+    let mut draft = match &current.path {
+        Some(path) => ConfigDraft::load(path)
+            .map_err(|e| format!("Couldn't re-read {}: {e}", path.display()))?,
+        None => ConfigDraft::default(),
+    };
+    ensure_required_settings(&mut draft);
+    Ok(draft)
 }
 
 fn ensure_required_settings(draft: &mut ConfigDraft) {
@@ -397,14 +430,7 @@ impl ConfigBuilder {
         // has to go and find it. A file the library has never seen simply has none.
         let description = path
             .as_ref()
-            .and_then(|p| {
-                let file_path = p.to_string_lossy().to_string();
-                AppSettings::get(cx)
-                    .task_configs
-                    .iter()
-                    .find(|c| c.file_path == file_path)
-                    .map(|c| c.description.to_string())
-            })
+            .and_then(|p| library_description(p, cx))
             .unwrap_or_default();
 
         let problems = validate(&draft);
@@ -758,6 +784,82 @@ impl ConfigBuilder {
         Some(PathBuf::from(dir).join(format!("{stem}.yml")))
     }
 
+    /// Save, asking first when the file on disk has comments the save would drop (plan Q8:
+    /// the minimum option — warn, rather than round-trip comments).
+    fn request_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self
+            .draft
+            .path
+            .clone()
+            .filter(|_| self.draft.source_has_comments)
+        else {
+            self.save(window, cx);
+            return;
+        };
+        let this = cx.entity().downgrade();
+        ui::confirm_dialog(
+            window,
+            cx,
+            format!("Save over {}?", stem_of(&path)),
+            "This file has comments. Saving rewrites it from the settings shown here: every \
+             setting is kept, but comments and hand formatting are not.",
+            "Save anyway",
+            move |window, cx| {
+                this.update(cx, |this, cx| this.save(window, cx)).ok();
+            },
+        );
+    }
+
+    /// Discard, after asking. A saved config goes back to its file; a new one starts again.
+    fn request_discard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let body = if self.draft.path.is_some() {
+            "Your changes since the last save are lost. The saved file and its links stay as \
+             they are."
+        } else {
+            "Everything you have set in this new config is lost. Nothing has been written to \
+             disk yet."
+        };
+        let this = cx.entity().downgrade();
+        ui::confirm_dialog(
+            window,
+            cx,
+            "Discard draft?",
+            body,
+            "Discard",
+            move |_, cx| {
+                this.update(cx, |this, cx| this.discard(cx)).ok();
+            },
+        );
+    }
+
+    fn discard(&mut self, cx: &mut Context<Self>) {
+        match discarded_draft(&self.draft) {
+            Ok(draft) => {
+                self.draft = draft;
+                self.description = self
+                    .draft
+                    .path
+                    .as_ref()
+                    .and_then(|p| library_description(p, cx))
+                    .unwrap_or_default();
+                // Every widget, including the name and description, is rebuilt from the draft.
+                self.inputs.clear();
+                self.selects.clear();
+                self.last_chain_scan = None;
+                self.problems = validate(&self.draft);
+                self.chrome = BuilderChromeState {
+                    yaml: self.chrome.yaml,
+                    ..Default::default()
+                };
+            }
+            Err(error) => self.chrome.transition(BuilderChromeEvent::Failed {
+                title: "Discard failed".into(),
+                detail: error.into(),
+            }),
+        }
+        cx.notify();
+    }
+
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.count(Severity::Error) > 0 {
             self.chrome.transition(BuilderChromeEvent::Failed {
@@ -879,6 +981,7 @@ impl Render for ConfigBuilder {
                     ),
             )
             .child(self.render_footer(errors, warnings, cx))
+            .children(Root::render_dialog_layer(window, cx))
     }
 }
 
@@ -1079,16 +1182,13 @@ impl ConfigBuilder {
             .child(
                 status_bar_button("discard-draft")
                     .label("Discard draft")
-                    .disabled(self.draft.values.is_empty())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let keys: Vec<String> = this.draft.values.keys().cloned().collect();
-                        for key in keys {
-                            this.forget_widgets(&key);
-                        }
-                        this.draft.values.clear();
-                        this.chrome.transition(BuilderChromeEvent::Edited);
-                        this.revalidate(cx);
-                    })),
+                    .disabled(!self.chrome.is_dirty())
+                    .tooltip(if self.draft.path.is_some() {
+                        "Go back to the saved file"
+                    } else {
+                        "Start this config again"
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| this.request_discard(window, cx))),
             )
             .child(
                 status_bar_button("save-config")
@@ -1103,7 +1203,7 @@ impl ConfigBuilder {
                     } else {
                         "Write the YAML and add it to the config library"
                     })
-                    .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.request_save(window, cx))),
             );
 
         // The builder footer and the main task/status bar are one piece of window chrome. Using
@@ -1160,8 +1260,9 @@ mod tests {
     // shadow the one this needs.
     use super::{
         BuilderChromeEvent, BuilderChromeState, BuilderTitleSaveState, ConfigDraft,
-        INTEGER_PATTERN, ensure_required_settings,
+        INTEGER_PATTERN, discarded_draft, ensure_required_settings,
     };
+    use serde_yaml::Value;
 
     /// The pattern is what stands between a typo and a YAML integer field holding a word.
     /// Empty has to pass — §04 says an empty numeric field means "use the default", not zero —
@@ -1221,5 +1322,34 @@ mod tests {
             draft.values.get("task").and_then(|value| value.as_str()),
             Some("")
         );
+    }
+
+    /// P0-7: Discard returns a saved config to its file, and a new one to a required-only
+    /// draft — never to an empty form.
+    #[test]
+    fn discard_reloads_the_file_or_starts_again() {
+        let dir = std::env::temp_dir().join(format!("builder-discard-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("saved.yml");
+        std::fs::write(&path, "task: update\nid_field: pid\n").unwrap();
+
+        let mut edited = ConfigDraft::load(&path).unwrap();
+        edited.values.clear();
+        edited
+            .values
+            .insert("log_file_path".into(), Value::String("x.log".into()));
+        let back = discarded_draft(&edited).unwrap();
+        assert_eq!(back.path.as_deref(), Some(path.as_path()));
+        assert_eq!(back.values.get("task").and_then(Value::as_str), Some("update"));
+        assert_eq!(back.values.get("id_field").and_then(Value::as_str), Some("pid"));
+        assert!(!back.values.contains_key("log_file_path"));
+
+        let mut unsaved = ConfigDraft::from_yaml("task: create\nid_field: id\n").unwrap();
+        unsaved.path = None;
+        let fresh = discarded_draft(&unsaved).unwrap();
+        assert!(fresh.is_blank());
+        assert!(fresh.values.contains_key("task"));
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
