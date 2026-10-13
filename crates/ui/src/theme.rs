@@ -26,9 +26,47 @@ const FONTS: [&[u8]; 5] = [
     include_bytes!("../../../assets/fonts/IBMPlexMono-Medium.ttf"),
 ];
 
-/// Install the Qrate light/dark pair and re-apply the mode already chosen from the OS.
-///
-/// Call once, after `gpui_component::init`, which is what puts a `Theme` global in place.
+/// A light/dark pair the user can pick in Settings → Appearance (plan 7.1). Qrate is the
+/// design's own; the others are generated from it by `scripts/gen-themes.py`, so every palette
+/// keeps the same surface hierarchy and only its hues change.
+pub struct Palette {
+    pub key: &'static str,
+    pub label: &'static str,
+    dark: &'static str,
+    light: &'static str,
+}
+
+pub const PALETTES: &[Palette] = &[
+    Palette {
+        key: "qrate",
+        label: "Qrate",
+        dark: include_str!("../../../assets/themes/qrate-dark.json"),
+        light: include_str!("../../../assets/themes/qrate-light.json"),
+    },
+    Palette {
+        key: "gruvbox",
+        label: "Gruvbox",
+        dark: include_str!("../../../assets/themes/gruvbox-dark.json"),
+        light: include_str!("../../../assets/themes/gruvbox-light.json"),
+    },
+    Palette {
+        key: "everforest",
+        label: "Everforest",
+        dark: include_str!("../../../assets/themes/everforest-dark.json"),
+        light: include_str!("../../../assets/themes/everforest-light.json"),
+    },
+];
+
+/// The palette for a stored key; Qrate for anything unknown.
+pub fn palette(key: &str) -> &'static Palette {
+    PALETTES
+        .iter()
+        .find(|p| p.key == key)
+        .unwrap_or(&PALETTES[0])
+}
+
+/// Load the bundled fonts and the Qrate pair. Call once, after `gpui_component::init`, which is
+/// what puts a `Theme` global in place.
 pub fn init(cx: &mut App) {
     // Before the theme, so the families it names are already resolvable. A failure here is not
     // fatal — the platform's default face is ugly, not broken — but it is worth a log line.
@@ -38,22 +76,24 @@ pub fn init(cx: &mut App) {
     {
         log::warn!("bundled fonts failed to load, falling back to system faces: {err}");
     }
+    install(&PALETTES[0], cx);
+}
 
-    let set: ThemeSet =
-        serde_json::from_str(include_str!("../theme.json")).expect("theme.json is embedded");
-
-    for config in set.themes {
-        let config = Rc::new(config);
-        let theme = Theme::global_mut(cx);
-        if config.mode.is_dark() {
-            theme.dark_theme = config;
-        } else {
-            theme.light_theme = config;
+/// Make `palette` the light and dark themes, keeping whichever mode is showing.
+pub fn install(palette: &Palette, cx: &mut App) {
+    for json in [palette.dark, palette.light] {
+        let set: ThemeSet = serde_json::from_str(json).expect("bundled themes parse");
+        for config in set.themes {
+            let config = Rc::new(config);
+            let theme = Theme::global_mut(cx);
+            if config.mode.is_dark() {
+                theme.dark_theme = config;
+            } else {
+                theme.light_theme = config;
+            }
         }
     }
-
-    // `Theme::change` is what actually copies the config into the live colours. Re-run it with
-    // the mode gpui already picked from the OS so this is a restyle, not a mode switch.
+    // `Theme::change` is what copies the config into the live colours.
     let mode = Theme::global(cx).mode;
     Theme::change(mode, None, cx);
 }
@@ -66,11 +106,12 @@ mod tests {
     /// colour with no error anywhere. Assert a few landed, in both modes.
     #[test]
     fn theme_json_parses_into_two_modes() {
-        let set: ThemeSet = serde_json::from_str(include_str!("../theme.json")).unwrap();
-        assert_eq!(set.themes.len(), 2);
-
-        let dark = set.themes.iter().find(|t| t.mode.is_dark()).unwrap();
-        let light = set.themes.iter().find(|t| !t.mode.is_dark()).unwrap();
+        let parse = |json: &str| {
+            let set: ThemeSet = serde_json::from_str(json).unwrap();
+            set.themes.into_iter().next().unwrap()
+        };
+        let (dark, light) = (&parse(PALETTES[0].dark), &parse(PALETTES[0].light));
+        assert!(dark.mode.is_dark() && !light.mode.is_dark());
 
         assert_eq!(
             dark.colors.primary.as_ref().map(|c| c.as_ref()),
@@ -106,6 +147,14 @@ mod tests {
         for t in [dark, light] {
             assert_eq!(t.font_family.as_deref(), Some("Archivo"));
             assert_eq!(t.mono_font_family.as_deref(), Some("IBM Plex Mono"));
+        }
+
+        // Every generated palette parses, has both modes, and keeps the fonts.
+        for palette in PALETTES {
+            let (d, l) = (parse(palette.dark), parse(palette.light));
+            assert!(d.mode.is_dark() && !l.mode.is_dark(), "{}", palette.key);
+            assert_eq!(d.font_family.as_deref(), Some("Archivo"));
+            assert!(d.colors.primary.is_some() && l.colors.background.is_some());
         }
 
         // Font sizes are deliberately absent: the gpui-component defaults scale with the

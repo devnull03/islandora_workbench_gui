@@ -129,8 +129,13 @@ Stage 5 needs — *Workbench & Python* is machine facts, everything else is inst
   restores note 8's cut `builder_check_paths` with an observable effect. *Open the builder
   docked* waits for Stage 4; *Read vocabularies from* waits for a server vocabulary fetch, which
   nothing in the app has yet.
-- **Appearance** is its own page after Config builder (§10); the theme list grows in the
-  themes phase.
+- **Appearance** is its own page after Config builder (§10): a **Palette** dropdown (Qrate,
+  Gruvbox, Everforest; machine setting `theme_palette`) and the Dark switch. The pairs live in
+  `assets/themes/*.json` — the Qrate pair hand-tuned, the rest generated from it by
+  `scripts/gen-themes.py` (`--check` fails when they are stale), which places each neutral at
+  Qrate's lightness step between the palette's own background and foreground and swaps the
+  accent families, so only hues change between palettes (plan 7.1). `crates/ui/theme.json` is
+  gone.
 - **Sidebar** is 176px (§00) via `Settings::sidebar_width`. At that width "Workbench & Python"
   truncates; shortening the page name is a design call left open.
 - **Footer**: "Profile: Default" with the default server's health dot (success / danger / muted

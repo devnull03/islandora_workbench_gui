@@ -181,10 +181,9 @@ pub fn build_pages(_cx: &gpui::App) -> Vec<SettingPage> {
         // §10: its own page, after Config builder.
         SettingPage::new("Appearance")
             .default_open(true)
-            .groups(vec![
-                SettingGroup::new()
-                    .title("Theme")
-                    .items(vec![crate::theming::appearance_setting()]),
-            ]),
+            .groups(vec![SettingGroup::new().title("Theme").items(vec![
+                crate::theming::palette_setting(),
+                crate::theming::appearance_setting(),
+            ])]),
     ]
 }
