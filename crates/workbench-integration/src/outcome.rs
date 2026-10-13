@@ -19,6 +19,8 @@ pub struct RunReport {
     pub contact_sheet: Option<PathBuf>,
     /// `CSV template saved at <path>.`
     pub csv_template: Option<PathBuf>,
+    /// `CSV export saved at <path>` (the `export_csv` task).
+    pub exported_csv: Option<PathBuf>,
 }
 
 impl RunReport {
@@ -34,6 +36,9 @@ impl RunReport {
         if let Some(path) = sentence_path(line, "CSV template saved at ") {
             self.csv_template = Some(path);
         }
+        if let Some(path) = sentence_path(line, "CSV export saved at ") {
+            self.exported_csv = Some(path);
+        }
     }
 }
 
@@ -44,6 +49,30 @@ fn created_node_id(line: &str) -> Option<u64> {
     let after = &rest[rest.rfind("/node/")? + "/node/".len()..];
     let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
+}
+
+/// Where an export task writes its CSV: `export_csv_file_path` when the config sets it, else
+/// Workbench's default for the View tasks — `<input_dir>/<config name>.csv_file_with_…` (the
+/// config name up to its first full stop, as `os.path.basename(...).split(".")[0]`). The
+/// `export_csv` task prints its path instead ([`RunReport::exported_csv`]).
+pub fn export_csv_path(
+    task: &str,
+    config_text: impl Fn(&str) -> Option<String>,
+    config_file: &Path,
+    workbench_dir: &Path,
+) -> Option<PathBuf> {
+    if let Some(path) = config_text("export_csv_file_path") {
+        return Some(crate::secrets::resolve(&path, workbench_dir));
+    }
+    let suffix = match task {
+        "get_data_from_view" => "csv_file_with_data_from_view",
+        "get_media_report_from_view" => "csv_file_with_media_report_from_view",
+        _ => return None,
+    };
+    let name = config_file.file_name()?.to_string_lossy();
+    let stem = name.split('.').next().unwrap_or_default();
+    let input_dir = config_text("input_dir").unwrap_or_else(|| "input_data".into());
+    Some(crate::secrets::resolve(&input_dir, workbench_dir).join(format!("{stem}.{suffix}")))
 }
 
 /// The path in `<prefix><path>.` — the trailing full stop is Workbench's, not the path's.
@@ -104,6 +133,43 @@ pub fn rollback_config_from_log(log_text: &str, workbench_dir: &Path) -> Option<
     } else {
         workbench_dir.join(path)
     })
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    #[test]
+    fn export_paths_follow_workbench() {
+        let wb = Path::new("/wb");
+        let none = |_: &str| None;
+        assert_eq!(
+            export_csv_path(
+                "get_data_from_view",
+                none,
+                Path::new("/c/view.export.yml"),
+                wb
+            ),
+            Some(PathBuf::from(
+                "/wb/input_data/view.csv_file_with_data_from_view"
+            ))
+        );
+        let set = |k: &str| (k == "export_csv_file_path").then(|| "out/x.csv".to_string());
+        assert_eq!(
+            export_csv_path("export_csv", set, Path::new("/c/a.yml"), wb),
+            Some(PathBuf::from("/wb/out/x.csv"))
+        );
+        assert_eq!(
+            export_csv_path("create", none, Path::new("/c/a.yml"), wb),
+            None
+        );
+        let mut report = RunReport::default();
+        report.observe("CSV export saved at /wb/input_data/a.csv_file_with_field_values");
+        assert_eq!(
+            report.exported_csv,
+            Some(PathBuf::from("/wb/input_data/a.csv_file_with_field_values"))
+        );
+    }
 }
 
 #[cfg(test)]

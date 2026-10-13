@@ -197,6 +197,13 @@ fn fetch_sheet(url: &str) -> Result<String> {
         .timeout(std::time::Duration::from_secs(60))
         .call()
         .with_context(|| format!("Couldn't fetch the sheet from {export}"))?;
+    // A sheet that is not shared answers with Google's sign-in page, not a CSV.
+    if !response.content_type().contains("csv") {
+        anyhow::bail!(
+            "The sheet did not come back as a CSV — share it as \"Anyone with the link can view\" \
+             (or publish it) and try again."
+        );
+    }
     response
         .into_string()
         .context("The sheet's CSV could not be read as text")

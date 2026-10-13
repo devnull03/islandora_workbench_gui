@@ -422,10 +422,10 @@ impl Workspace {
 
     /// Any Workbench action needs a local ingest dir plus both selects chosen.
     fn workbench_ready(&self, cx: &App) -> bool {
-        let dir_ok = !self.ingest_files_dir.read(cx).value().trim().is_empty();
+        // The ingest folder is step 1's; Check, Run and the More menu need only these two.
         let task_ok = self.saved_config_select.read(cx).selected_value().is_some();
         let server_ok = self.server_select.read(cx).selected_value().is_some();
-        dir_ok && task_ok && server_ok
+        task_ok && server_ok
     }
 
     /// A different profile is active: re-seed every field and list from it, and drop what

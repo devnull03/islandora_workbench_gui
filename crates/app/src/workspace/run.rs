@@ -294,23 +294,15 @@ impl Workspace {
         // begin at 0 whatever the file's length was before.
         let log_rewritten = handler.text_setting("log_file_mode") == Some("w");
         // What the run writes for the user to open: a create's output CSV, or an export's CSV.
-        let exports = matches!(
-            handler.text_setting("task"),
-            Some("export_csv" | "get_data_from_view" | "get_media_report_from_view")
-        );
-        let written = if exports {
-            handler.text_setting("export_csv_file_path")
-        } else {
-            handler.text_setting("output_csv")
-        };
-        let output_csv = written.map(|p| {
-            let path = PathBuf::from(p);
-            if path.is_absolute() {
-                path
-            } else {
-                wb_info.install_path.join(path)
+        let text = |key: &str| handler.text_setting(key).map(str::to_owned);
+        let output_csv = match handler.text_setting("task") {
+            Some(task @ ("export_csv" | "get_data_from_view" | "get_media_report_from_view")) => {
+                outcome::export_csv_path(task, text, &config_path, &wb_info.install_path)
             }
-        });
+            _ => handler
+                .text_setting("output_csv")
+                .map(|p| workbench_integration::secrets::resolve(p, &wb_info.install_path)),
+        };
         let confirms = AppSettings::get(cx)
             .server_configs
             .iter()

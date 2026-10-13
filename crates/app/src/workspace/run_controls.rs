@@ -114,8 +114,28 @@ impl Workspace {
                             Rc::new(|this, window, cx| this.ask_map_export(window, cx)),
                         ))
                         .item(item(
+                            "Export duplicate IDs from the map…",
+                            Rc::new(|this, window, cx| this.ask_map_export_duplicates(window, cx)),
+                        ))
+                        .item(item(
+                            "Merge another map into this one…",
+                            Rc::new(|this, window, cx| this.ask_map_merge(window, cx)),
+                        ))
+                        .item(item(
                             "Remove map entries before a date…",
-                            Rc::new(|this, window, cx| this.ask_map_remove_before(window, cx)),
+                            Rc::new(|this, window, cx| {
+                                this.ask_map_remove_by_date(false, window, cx)
+                            }),
+                        ))
+                        .item(item(
+                            "Remove map entries after a date…",
+                            Rc::new(|this, window, cx| {
+                                this.ask_map_remove_by_date(true, window, cx)
+                            }),
+                        ))
+                        .item(item(
+                            "Remove this config's map entries…",
+                            Rc::new(|this, window, cx| this.ask_map_remove_for_config(window, cx)),
                         ))
                         .item(item(
                             "Remove map entries for deleted nodes…",
@@ -155,7 +175,7 @@ impl Workspace {
                     .tooltip(if ready {
                         "Run Workbench's --check: validates the config and the CSV, changes nothing"
                     } else {
-                        "Pick an ingest folder, a config and a server first"
+                        "Pick a config and a server first"
                     })
                     .on_click(cx.listener(|this, _, window, cx| this.run_check(window, cx))),
             )
@@ -261,6 +281,14 @@ impl Workspace {
         }
         if let Some(template) = &run.report.csv_template {
             actions.push(self.open_button("open-csv-template", "Open CSV template", template, cx));
+        }
+        if let Some(export) = run
+            .report
+            .exported_csv
+            .as_ref()
+            .filter(|_| run.output_csv.is_none())
+        {
+            actions.push(self.open_button("open-exported-csv", "Open exported CSV", export, cx));
         }
         if let Some(output) = &run.output_csv {
             actions.push(self.open_button("open-output-csv", "Open output CSV", output, cx));

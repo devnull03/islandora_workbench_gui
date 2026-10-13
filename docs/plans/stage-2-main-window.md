@@ -243,11 +243,19 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   like any CSV. This covers Workbench's own Excel input (`excel_worksheet`) from step 1.
   The worksheet is a profile setting (`source_worksheet`).
 - *CSV ID → node ID map.* The More menu runs Workbench's own
-  `scripts/manage_csv_to_node_id_map.py` in its Python: **Export the CSV ID map…** (saves and
-  opens a CSV), **Remove map entries before a date…** and **Remove map entries for deleted
-  nodes…** (against the selected server). The database is found the way Workbench finds it
+  `scripts/manage_csv_to_node_id_map.py` in its Python, all seven of its operations: export the
+  map, export the rows with duplicate CSV IDs (`--nonunique csv_id`), merge another map into
+  this one, remove entries before or after a date, remove the selected config's entries, and
+  remove entries for nodes the selected server no longer has (the dialog warns that the map is
+  not split by server). The database is found the way Workbench finds it
   (`csv_id_to_node_id_map_path`, else `csv_id_to_node_id_map_dir` — the system temp folder by
   default — plus `csv_id_to_node_id_map_filename`); output goes to the log, and the window is
   locked while it runs. Text dialogs (these and quick delete) now focus their field on open.
 - *Islandora 7 export* is out of scope: `get_islandora_7_content.py` moved out of Workbench into
   its own repository (`mjordan/i7_import`) in October 2025.
+- *Smaller parity fixes.* An export's CSV is offered after the run: the `export_csv` task's
+  printed path, or the View tasks' default `<input_dir>/<config>.csv_file_with_…` when
+  `export_csv_file_path` is not set; `~` is expanded in it and in the map path. An `input_csv`
+  that is a Google Sheet URL is not flagged as a missing file. A sheet that answers with a
+  sign-in page instead of a CSV says to share it. The ingest folder no longer gates Check, Run
+  and the More menu — nothing there uses it. Spreadsheet dates are written `yyyy-mm-dd`.

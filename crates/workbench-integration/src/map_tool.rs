@@ -20,6 +20,10 @@ pub enum MapAction {
     RemoveForConfigs(String),
     /// Delete entries whose node no longer exists on this host.
     RemoveDeletedNodes(String),
+    /// Dump only the rows whose value in this column (`csv_id`, say) appears more than once.
+    ExportDuplicates { csv: PathBuf, column: String },
+    /// Copy another map database's entries into this one.
+    MergeFrom(PathBuf),
 }
 
 impl MapAction {
@@ -30,22 +34,39 @@ impl MapAction {
             MapAction::RemoveAfter(_) => "Remove map entries after a date",
             MapAction::RemoveForConfigs(_) => "Remove map entries for configs",
             MapAction::RemoveDeletedNodes(_) => "Remove map entries for deleted nodes",
+            MapAction::ExportDuplicates { .. } => "Export duplicate IDs from the CSV ID map",
+            MapAction::MergeFrom(_) => "Merge another CSV ID map into this one",
         }
     }
 
-    fn args(&self) -> Vec<String> {
-        let (flag, value) = match self {
-            MapAction::ExportCsv(path) => ("--csv_path", path.display().to_string()),
-            MapAction::RemoveBefore(date) => ("--remove_entries_before", date.clone()),
-            MapAction::RemoveAfter(date) => ("--remove_entries_after", date.clone()),
+    /// The script's flags for this action, given the map at `db`. Merging names the map as the
+    /// target and takes no `--db_path`.
+    fn args(&self, db: &Path) -> Vec<String> {
+        let db = db.display().to_string();
+        let with_db =
+            |flag: &str, value: String| vec!["--db_path".into(), db.clone(), flag.into(), value];
+        match self {
+            MapAction::ExportCsv(path) => with_db("--csv_path", path.display().to_string()),
+            MapAction::RemoveBefore(date) => with_db("--remove_entries_before", date.clone()),
+            MapAction::RemoveAfter(date) => with_db("--remove_entries_after", date.clone()),
             MapAction::RemoveForConfigs(list) => {
-                ("--remove_entries_with_config_files", list.clone())
+                with_db("--remove_entries_with_config_files", list.clone())
             }
             MapAction::RemoveDeletedNodes(host) => {
-                ("--remove_entries_for_deleted_nodes", host.clone())
+                with_db("--remove_entries_for_deleted_nodes", host.clone())
             }
-        };
-        vec![flag.to_string(), value]
+            MapAction::ExportDuplicates { csv, column } => {
+                let mut args = with_db("--csv_path", csv.display().to_string());
+                args.extend(["--nonunique".into(), column.clone()]);
+                args
+            }
+            MapAction::MergeFrom(source) => vec![
+                "--target_db_path".into(),
+                db,
+                "--source_db_path".into(),
+                source.display().to_string(),
+            ],
+        }
     }
 }
 
@@ -64,11 +85,7 @@ pub fn map_db_path(config_text: impl Fn(&str) -> Option<String>, workbench_dir: 
                 .unwrap_or_else(|| "csv_id_to_node_id_map.db".into());
             dir.join(file)
         });
-    if path.is_absolute() {
-        path
-    } else {
-        workbench_dir.join(path)
-    }
+    crate::secrets::resolve(&path.to_string_lossy(), workbench_dir)
 }
 
 /// The command that runs `action` on the map at `db`.
@@ -76,9 +93,7 @@ pub fn map_tool_command(wb: &WbInfo, db: &Path, action: &MapAction) -> Command {
     let mut cmd = wb.python_command();
     cmd.arg(Path::new("scripts").join("manage_csv_to_node_id_map.py"))
         .env("PYTHONUNBUFFERED", "1")
-        .arg("--db_path")
-        .arg(db)
-        .args(action.args());
+        .args(action.args(db));
     cmd
 }
 
@@ -105,13 +120,35 @@ mod tests {
 
     #[test]
     fn actions_become_the_script_flags() {
+        let db = Path::new("/m.db");
         assert_eq!(
-            MapAction::RemoveBefore("2025-01-01".into()).args(),
-            vec!["--remove_entries_before", "2025-01-01"]
+            MapAction::RemoveBefore("2025-01-01".into()).args(db),
+            vec![
+                "--db_path",
+                "/m.db",
+                "--remove_entries_before",
+                "2025-01-01"
+            ]
         );
         assert_eq!(
-            MapAction::ExportCsv("/tmp/map.csv".into()).args(),
-            vec!["--csv_path", "/tmp/map.csv"]
+            MapAction::ExportDuplicates {
+                csv: "/tmp/d.csv".into(),
+                column: "csv_id".into()
+            }
+            .args(db),
+            vec![
+                "--db_path",
+                "/m.db",
+                "--csv_path",
+                "/tmp/d.csv",
+                "--nonunique",
+                "csv_id"
+            ]
+        );
+        // Merging names the map as the target, with no --db_path.
+        assert_eq!(
+            MapAction::MergeFrom("/other.db".into()).args(db),
+            vec!["--target_db_path", "/m.db", "--source_db_path", "/other.db"]
         );
     }
 }

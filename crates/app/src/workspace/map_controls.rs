@@ -88,7 +88,9 @@ impl Workspace {
             cx,
         );
         let export = match &action {
-            MapAction::ExportCsv(path) => Some(path.clone()),
+            MapAction::ExportCsv(path) | MapAction::ExportDuplicates { csv: path, .. } => {
+                Some(path.clone())
+            }
             _ => None,
         };
         let workspace = cx.entity();
@@ -154,24 +156,113 @@ impl Workspace {
         );
     }
 
-    /// Remove the entries older than a date the user types.
-    pub(super) fn ask_map_remove_before(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Remove the entries the selected config made — Workbench records the config path it was
+    /// given, which for this app is the library file.
+    pub(super) fn ask_map_remove_for_config(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(config) = self.saved_config_select.read(cx).selected_value().cloned() else {
+            return self.append_log("[ERROR] Choose a config first.", window, cx);
+        };
+        let this = cx.entity().downgrade();
+        ui::confirm_dialog(
+            window,
+            cx,
+            "Remove this config's map entries?",
+            format!(
+                "Every CSV ID map entry made by runs of {config} is deleted. Later runs can no \
+                 longer find those nodes as parents."
+            ),
+            "Remove",
+            move |window, cx| {
+                let config = config.to_string();
+                this.update(cx, |this, cx| {
+                    this.run_map_tool(MapAction::RemoveForConfigs(config), window, cx)
+                })
+                .ok();
+            },
+        );
+    }
+
+    /// Export only the rows whose CSV ID appears more than once — the duplicates the docs warn
+    /// make parent lookups ambiguous.
+    pub(super) fn ask_map_export_duplicates(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let directory = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let receiver =
+            cx.prompt_for_new_path(&directory, Some("csv_id_to_node_id_map_duplicates.csv"));
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(csv))) = receiver.await else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| {
+                let action = MapAction::ExportDuplicates {
+                    csv,
+                    column: "csv_id".into(),
+                };
+                this.run_map_tool(action, window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Merge another map database (from another machine or folder) into this one.
+    pub(super) fn ask_map_merge(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Merge this CSV ID map".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = receiver.await else {
+                return;
+            };
+            let Some(source) = paths.into_iter().next() else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| {
+                this.run_map_tool(MapAction::MergeFrom(source), window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Remove the entries recorded before (or after) a date the user types.
+    pub(super) fn ask_map_remove_by_date(
+        &mut self,
+        after: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("2025-01-31"));
         let this = cx.entity().downgrade();
         let focus = input.clone();
         window.open_dialog(cx, move |dialog, _, _| {
             let (input_for_remove, this) = (input.clone(), this.clone());
             dialog
-                .title("Remove map entries before a date")
+                .title(if after {
+                    "Remove map entries after a date"
+                } else {
+                    "Remove map entries before a date"
+                })
                 .w(ui::tokens::CONFIRM_DIALOG_W)
                 .child(
                     v_flex()
                         .gap(GAP_SM)
                         .child(
-                            Label::new(
-                                "Entries Workbench recorded before this date (yyyy-mm-dd, \
-                                 optionally hh:mm) are deleted from the CSV ID map.",
-                            )
+                            Label::new(format!(
+                                "Entries Workbench recorded {} this date (yyyy-mm-dd, optionally \
+                                 hh:mm) are deleted from the CSV ID map.",
+                                if after { "after" } else { "before" }
+                            ))
                             .text_sm(),
                         )
                         .child(Input::new(&input).with_size(APP_CONTROL_SIZE)),
@@ -197,7 +288,12 @@ impl Workspace {
                                     }
                                     window.close_dialog(cx);
                                     this.update(cx, |this, cx| {
-                                        this.run_map_tool(MapAction::RemoveBefore(date), window, cx)
+                                        let action = if after {
+                                            MapAction::RemoveAfter(date)
+                                        } else {
+                                            MapAction::RemoveBefore(date)
+                                        };
+                                        this.run_map_tool(action, window, cx)
                                     })
                                     .ok();
                                 }),

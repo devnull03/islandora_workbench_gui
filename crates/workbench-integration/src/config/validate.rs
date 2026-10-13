@@ -364,6 +364,15 @@ fn check_path(
     workbench_dir: Option<&Path>,
     input_dir: Option<&str>,
 ) -> Problem {
+    // Workbench reads a Google Sheet URL in `input_csv` itself (docs: "Using Google Sheets as
+    // input data"); there is no file to look for.
+    if key == "input_csv" && (raw.starts_with("https://") || raw.starts_with("http://")) {
+        return Problem::new(
+            key,
+            Severity::Ok,
+            "A sheet Workbench downloads when it runs.",
+        );
+    }
     let mut expanded = expand_home(raw);
     // Workbench joins `input_csv` onto `input_dir` (`os.path.join`, so an absolute `input_csv`
     // wins), and runs from its own folder.
@@ -785,6 +794,13 @@ mod tests {
                 .message
                 .contains(&tree.root.join("in/meta.csv").display().to_string())
         );
+        let sheet = check_path(
+            "input_csv",
+            "https://docs.google.com/spreadsheets/d/abc/edit",
+            Some(&tree.root),
+            None,
+        );
+        assert_eq!(sheet.severity, Severity::Ok);
         let default_dir = check_path("input_csv", "meta.csv", Some(&tree.root), None);
         assert_eq!(default_dir.severity, Severity::Warn);
         assert!(default_dir.message.contains("input_data"));
