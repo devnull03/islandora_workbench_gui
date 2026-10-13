@@ -111,6 +111,9 @@ library folder (`config_library_dir`) and its config list; the YAML files stay m
   window redraws as soon as a switch is made from Settings.
 - Settings written by a newer schema are copied aside (`app_settings_v1_from_vN`) before this
   build loads them, since its next save would drop what it does not know.
+- Profiles is now the last Settings page (`3c`), and Manage profiles opens Settings on it
+  (`OpenProfiles`; an already-open Settings window is brought forward on its current page).
+  A switch also clears step 2's `↳ N` badge with the rest of the config summary.
 - Still open (Low): the profile bar is inside the scrolling column rather than its own slot,
-  card facts are one line rather than chips, Manage profiles does not land on the Profiles
-  page, import always adds ("X 2") rather than offering to replace.
+  card facts are one line rather than chips, import always adds ("X 2") rather than offering
+  to replace.

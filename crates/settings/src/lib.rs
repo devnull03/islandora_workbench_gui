@@ -24,7 +24,7 @@ use gpui_component::{
     h_flex,
     input::InputState,
     label::Label,
-    setting::{SettingField, SettingItem, SettingPage, Settings},
+    setting::{SelectIndex, SettingField, SettingItem, SettingPage, Settings},
     v_flex,
 };
 use serde::{Deserialize, Serialize};
@@ -656,6 +656,8 @@ pub struct SettingsWindow {
     /// pages list what is currently saved, which a context-free builder cannot see. Re-invoked
     /// every render.
     pub build_pages: fn(&App) -> Vec<SettingPage>,
+    /// The page the window opens on.
+    pub initial_page: usize,
     /// Persists the window's size (debounced through the settings writer) so it reopens where it
     /// was left.
     _bounds_sub: Subscription,
@@ -681,6 +683,7 @@ impl SettingsWindow {
         let _settings_sub = cx.observe_global::<AppSettings>(|_this, cx| cx.notify());
         Self {
             build_pages,
+            initial_page: 0,
             _bounds_sub,
             _settings_sub,
         }
@@ -732,6 +735,10 @@ impl Render for SettingsWindow {
                         Settings::new("app-settings")
                             // §00: one sidebar width, 176, in both windows.
                             .sidebar_width(SIDEBAR_W)
+                            .default_selected_index(SelectIndex {
+                                page_ix: self.initial_page,
+                                group_ix: None,
+                            })
                             .pages((self.build_pages)(cx)),
                     ),
             )

@@ -29,8 +29,8 @@ use window_wrapper::{
 
 use crate::{
     app_menus::{
-        CopyDebugInfo, OpenLogsFolder, OpenSettings, Quit, REPO_URL, ReportIssue, ToggleLog,
-        app_menus,
+        CopyDebugInfo, OpenLogsFolder, OpenProfiles, OpenSettings, Quit, REPO_URL, ReportIssue,
+        ToggleLog, app_menus,
     },
     app_settings::build_pages,
     dock::{LogDockButton, MainDock},
@@ -202,6 +202,41 @@ fn may_close(
     false
 }
 
+/// Open Settings on `page`, or bring the open Settings window forward (it keeps its page).
+fn open_settings(page: usize, cx: &mut gpui::App) {
+    if let Some(handle) = cx.global::<SettingsWindowHandle>().handle
+        && handle
+            .update(cx, |_, window, _| window.activate_window())
+            .is_ok()
+    {
+        return;
+    }
+    cx.global_mut::<SettingsWindowHandle>().handle = None;
+    let (bounds, min_size) = SettingsWindow::startup_placement(cx);
+    let window_options = WindowOptions {
+        titlebar: Some(TitleBar::title_bar_options()),
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_min_size: min_size,
+        ..Default::default()
+    };
+    cx.spawn(async move |cx| {
+        let result = cx.open_window(window_options, |window, cx| {
+            let view = cx.new(|cx| {
+                let mut settings = SettingsWindow::new(window, cx, build_pages);
+                settings.initial_page = page;
+                settings
+            });
+            cx.new(|cx| Root::new(view, window, cx))
+        });
+        if let Ok(window_handle) = result {
+            cx.update(|cx| {
+                cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
+            });
+        }
+    })
+    .detach();
+}
+
 fn main() {
     // First, so a failure during startup — the exact case where no window appears to report it —
     // still reaches the file.
@@ -239,37 +274,11 @@ fn main() {
 
         cx.on_action(|_: &OpenConfigBuilder, cx| open_config_builder(None, cx));
 
-        cx.on_action(|_: &OpenSettings, cx| {
-            let state = cx.global::<SettingsWindowHandle>();
-
-            if let Some(handle) = &state.handle {
-                if handle.update(cx, |_, _, _| {}).is_ok() {
-                    return;
-                } else {
-                    cx.global_mut::<SettingsWindowHandle>().handle = None;
-                }
-            }
-            let (bounds, min_size) = SettingsWindow::startup_placement(cx);
-            let window_options = WindowOptions {
-                titlebar: Some(TitleBar::title_bar_options()),
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: min_size,
-                ..Default::default()
-            };
-
-            cx.spawn(async move |cx| {
-                let result = cx.open_window(window_options, |window, cx| {
-                    let view = cx.new(|cx| SettingsWindow::new(window, cx, build_pages));
-                    cx.new(|cx| Root::new(view, window, cx))
-                });
-
-                if let Ok(window_handle) = result {
-                    cx.update(|cx| {
-                        cx.global_mut::<SettingsWindowHandle>().handle = Some(window_handle.into());
-                    });
-                }
-            })
-            .detach();
+        cx.on_action(|_: &OpenSettings, cx| open_settings(0, cx));
+        // "Manage profiles": the same window, opened on its last page (Profiles).
+        cx.on_action(|_: &OpenProfiles, cx| {
+            let last = build_pages(cx).len().saturating_sub(1);
+            open_settings(last, cx);
         });
         // ----------------------------------------------
 

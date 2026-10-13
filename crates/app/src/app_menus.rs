@@ -4,7 +4,7 @@ use window_wrapper::OpenBrowser;
 
 use config_builder::{OpenConfigBuilder, ToggleBuilderDock};
 
-actions!(nav, [OpenSettings, ToggleLog, Quit]);
+actions!(nav, [OpenSettings, OpenProfiles, ToggleLog, Quit]);
 actions!(help, [CopyDebugInfo, OpenLogsFolder, ReportIssue]);
 
 pub const REPO_URL: &str = "https://github.com/devnull03/islandora_workbench_gui";

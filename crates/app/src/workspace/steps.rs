@@ -71,7 +71,7 @@ impl Workspace {
                 .child(
                     ui::ghost_button("manage-profiles")
                         .label("Manage profiles")
-                        .on_click(|_, _, cx| cx.dispatch_action(&crate::app_menus::OpenSettings)),
+                        .on_click(|_, _, cx| cx.dispatch_action(&crate::app_menus::OpenProfiles)),
                 )
                 .into_any_element(),
         )

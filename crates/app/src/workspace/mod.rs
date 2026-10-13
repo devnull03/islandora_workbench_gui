@@ -463,6 +463,7 @@ impl Workspace {
         });
         self.summarised_config = None;
         self.config_summary = None;
+        self.config_chain = 0;
         self.processed_csv = None;
         self.last_run = None;
         self.stage = WorkflowStage::Unfilled;
