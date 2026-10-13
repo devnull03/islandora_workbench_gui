@@ -82,7 +82,9 @@ pub fn profiles_field() -> SettingItem {
                             .label("Import…")
                             .on_click({
                                 let error = error.clone();
-                                move |_, _, cx| import_profile(error.clone(), cx)
+                                move |_, window, cx| {
+                                    import_profile(error.clone(), window.window_handle(), cx)
+                                }
                             }),
                     ),
             )
@@ -307,7 +309,45 @@ fn export_profile(profile: Profile, cx: &mut App) {
     .detach();
 }
 
-fn import_profile(error: Entity<LastError>, cx: &mut App) {
+/// Add an imported profile — or, when one already has its name, ask whether to replace it
+/// (the usual case: an updated copy of a profile from a colleague).
+fn offer_import(profile: Profile, error: Entity<LastError>, window: AnyWindowHandle, cx: &mut App) {
+    let name = profile.name.trim().to_string();
+    let exists = AppSettings::get(cx).has_profile(&name);
+    if !exists {
+        AppSettings::update(cx, |s| s.import_profile(profile));
+        report(&error, None, cx);
+        return;
+    }
+    let active = AppSettings::get(cx).active_profile == name;
+    if active && WindowLock::is_locked(cx) {
+        let added = AppSettings::update(cx, |s| s.import_profile(profile));
+        report(
+            &error,
+            Some(&format!(
+                "{name} is in use by a run, so the import was added as {added}."
+            )),
+            cx,
+        );
+        return;
+    }
+    let _ = window.update(cx, |_, window, cx| {
+        ui::confirm_dialog(
+            window,
+            cx,
+            format!("Replace the {name} profile?"),
+            "Its servers, config list and input settings are replaced by the imported ones. \
+             To keep both, cancel and rename this one first.",
+            "Replace",
+            move |_, cx| {
+                AppSettings::update(cx, |s| s.replace_profile(profile.clone()));
+                report(&error, None, cx);
+            },
+        );
+    });
+}
+
+fn import_profile(error: Entity<LastError>, window: AnyWindowHandle, cx: &mut App) {
     let receiver = cx.prompt_for_paths(PathPromptOptions {
         files: true,
         directories: false,
@@ -325,10 +365,7 @@ fn import_profile(error: Entity<LastError>, cx: &mut App) {
             .map_err(|e| format!("Couldn't read {}: {e}", path.display()))
             .and_then(|text| profiles::import_yaml(&text));
         cx.update(|cx| match parsed {
-            Ok(profile) => {
-                AppSettings::update(cx, |s| s.import_profile(profile));
-                report(&error, None, cx);
-            }
+            Ok(profile) => offer_import(profile, error, window, cx),
             Err(e) => report(&error, Some(&e), cx),
         });
     })

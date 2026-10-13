@@ -57,6 +57,9 @@ pub(crate) enum BuilderHost {
 
 /// Everything a builder holds that is not a widget.
 pub(crate) struct BuilderSnapshot {
+    /// What widgets refused, and their text, so a move does not lose a half-typed value.
+    pub(crate) widget_errors: std::collections::HashMap<String, String>,
+    pub(crate) carried_text: std::collections::HashMap<SharedString, String>,
     pub(crate) profile: String,
     pub(crate) draft: ConfigDraft,
     pub(crate) description: String,
@@ -146,6 +149,16 @@ impl BuilderPane {
     /// Whether the pane has anything to show; the app closes an empty right dock on startup.
     pub fn is_empty(&self) -> bool {
         self.docked.is_none() && self.floated_view().is_none() && self.snap_preview.is_none()
+    }
+
+    /// The dock's width while a builder is docked in it — the main window lays its steps out
+    /// in what is left.
+    pub fn docked_width(&self, cx: &App) -> Option<Pixels> {
+        self.docked.as_ref()?;
+        self.area
+            .upgrade()?
+            .read(cx)
+            .dock_size(DockPlacement::Right)
     }
 
     /// The docked builder holds edits that are not saved.
@@ -400,7 +413,7 @@ pub(crate) fn dock(view: Entity<ConfigBuilder>, cx: &mut App) {
     let floating = cx
         .global::<ConfigBuilderWindows>()
         .window_of(&view.downgrade());
-    let snapshot = view.read(cx).snapshot();
+    let snapshot = view.read(cx).snapshot(cx);
     let key = snapshot.draft.path.clone();
     let docked_ok = main.update(cx, |_, window, cx| {
         let docked = cx.new(|cx| ConfigBuilder::restore(snapshot, BuilderHost::Docked, window, cx));
@@ -429,7 +442,7 @@ pub(crate) fn float(view: Entity<ConfigBuilder>, cx: &mut App) {
     let Some((_, pane)) = BuilderDock::get(cx) else {
         return;
     };
-    let snapshot = view.read(cx).snapshot();
+    let snapshot = view.read(cx).snapshot(cx);
     let key = snapshot.draft.path.clone();
     let depth = snapshot.ancestors.len();
     let with_yaml = snapshot.chrome.yaml_visible();

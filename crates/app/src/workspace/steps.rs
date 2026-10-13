@@ -9,7 +9,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     ActiveTheme, Disableable, IconName, Sizable, checkbox::Checkbox, h_flex, input::Input,
-    label::Label,
+    label::Label, v_flex,
 };
 use settings::AppSettings;
 use ui::{Card, CardTone, FieldRow, LabeledField, StepSection, app_button};
@@ -280,6 +280,68 @@ impl Workspace {
                     .child(self.render_run_actions(cx)),
             )
             .children(self.render_run_options(cx))
+            .children(self.render_last_run(cx))
+    }
+
+    /// `2b`: with the builder docked and little room left, the steps compress to a rail — what
+    /// will run, against what, and the run controls. Pop the builder out (or drag the divider)
+    /// for the full steps.
+    pub(super) fn render_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().colors.muted_foreground;
+        let value = |text: String| {
+            if text.trim().is_empty() {
+                "—".to_string()
+            } else {
+                text
+            }
+        };
+        let file_name = |path: &str| {
+            std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_string())
+        };
+        let source = value(self.source_field(cx).read(cx).value().to_string());
+        let ingest = value(self.ingest_files_dir.read(cx).value().to_string());
+        let config = value(
+            self.saved_config_select
+                .read(cx)
+                .selected_value()
+                .map(|p| file_name(p))
+                .unwrap_or_default(),
+        );
+        let server = value(
+            self.server_select
+                .read(cx)
+                .selected_value()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
+        );
+        let row = |label: &'static str, text: String| {
+            v_flex()
+                .w_full()
+                .min_w(px(0.))
+                .gap_0p5()
+                .child(Label::new(label).text_xs().text_color(muted))
+                .child(div().w_full().truncate().text_sm().child(text))
+        };
+        v_flex()
+            .w_full()
+            .min_w(px(0.))
+            .p_4()
+            .gap_3()
+            .child(Label::new("RUN").text_xs().text_color(muted))
+            .child(row("Source", source))
+            .child(row("Ingest dir", ingest))
+            .child(row("Config", config))
+            .child(row("Server", server))
+            .child(
+                h_flex()
+                    .w_full()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(self.render_run_actions(cx)),
+            )
             .children(self.render_last_run(cx))
     }
 }

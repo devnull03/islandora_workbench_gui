@@ -35,6 +35,8 @@ pub struct MainDock {
     builder_pane: Entity<BuilderPane>,
     /// Persists the layout whenever the dock emits `LayoutChanged`.
     _layout_sub: Subscription,
+    /// Re-clamps the builder's dock when the window shrinks under it.
+    _bounds_sub: Subscription,
 }
 
 impl MainDock {
@@ -111,7 +113,15 @@ impl MainDock {
             },
         );
 
+        // The 60% ceiling is a share of the window, so a smaller window lowers it too (`2b`).
+        let _bounds_sub = cx.observe_window_bounds(window, |this, window, cx| {
+            Self::clamp_builder_width(&this.dock_area, window, cx);
+        });
+        // A layout restored from a wider window may already be over it.
+        Self::clamp_builder_width(&dock_area, window, cx);
+
         Self {
+            _bounds_sub,
             dock_area,
             builder_pane,
             _layout_sub,

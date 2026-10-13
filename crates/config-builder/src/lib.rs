@@ -389,6 +389,9 @@ pub struct ConfigBuilder {
     pub(crate) chain_error: Option<SharedString>,
     pub(crate) collapsed_chain: HashSet<PathBuf>,
     pub(crate) last_chain_scan: Option<Instant>,
+    /// Text a widget held but could not turn into a value when the builder moved host
+    /// (`dock`), by widget id: the rebuilt widget starts with it rather than the last good value.
+    carried_text: HashMap<SharedString, String>,
     /// Each widget's change handler, by widget id, dropped with the widget in `forget_widgets`.
     widget_subscriptions: HashMap<SharedString, Subscription>,
     /// The chain scan in flight, if any (see `scan_chain`).
@@ -563,6 +566,25 @@ impl ValidationInputs {
             warn_clashes: AppSettings::bool_or(BUILDER_WARN_CLASHES_KEY, true, cx),
         }
     }
+}
+
+/// The draft's problems plus what its widgets could not turn into values, widget errors first
+/// and sorted, so the footer and the "first blocker" are the same on every render.
+fn problems_for(
+    draft: &ConfigDraft,
+    widget_errors: &HashMap<String, String>,
+    cx: &App,
+) -> Vec<Problem> {
+    let mut problems = validate_draft(draft, cx);
+    let mut errors: Vec<_> = widget_errors.iter().collect();
+    errors.sort();
+    let widget_problems = errors.into_iter().map(|(key, error)| Problem {
+        key: Some(key.clone()),
+        severity: Severity::Error,
+        message: error.clone(),
+    });
+    problems.splice(0..0, widget_problems);
+    problems
 }
 
 /// Validate with what the builder knows about this machine.
@@ -788,6 +810,8 @@ impl ConfigBuilder {
             .unwrap_or_default();
         let loaded_numbers = numeric_keys(&draft);
         let snapshot = BuilderSnapshot {
+            widget_errors: HashMap::new(),
+            carried_text: HashMap::new(),
             profile: AppSettings::get(cx).active_profile.clone(),
             draft,
             description,
@@ -815,8 +839,28 @@ impl ConfigBuilder {
 
     /// Everything a builder holds that is not a widget: enough to rebuild it in another host
     /// (`dock`). The widgets are rebuilt from the draft, which is the source of truth anyway.
-    pub(crate) fn snapshot(&self) -> BuilderSnapshot {
+    pub(crate) fn snapshot(&self, cx: &App) -> BuilderSnapshot {
+        // A refused value lives only in its widget; keep the text of every widget whose
+        // setting has one, so the rebuilt widget shows what was typed, error and all.
+        let refused = |id: &SharedString| {
+            let key = id.split('#').next().unwrap_or_default();
+            self.widget_errors.contains_key(key)
+        };
+        let mut carried_text: HashMap<SharedString, String> = self
+            .inputs
+            .iter()
+            .filter(|(id, _)| refused(id))
+            .map(|(id, input)| (id.clone(), input.read(cx).value().to_string()))
+            .collect();
+        carried_text.extend(
+            self.textareas
+                .iter()
+                .filter(|(id, _)| refused(id))
+                .map(|(id, area)| (id.clone(), area.read(cx).value().to_string())),
+        );
         BuilderSnapshot {
+            widget_errors: self.widget_errors.clone(),
+            carried_text,
             profile: self.profile.clone(),
             draft: self.draft.clone(),
             description: self.description.clone(),
@@ -835,6 +879,8 @@ impl ConfigBuilder {
         cx: &mut Context<Self>,
     ) -> Self {
         let BuilderSnapshot {
+            widget_errors,
+            carried_text,
             profile,
             draft,
             description,
@@ -895,8 +941,7 @@ impl ConfigBuilder {
             if inputs != this.validation_inputs {
                 this.validation_inputs = inputs;
                 this.last_chain_scan = None;
-                this.revalidate(cx);
-                cx.notify();
+                this.refresh_problems(cx);
             }
         });
         let _subscriptions = vec![
@@ -914,7 +959,7 @@ impl ConfigBuilder {
             }),
         ];
 
-        let problems = validate_draft(&draft, cx);
+        let problems = problems_for(&draft, &widget_errors, cx);
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
         Self {
@@ -932,7 +977,8 @@ impl ConfigBuilder {
             inputs: HashMap::new(),
             selects: HashMap::new(),
             textareas: HashMap::new(),
-            widget_errors: HashMap::new(),
+            widget_errors,
+            carried_text,
             loaded_numbers,
             search,
             search_selected: None,
@@ -972,7 +1018,10 @@ impl ConfigBuilder {
         if let Some(existing) = self.inputs.get(&id) {
             return existing.clone();
         }
-        let seed = seed.to_string();
+        let seed = self
+            .carried_text
+            .remove(&id)
+            .unwrap_or_else(|| seed.to_string());
         let placeholder = placeholder.to_string();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -1067,7 +1116,12 @@ impl ConfigBuilder {
         if let Some(existing) = self.inputs.get(&id) {
             return existing.clone();
         }
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("+ Add"));
+        let carried = self.carried_text.remove(&id).unwrap_or_default();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("+ Add")
+                .default_value(carried)
+        });
         let key = setting_key.to_string();
         self.widget_subscriptions.insert(
             id.clone(),
@@ -1132,7 +1186,10 @@ impl ConfigBuilder {
         if let Some(existing) = self.inputs.get(&id) {
             return existing.clone();
         }
-        let seed = seed.to_string();
+        let seed = self
+            .carried_text
+            .remove(&id)
+            .unwrap_or_else(|| seed.to_string());
         let placeholder = placeholder.to_string();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -1167,7 +1224,10 @@ impl ConfigBuilder {
         if let Some(existing) = self.inputs.get(&id) {
             return existing.clone();
         }
-        let seed = seed.to_string();
+        let seed = self
+            .carried_text
+            .remove(&id)
+            .unwrap_or_else(|| seed.to_string());
         let placeholder = placeholder.to_string();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -1201,7 +1261,10 @@ impl ConfigBuilder {
         if let Some(existing) = self.textareas.get(&id) {
             return existing.clone();
         }
-        let seed = seed.to_string();
+        let seed = self
+            .carried_text
+            .remove(&id)
+            .unwrap_or_else(|| seed.to_string());
         let state = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(3, 16)
@@ -1315,19 +1378,17 @@ impl ConfigBuilder {
         self.revalidate(cx);
     }
 
+    /// The draft changed: recompute its problems and mark it edited.
     pub(crate) fn revalidate(&mut self, cx: &mut Context<Self>) {
-        self.draft_revision += 1;
-        self.problems = validate_draft(&self.draft, cx);
-        // Sorted, so the footer and the "first blocker" are the same on every render.
-        let mut widget_errors: Vec<_> = self.widget_errors.iter().collect();
-        widget_errors.sort();
-        let widget_problems = widget_errors.into_iter().map(|(key, error)| Problem {
-            key: Some(key.clone()),
-            severity: Severity::Error,
-            message: error.clone(),
-        });
-        self.problems.splice(0..0, widget_problems);
+        self.refresh_problems(cx);
         self.chrome.transition(BuilderChromeEvent::Edited);
+    }
+
+    /// Recompute the problems without calling the draft edited — for when something outside it
+    /// changed (Settings, a profile switch).
+    pub(crate) fn refresh_problems(&mut self, cx: &mut Context<Self>) {
+        self.draft_revision += 1;
+        self.problems = problems_for(&self.draft, &self.widget_errors, cx);
         cx.notify();
     }
 

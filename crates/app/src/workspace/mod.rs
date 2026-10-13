@@ -11,8 +11,10 @@ pub use log_viewer::LogViewer;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 use gpui_component::{
+    ActiveTheme as _,
     dock::{BasePanel, Panel, PanelControl, PanelEvent},
     input::{InputEvent, InputState},
     scroll::ScrollableElement,
@@ -699,25 +701,57 @@ impl Render for Workspace {
         // has. `min_h(relative(1.))` keeps the column stretching to fill a tall window while
         // letting it exceed a short one — at which point this scrolls, instead of the overflow
         // pushing the status bar off-screen.
-        div()
-            .size_full()
+        // `2b`: the docked builder compresses the steps to a rail when it leaves them too little
+        // room for the full form.
+        let rail = config_builder::BuilderDock::main(cx)
+            .and_then(|(_, pane)| pane.read(cx).docked_width(cx))
+            .is_some_and(|docked| {
+                window.viewport_size().width - docked < ui::tokens::RAIL_BREAKPOINT_W
+            });
+        let steps = div()
+            .id("workspace-steps")
+            .w_full()
+            .flex_1()
+            .min_h(px(0.))
             // Horizontal overflow is never wanted here: the steps must fit the window, and a
             // sheet URL or an absolute path is longer than any window. Without the clip the
             // controls simply run off the right edge.
             .overflow_x_hidden()
-            .child(
-                v_flex()
+            .map(|steps| {
+                if rail {
+                    steps.child(self.render_rail(cx))
+                } else {
+                    steps.child(
+                        v_flex()
+                            .w_full()
+                            .min_w(px(0.))
+                            .min_h(relative(1.))
+                            .p_4()
+                            .gap_4()
+                            .child(self.render_input_source(cx))
+                            .child(self.render_config(cx))
+                            .child(self.render_server(cx)),
+                    )
+                }
+            })
+            .overflow_y_scrollbar();
+
+        // `2c`/`3c`: the profile bar is its own band between the title bar and the steps, so it
+        // stays put while they scroll.
+        v_flex()
+            .size_full()
+            .children(self.render_profile_bar(cx).map(|bar| {
+                div()
                     .w_full()
-                    .min_w(px(0.))
-                    .min_h(relative(1.))
-                    .p_4()
-                    .gap_4()
-                    .children(self.render_profile_bar(cx))
-                    .child(self.render_input_source(cx))
-                    .child(self.render_config(cx))
-                    .child(self.render_server(cx)),
-            )
-            .overflow_y_scrollbar()
+                    .flex_none()
+                    .px(ui::tokens::PROFILE_BAR_PAD_X)
+                    .py(ui::tokens::PROFILE_BAR_PAD_Y)
+                    .bg(cx.theme().colors.table_head)
+                    .border_b_1()
+                    .border_color(cx.theme().colors.border)
+                    .child(bar)
+            }))
+            .child(steps)
     }
 }
 

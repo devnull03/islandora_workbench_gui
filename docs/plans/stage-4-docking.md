@@ -96,8 +96,8 @@ display.
   and left it showing.
 - Verified under Xvfb: Edit → `Ctrl+\` docks; Pop out leaves the placeholder; moving the window
   onto the edge shows the target and docks; ✕ with edits prompts and closes.
-- Not done: the run controls do not compress to a rail when the builder is docked — the
-  workspace simply narrows (it already reflows to its minimum width).
+- The run controls compress to a rail when the docked builder leaves them too little room —
+  see the audit notes below.
 
 **M5 audit fixes (October 2026).**
 - Edit/New are clicked inside the main window's own update, where that window cannot be
@@ -113,6 +113,11 @@ display.
 - A floated window is sized from the builder's own YAML state, not the Settings default.
 - The builder has a focus handle, focused when it opens, so `Ctrl+\` works before anything is
   clicked; a global handler catches the action when nothing focused handles it.
-- Still open (Low): a refused widget value is not carried across dock/float; the 60% clamp
-  is applied on layout changes, not when the window shrinks; preview toggles persist the layout.
+- Closed since: a refused widget value (bad YAML, a word in a number list) and its error now
+  travel with the snapshot and re-seed the rebuilt widget; the 60% clamp is re-applied when
+  the window shrinks and after a restored layout; and the run controls compress to a rail
+  (Source · Ingest dir · Config · Server, then the run actions and last run) when the docked
+  builder leaves the steps under `RAIL_BREAKPOINT_W` (560 px). Revalidating because Settings
+  changed no longer marks an open builder as edited. Still open (Low): preview toggles
+  persist the layout.
 

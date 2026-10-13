@@ -114,6 +114,7 @@ library folder (`config_library_dir`) and its config list; the YAML files stay m
 - Profiles is now the last Settings page (`3c`), and Manage profiles opens Settings on it
   (`OpenProfiles`; an already-open Settings window is brought forward on its current page).
   A switch also clears step 2's `↳ N` badge with the rest of the config summary.
-- Still open (Low): the profile bar is inside the scrolling column rather than its own slot,
-  card facts are one line rather than chips, import always adds ("X 2") rather than offering
-  to replace.
+- The profile bar is its own band between the title bar and the steps (`table_head`, bottom
+  border, 9/14 padding), so it stays put while they scroll. Importing a profile whose name is
+  taken asks to replace it in place (the active one is reloaded; refused while a run uses it).
+- Still open (Low): card facts are one line rather than chips.

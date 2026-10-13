@@ -51,6 +51,11 @@ pub const TITLE_BAR_H: Pixels = px(34.);
 pub const STATUS_BAR_H: Pixels = px(34.);
 /// gpui-component's title row over a dock that holds a single panel (`TabPanel::render_title`).
 pub const DOCK_TITLE_H: Pixels = px(30.);
+/// Below this much room beside the docked builder, the main window's steps become a rail.
+pub const RAIL_BREAKPOINT_W: Pixels = px(560.);
+/// The profile bar's band above the main window's steps (`3c`: 9 px by 14 px).
+pub const PROFILE_BAR_PAD_X: Pixels = px(14.);
+pub const PROFILE_BAR_PAD_Y: Pixels = px(9.);
 /// The setting picker's trigger, one step taller than an ordinary control because it is the only
 /// thing on its row (Component Spec §08).
 pub const PICKER_TRIGGER_H: Pixels = px(34.);

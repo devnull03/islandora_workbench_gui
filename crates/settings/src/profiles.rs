@@ -344,6 +344,30 @@ impl AppSettings {
         name
     }
 
+    /// Whether a profile is called `name`.
+    pub fn has_profile(&self, name: &str) -> bool {
+        name == self.active_profile || self.profiles.iter().any(|p| p.name == name)
+    }
+
+    /// Import `profile` over the one with the same name — a colleague's updated copy — keeping
+    /// its place in the list. Refused while it is the active profile and a run could be using
+    /// it (the caller checks); a name nobody has is simply added.
+    pub fn replace_profile(&mut self, mut profile: Profile) -> String {
+        let name = profile.name.trim().to_string();
+        profile.name = name.clone();
+        profile
+            .values
+            .retain(|key, _| PROFILE_KEYS.contains(&key.as_str()));
+        if name == self.active_profile {
+            self.load_profile(&profile);
+        } else if let Some(existing) = self.profiles.iter_mut().find(|p| p.name == name) {
+            *existing = profile;
+        } else {
+            self.profiles.push(profile);
+        }
+        name
+    }
+
     fn unique_name(&self, wanted: &str) -> String {
         let base = if wanted.is_empty() { "Profile" } else { wanted };
         let names = self.profile_names();
@@ -390,6 +414,29 @@ mod tests {
             last_check: None,
         });
         s
+    }
+
+    /// Re-importing a profile replaces it in place, the active one included.
+    #[test]
+    fn replacing_a_profile_keeps_its_place() {
+        let mut s = settings();
+        s.add_profile("B", None).unwrap();
+        let mut updated = s.all_profiles()[0].clone();
+        updated.servers.clear();
+        s.replace_profile(updated);
+        assert!(
+            s.server_configs.is_empty(),
+            "the active profile was reloaded"
+        );
+        let mut b = s.all_profiles()[1].clone();
+        b.values
+            .insert("workbench_path".into(), ProfileValue::Text("/x".into()));
+        s.replace_profile(b);
+        assert_eq!(s.profile_names(), vec!["Default", "B"]);
+        assert!(
+            !s.all_profiles()[1].values.contains_key("workbench_path"),
+            "machine keys never come in with a profile"
+        );
     }
 
     /// A save from a builder opened under another profile lands in that profile's library.
