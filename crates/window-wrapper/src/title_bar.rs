@@ -114,7 +114,11 @@ impl RenderOnce for AppTitleBar {
                                     .icon(IconName::LoaderCircle)
                                     .color(muted),
                             )
-                            .child(Label::new("Ingest running").text_xs().text_color(muted))
+                            .child(
+                                Label::new(WindowLock::label(cx))
+                                    .text_xs()
+                                    .text_color(muted),
+                            )
                     }),
             )
     }

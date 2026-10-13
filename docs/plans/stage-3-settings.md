@@ -135,7 +135,11 @@ Stage 5 needs — *Workbench & Python* is machine facts, everything else is inst
   `scripts/gen-themes.py` (`--check` fails when they are stale), which places each neutral at
   Qrate's lightness step between the palette's own background and foreground and swaps the
   accent families, so only hues change between palettes (plan 7.1). `crates/ui/theme.json` is
-  gone.
+  gone. After the M6 audit the generator also takes an accent shade's family from its key (a
+  pressed danger button stays red), picks the text colour on each accent by contrast and nudges
+  the accent until that text reaches WCAG AA (4.5:1), holds muted text at AA on the background,
+  and `--check` fails any generated pair below AA. The hand-tuned Qrate pair is not adjusted
+  (its dark danger button is 3.9:1).
 - **Sidebar** is 176px (§00) via `Settings::sidebar_width`. At that width "Workbench & Python"
   truncates; shortening the page name is a design call left open.
 - **Footer**: "Profile: Default" with the default server's health dot (success / danger / muted

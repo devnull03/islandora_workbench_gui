@@ -110,11 +110,11 @@ Fifteen things the plan did not predict:
    against the ones the select holds, which keeps that to one `read_dir` per render.
 7. **The config summary is cached.** `14 settings · runs 2 secondary configs · edited today`
    needs a parse of the YAML plus a stat, which must not happen once per frame — it is rebuilt
-   only when the selection changes. "Edited" is relative (today / yesterday / N days ago), which
+   when the selection changes or a config file is written (`ConfigFilesChanged`). "Edited" is relative (today / yesterday / N days ago), which
    also avoids pulling in a date-formatting crate.
-8. **The mockup's `↳ 2` chain badge is folded into the summary line** as
-   `runs N secondary configs` rather than drawn as a separate glyph. Add the badge when the row
-   gets crowded enough to need the shorthand.
+8. **The mockup's `↳ 2` chain badge** sits beside the config dropdown in the accent colour
+   (phase 6.3; the summary line still spells it out as `runs N secondary configs`). It counts
+   the configs run directly after this one, like the summary.
 9. **The run log is a real bottom dock.** `gpui_component::dock::DockArea` owns its open state and
    height; both persist in `AppSettings`. The native status bar's Log control and **Ctrl+`** invoke
    the same toggle action.
@@ -208,3 +208,13 @@ Windows `open_file` uses Explorer rather than `cmd /C start` (cmd re-parses `&`/
   spec's 4 s) reports each run outcome — Check, Run, quick delete — and nothing else.
 - Preprocessing now holds the window lock like a run, and a Process with no Workbench folder
   set says so instead of leaving the step stuck in its busy state.
+- **M6 audit fixes.** Quit is deferred out of the menu's dispatch (it used to run while the main
+  window was mid-update, find it unreachable and quit regardless of a run or unsaved edits). It
+  now refuses during a run with a visible notice, and asks once about unsaved edits in *any*
+  builder, docked or floating, in a window brought to the front. Closing during a run also says
+  why it is refused. Preprocessing locks profile switches but no longer the close button (it
+  cannot be cancelled, so a hung script would have made the window unclosable), and the title
+  bar says "Preprocessing" rather than "Ingest running". Step 2's summary and badge redraw when a
+  config file is written — by a builder or by a run's rewrite. A builder whose profile was
+  renamed or deleted files its config in the active profile. A failed settings backup no longer
+  makes settings load as defaults.

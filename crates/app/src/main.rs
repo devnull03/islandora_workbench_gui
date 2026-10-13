@@ -179,7 +179,14 @@ fn may_close(
     cx: &mut gpui::App,
     proceed: impl Fn(&mut Window, &mut gpui::App) + 'static,
 ) -> bool {
-    if WindowLock::is_locked(cx) {
+    if WindowLock::blocks_close(cx) {
+        use gpui_component::WindowExt as _;
+        window.push_notification(
+            gpui_component::notification::Notification::warning(
+                "A run is in progress. Cancel it before closing.",
+            ),
+            cx,
+        );
         return false;
     }
     let Some((_, pane)) = BuilderDock::main(cx) else {
@@ -235,6 +242,57 @@ fn open_settings(page: usize, cx: &mut gpui::App) {
         }
     })
     .detach();
+}
+
+/// Quit, unless a run is going (say so, and stay) or a builder — docked or in its own window —
+/// has unsaved edits (ask once, in a window the user can see).
+fn request_quit(cx: &mut gpui::App) {
+    use gpui_component::WindowExt as _;
+    let main = BuilderDock::main(cx).map(|(window, _)| window);
+    if WindowLock::blocks_close(cx) {
+        if let Some(main) = main {
+            let _ = main.update(cx, |_, window, cx| {
+                window.activate_window();
+                window.push_notification(
+                    gpui_component::notification::Notification::warning(
+                        "A run is in progress. Cancel it before quitting.",
+                    ),
+                    cx,
+                );
+            });
+        }
+        return;
+    }
+    let (unsaved, builder_window) = cx.global::<ConfigBuilderWindows>().unsaved(cx);
+    if unsaved == 0 {
+        cx.quit();
+        return;
+    }
+    let Some(ask_in) = main.or(builder_window) else {
+        cx.quit();
+        return;
+    };
+    let asked = ask_in.update(cx, |_, window, cx| {
+        window.activate_window();
+        ui::confirm_dialog(
+            window,
+            cx,
+            "Quit with unsaved builder edits?",
+            if unsaved == 1 {
+                "A Config Builder has edits that are not saved. Quitting discards them.".to_string()
+            } else {
+                format!("{unsaved} Config Builders have edits that are not saved. Quitting discards them.")
+            },
+            "Discard and quit",
+            |_, cx| {
+                ConfigBuilderWindows::forget_unsaved(cx);
+                cx.quit();
+            },
+        );
+    });
+    if asked.is_err() {
+        log::warn!("couldn't ask about unsaved builder edits; not quitting");
+    }
 }
 
 fn main() {
@@ -299,19 +357,9 @@ fn main() {
                 pane.update(cx, |pane, cx| pane.toggle(cx));
             }
         });
-        // Quit asks the same question as closing the main window.
-        cx.on_action(|_: &Quit, cx| {
-            let Some((main, _)) = BuilderDock::main(cx) else {
-                cx.quit();
-                return;
-            };
-            let quit_now = main
-                .update(cx, |_, window, cx| may_close(window, cx, |_, cx| cx.quit()))
-                .unwrap_or(true);
-            if quit_now {
-                cx.quit();
-            }
-        });
+        // Quit asks the same questions as closing — deferred, because a menu dispatch runs while
+        // the window it came from is being updated, and that window cannot be updated again.
+        cx.on_action(|_: &Quit, cx| cx.defer(request_quit));
 
         // Help ▸ … — the report path. Nothing is uploaded: both routes put the text in front of
         // the user (clipboard, or a prefilled issue form) before it leaves the machine.

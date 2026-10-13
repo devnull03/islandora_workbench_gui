@@ -199,7 +199,8 @@ impl Workspace {
                             .flex_none()
                             .text_xs()
                             .font_family(cx.theme().mono_font_family.clone())
-                            .text_color(cx.theme().colors.warning)
+                            // `2c` draws it in the active-border colour, the accent.
+                            .text_color(cx.theme().colors.primary)
                             .child(format!("↳ {}", self.config_chain)),
                     )
                 })

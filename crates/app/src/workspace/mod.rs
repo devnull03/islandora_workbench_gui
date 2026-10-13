@@ -182,6 +182,9 @@ impl Workspace {
         let mut _subscriptions = Vec::new();
         // A profile switched from Settings has to reach this window now, not at its next
         // unrelated redraw; `render` applies it.
+        // A config file was written (a builder save, a run's rewrite): step 2 re-reads it.
+        _subscriptions
+            .push(cx.observe_global::<config_builder::ConfigFilesChanged>(|_, cx| cx.notify()));
         _subscriptions.push(cx.observe_global::<AppSettings>(|this, cx| {
             if AppSettings::get(cx).profile_generation != this.seen_profile_generation {
                 cx.notify();
@@ -583,8 +586,9 @@ impl Workspace {
             return;
         };
         self.op = Operation::Preprocessing;
-        // Busy like a run: no profile switch underneath it (the switch is refused while locked).
-        WindowLock::set(true, cx);
+        // No profile switch underneath it (refused while locked); closing is still allowed, as
+        // a preprocess cannot be stopped.
+        WindowLock::set_preprocessing(true, cx);
         cx.notify();
         let source_key = self.source_key(cx);
         let source_value = self.source_field(cx).read(cx).value().to_string();
@@ -603,7 +607,7 @@ impl Workspace {
                 Err(e) => {
                     self.append_log(&format!("[ERROR] {e}"), window, cx);
                     self.op = Operation::None;
-                    WindowLock::set(false, cx);
+                    WindowLock::set_preprocessing(false, cx);
                     cx.notify();
                     return;
                 }
@@ -661,7 +665,7 @@ impl Workspace {
                         }
                     }
                     this.op = Operation::None;
-                    WindowLock::set(false, cx);
+                    WindowLock::set_preprocessing(false, cx);
                     cx.notify();
                 });
             });

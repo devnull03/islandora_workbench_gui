@@ -59,6 +59,49 @@ def mix(a, b, t):
     return tuple(x + (y - x) * t for x, y in zip(a, b))
 
 
+def relative_luminance(rgb):
+    """WCAG 2.x relative luminance."""
+    def channel(c):
+        c = c / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (channel(c) for c in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b):
+    la, lb = sorted((relative_luminance(a), relative_luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+AA = 4.5  # WCAG AA for body text
+
+
+def readable_accent(base, candidates, mode):
+    """The accent, darkened (light mode) or lightened (dark mode) just enough that one of the
+    candidate text colours reaches AA on it, and that text colour."""
+    toward = (0, 0, 0) if mode == "light" else (255, 255, 255)
+    for step in range(0, 41):
+        accent = mix(base, toward, step * 0.02)
+        accent = tuple(round(c) for c in accent)
+        text = max(candidates, key=lambda t: contrast(t, accent))
+        if contrast(text, accent) >= AA:
+            return accent, text
+    return accent, text
+
+
+def readable_neutral(rgb, bg, fg):
+    """Move a text neutral toward the foreground until it reaches AA on the background."""
+    for step in range(0, 51):
+        candidate = tuple(round(c) for c in mix(rgb, fg, step * 0.02))
+        if contrast(candidate, bg) >= AA:
+            return candidate
+    return fg
+
+
+# Neutrals used as text, which must stay readable on the background.
+TEXT_NEUTRALS = ("muted.foreground", "tab.foreground", "table.head.foreground")
+
+
 def derive(template, palette, label, mode):
     colours = template["colors"]
     q_bg, _ = parse(colours["background"])
@@ -66,25 +109,40 @@ def derive(template, palette, label, mode):
     p_bg, _ = parse(palette["bg"])
     p_fg, _ = parse(palette["fg"])
 
-    # Qrate's accent bases and the derived shades that hang off them.
+    # Qrate's accent bases, and the palette's own — each nudged until text on it is readable.
     q_accents = {name: parse(colours[f"{name}.background"])[0] for name in ACCENTS}
+    candidates = [p_bg, p_fg, (0, 0, 0), (255, 255, 255)]
+    accents, accent_text = {}, {}
+    for name in ACCENTS:
+        accents[name], accent_text[name] = readable_accent(
+            parse(palette[name])[0], candidates, mode
+        )
 
-    def swap(value):
+    def shade(name, rgb, alpha):
+        """A hover/active shade: Qrate's move from its base, taken from the palette's base."""
+        base = q_accents[name]
+        delta = (lum(rgb) - lum(base)) / 255
+        target = (255, 255, 255) if delta > 0 else (0, 0, 0)
+        return fmt(mix(accents[name], target, abs(delta) * 1.2), alpha)
+
+    def swap(key, value):
         rgb, alpha = parse(value)
+        # An accent key belongs to its own family by name (a pressed danger button is red even
+        # where Qrate's red-pressed is nearer its rust primary).
+        family = key.split(".")[0]
+        if family in ACCENTS and key.endswith("background"):
+            if rgb == q_accents[family]:
+                return fmt(accents[family], alpha)
+            return shade(family, rgb, alpha)
         for name, base in q_accents.items():
             if rgb == base:
-                return fmt(parse(palette[name])[0], alpha)
-        # A hover/active shade: the same move from the palette's own base, for the nearest
-        # accent (light danger-hover sits close to the rust primary too).
+                return fmt(accents[name], alpha)
+        # Other keys drawn in an accent (ring, link, selection, slider…): the nearest family.
         distance, name = min(
             (sum(abs(x - y) for x, y in zip(rgb, base)), name) for name, base in q_accents.items()
         )
         if distance < 90:
-            base = q_accents[name]
-            p_base = parse(palette[name])[0]
-            delta = (lum(rgb) - lum(base)) / 255
-            target = (255, 255, 255) if delta > 0 else (0, 0, 0)
-            return fmt(mix(p_base, target, abs(delta) * 1.2), alpha)
+            return shade(name, rgb, alpha)
         if rgb in ((255, 255, 255), (0, 0, 0)):
             return value
         # A neutral: the same place between background and foreground.
@@ -95,13 +153,28 @@ def derive(template, palette, label, mode):
     theme = {k: v for k, v in template.items() if k != "colors"}
     theme["name"] = f"{label} {'Dark' if mode == 'dark' else 'Light'}"
     theme["is_default"] = False
-    theme["colors"] = {key: swap(value) for key, value in colours.items()}
-    # Text on an accent: the palette's background reads on every palette's accent.
+    theme["colors"] = {key: swap(key, value) for key, value in colours.items()}
     for name in ACCENTS:
         key = f"{name}.foreground"
         if key in theme["colors"]:
-            theme["colors"][key] = palette["bg"]
+            theme["colors"][key] = fmt(accent_text[name])
+    for key in TEXT_NEUTRALS:
+        if key in theme["colors"]:
+            rgb, alpha = parse(theme["colors"][key])
+            theme["colors"][key] = fmt(readable_neutral(rgb, p_bg, p_fg), alpha)
     return theme
+
+
+def contrast_problems(theme):
+    """Text/surface pairs below AA in a generated theme."""
+    c = {k: parse(v)[0] for k, v in theme["colors"].items()}
+    pairs = [(f"{n}.foreground", f"{n}.background") for n in ACCENTS]
+    pairs += [(k, "background") for k in TEXT_NEUTRALS] + [("foreground", "background")]
+    return [
+        f"{theme['name']}: {fg} on {bg} is {contrast(c[fg], c[bg]):.2f}"
+        for fg, bg in pairs
+        if fg in c and bg in c and contrast(c[fg], c[bg]) < AA
+    ]
 
 
 def theme_set(theme):
@@ -119,14 +192,16 @@ def main():
         template = json.loads((THEMES / f"qrate-{mode}.json").read_text())["themes"][0]
         for slug, palette in PALETTES.items():
             out = THEMES / f"{slug}-{mode}.json"
-            text = render(theme_set(derive(template, palette[mode], palette["label"], mode)))
+            theme = derive(template, palette[mode], palette["label"], mode)
+            stale.extend(contrast_problems(theme))
+            text = render(theme_set(theme))
             if check:
                 if not out.exists() or out.read_text() != text:
                     stale.append(out.name)
             else:
                 out.write_text(text)
     if stale:
-        sys.exit(f"out of date: {', '.join(stale)} — run scripts/gen-themes.py")
+        sys.exit("problems: " + "; ".join(stale) + " — fix the palette or run scripts/gen-themes.py")
 
 
 if __name__ == "__main__":

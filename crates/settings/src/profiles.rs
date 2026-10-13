@@ -219,8 +219,12 @@ impl AppSettings {
     /// Add or update a config-library entry, matched on its file, in profile `profile` —
     /// the live lists when it is the active one, its stored snapshot otherwise. A builder
     /// opened under one profile and saved after a switch still files its config there.
+    ///
+    /// A profile renamed or deleted since the builder opened is no longer there to receive it;
+    /// then the active profile does, rather than the save landing in no library at all.
     pub fn upsert_library_entry(&mut self, profile: &str, entry: TaskConfig) {
-        if profile == self.active_profile {
+        let known = self.profiles.iter().any(|p| p.name == profile);
+        if profile == self.active_profile || !known {
             match self
                 .task_configs
                 .iter_mut()
@@ -402,8 +406,12 @@ mod tests {
         };
         s.upsert_library_entry(DEFAULT_PROFILE, entry.clone());
         assert!(s.task_configs.is_empty());
-        s.upsert_library_entry(DEFAULT_PROFILE, entry);
+        s.upsert_library_entry(DEFAULT_PROFILE, entry.clone());
         s.switch_profile(DEFAULT_PROFILE).unwrap();
+        assert_eq!(s.task_configs.len(), 1);
+        // Opened under a profile that has since gone: the active one takes it.
+        s.task_configs.clear();
+        s.upsert_library_entry("Renamed away", entry);
         assert_eq!(s.task_configs.len(), 1);
     }
 

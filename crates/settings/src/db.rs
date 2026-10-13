@@ -268,11 +268,11 @@ pub fn load_app_settings() -> Result<AppSettings> {
     // on its next save. Keep the newer row aside first, once, so it can be recovered.
     if persist.settings_version > SETTINGS_SCHEMA_VERSION {
         let backup = format!("{SETTINGS_KEY}_from_v{}", persist.settings_version);
-        conn.execute(
-            "INSERT OR IGNORE INTO settings_kv(key, json) VALUES (?1, ?2)",
+        // Best effort: failing to keep the copy must not turn into "no settings at all".
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO settings_kv(key, json) VALUES (?1, ?2)",
             params![backup, json],
-        )
-        .context("Back up newer settings")?;
+        );
     }
     Ok(persist.into())
 }

@@ -127,6 +127,34 @@ impl ConfigBuilderWindows {
             .collect()
     }
 
+    /// How many open builders hold unsaved edits, and a window showing one of them — for Quit,
+    /// which closes every window without asking each one.
+    pub fn unsaved(&self, cx: &App) -> (usize, Option<AnyWindowHandle>) {
+        let dirty: Vec<&OpenBuilder> = self
+            .live()
+            .filter(|open| {
+                open.view
+                    .upgrade()
+                    .is_some_and(|view| view.read(cx).chrome.is_dirty())
+            })
+            .collect();
+        (dirty.len(), dirty.first().map(|open| open.window))
+    }
+
+    /// Mark every open builder saved-or-discarded, so closing their windows does not ask again.
+    pub fn forget_unsaved(cx: &mut App) {
+        let views: Vec<_> = cx
+            .global::<Self>()
+            .live()
+            .filter_map(|open| open.view.upgrade())
+            .collect();
+        for view in views {
+            view.update(cx, |builder, _| {
+                builder.chrome.save = BuilderTitleSaveState::Clean
+            });
+        }
+    }
+
     /// The window `view` is registered in.
     pub(crate) fn window_of(&self, view: &WeakEntity<ConfigBuilder>) -> Option<AnyWindowHandle> {
         self.live()
@@ -626,7 +654,8 @@ impl ConfigFilesChanged {
         cx.try_global::<Self>().map_or(0, |changed| changed.0)
     }
 
-    fn bump(cx: &mut App) {
+    /// Something wrote a config file.
+    pub fn bump(cx: &mut App) {
         cx.default_global::<Self>().0 += 1;
     }
 }

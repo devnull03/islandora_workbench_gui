@@ -203,7 +203,10 @@ impl Workspace {
             }
         }
 
-        match self.prepare_run(&action, &target, cx) {
+        let prepared = self.prepare_run(&action, &target, cx);
+        // Preparing writes host, credentials and input_csv into the config file.
+        config_builder::ConfigFilesChanged::bump(cx);
+        match prepared {
             Ok(prepared) => self.launch(action, prepared, window, cx),
             Err(error) => {
                 self.append_log(&format!("[ERROR] {error}"), window, cx);
