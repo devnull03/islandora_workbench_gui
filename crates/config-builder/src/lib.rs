@@ -78,7 +78,7 @@ const SEARCHABLE_SELECT_MIN: usize = 12;
 /// rival copy with a divergent draft.
 #[derive(Default)]
 pub struct ConfigBuilderWindows {
-    open: HashMap<Option<PathBuf>, OpenBuilder>,
+    open: Vec<OpenBuilder>,
 }
 
 impl Global for ConfigBuilderWindows {}
@@ -87,28 +87,68 @@ impl Global for ConfigBuilderWindows {}
 /// another window reaches this window's draft instead of the file under it (plan 1.9).
 #[derive(Clone)]
 struct OpenBuilder {
+    /// The file, as it was opened and as the file system names it; `None` for an unsaved draft.
+    /// Each unsaved draft is its own window.
+    path: Option<(PathBuf, PathBuf)>,
     window: AnyWindowHandle,
     view: WeakEntity<ConfigBuilder>,
 }
 
 impl ConfigBuilderWindows {
-    /// Every config with a live builder window, by the path it was opened with.
+    /// Every config with a live builder window, by both the path it was opened with and the
+    /// one the file system resolves it to. Plain paths, so a per-frame lookup touches no disk.
     pub(crate) fn open_paths(&self) -> HashSet<PathBuf> {
-        self.open
-            .iter()
-            .filter(|(_, open)| open.view.upgrade().is_some())
-            .filter_map(|(key, _)| key.clone())
+        self.live()
+            .filter_map(|open| open.path.clone())
+            .flat_map(|(opened, identity)| [opened, identity])
             .collect()
     }
 
     /// The live builder editing `path`, if one is open. Matched by file identity, not by the
     /// spelling the window was opened with.
     fn view_for(&self, path: &std::path::Path) -> Option<Entity<ConfigBuilder>> {
+        self.find(path).and_then(|open| open.view.upgrade())
+    }
+
+    /// The unsaved drafts and file drafts open in builders other than `except`.
+    pub(crate) fn drafts(&self, except: EntityId, cx: &App) -> Vec<ConfigDraft> {
+        self.live()
+            .filter_map(|open| open.view.upgrade())
+            .filter(|view| view.entity_id() != except)
+            .map(|view| view.read(cx).draft.clone())
+            .filter(|draft| draft.path.is_some())
+            .collect()
+    }
+
+    fn live(&self) -> impl Iterator<Item = &OpenBuilder> {
         self.open
             .iter()
-            .filter_map(|(key, open)| Some((key.as_deref()?, open)))
-            .find(|(key, _)| workbench_integration::config::chain::same_path(key, path))
-            .and_then(|(_, open)| open.view.upgrade())
+            .filter(|open| open.view.upgrade().is_some())
+    }
+
+    fn find(&self, path: &std::path::Path) -> Option<&OpenBuilder> {
+        let identity = workbench_integration::config::chain::identity(path);
+        self.live().find(|open| {
+            open.path
+                .as_ref()
+                .is_some_and(|(opened, known)| *known == identity || opened == path)
+        })
+    }
+
+    /// Record `view`'s window under `path`, replacing whatever entry the view had.
+    fn register(
+        &mut self,
+        path: Option<PathBuf>,
+        window: AnyWindowHandle,
+        view: WeakEntity<ConfigBuilder>,
+    ) {
+        self.open
+            .retain(|open| open.view.upgrade().is_some() && open.view != view);
+        let path = path.map(|path| {
+            let identity = workbench_integration::config::chain::identity(&path);
+            (path, identity)
+        });
+        self.open.push(OpenBuilder { path, window, view });
     }
 }
 
@@ -149,19 +189,15 @@ fn open_config_builder_with_ancestors(
     ancestors: Vec<PathBuf>,
     cx: &mut App,
 ) {
-    if let Some(handle) = cx
-        .global::<ConfigBuilderWindows>()
-        .open
-        .get(&path)
-        .map(|open| open.window)
+    if let Some(handle) = path.as_deref().and_then(|path| {
+        cx.global::<ConfigBuilderWindows>()
+            .find(path)
+            .map(|open| open.window)
+    }) && handle
+        .update(cx, |_, window, _| window.activate_window())
+        .is_ok()
     {
-        if handle
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
-        {
-            return;
-        }
-        cx.global_mut::<ConfigBuilderWindows>().open.remove(&path);
+        return;
     }
 
     // The starting width has to agree with whether the YAML panel is showing, or the window
@@ -208,13 +244,8 @@ fn open_config_builder_with_ancestors(
         });
         if let (Ok(handle), Some(view)) = (opened, view) {
             cx.update(|cx| {
-                cx.global_mut::<ConfigBuilderWindows>().open.insert(
-                    key,
-                    OpenBuilder {
-                        window: handle.into(),
-                        view,
-                    },
-                );
+                cx.global_mut::<ConfigBuilderWindows>()
+                    .register(key, handle.into(), view);
             });
         }
     })
@@ -270,6 +301,16 @@ pub struct ConfigBuilder {
     pub(crate) chain_error: Option<SharedString>,
     pub(crate) collapsed_chain: HashSet<PathBuf>,
     pub(crate) last_chain_scan: Option<Instant>,
+    /// Each widget's change handler, by widget id, dropped with the widget in `forget_widgets`.
+    widget_subscriptions: HashMap<SharedString, Subscription>,
+    /// The chain scan in flight, if any (see `scan_chain`).
+    chain_scan: Option<Task<()>>,
+    /// What validation read from Settings last time, so a settings change that alters the
+    /// answer (another profile, a new Workbench folder, a builder switch) revalidates.
+    validation_inputs: ValidationInputs,
+    /// The pending write of this window's size; replaced on every resize so a drag is saved
+    /// once, when it settles.
+    size_save: Option<Task<()>>,
 
     _subscriptions: Vec<Subscription>,
 }
@@ -415,15 +456,36 @@ fn parse_yaml_value(text: &str) -> Result<Value, String> {
     serde_yaml::from_str(text).map_err(|e| e.to_string())
 }
 
+/// How long a resize must settle before the builder size is written to Settings.
+const SIZE_SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// The settings validation depends on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ValidationInputs {
+    workbench_dir: Option<PathBuf>,
+    check_paths: bool,
+    warn_clashes: bool,
+}
+
+impl ValidationInputs {
+    fn read(cx: &App) -> Self {
+        Self {
+            workbench_dir: workbench_dir(cx),
+            check_paths: AppSettings::bool_or(BUILDER_CHECK_PATHS_KEY, true, cx),
+            warn_clashes: AppSettings::bool_or(BUILDER_WARN_CLASHES_KEY, true, cx),
+        }
+    }
+}
+
 /// Validate with what the builder knows about this machine.
 fn validate_draft(draft: &ConfigDraft, cx: &App) -> Vec<Problem> {
-    let workbench_dir = workbench_dir(cx);
+    let inputs = ValidationInputs::read(cx);
     validate(
         draft,
         &ValidationContext {
-            workbench_dir: workbench_dir.as_deref(),
-            skip_path_checks: !AppSettings::bool_or(BUILDER_CHECK_PATHS_KEY, true, cx),
-            skip_clash_warnings: !AppSettings::bool_or(BUILDER_WARN_CLASHES_KEY, true, cx),
+            workbench_dir: inputs.workbench_dir.as_deref(),
+            skip_path_checks: !inputs.check_paths,
+            skip_clash_warnings: !inputs.warn_clashes,
         },
     )
 }
@@ -436,9 +498,11 @@ fn edit_config_file(
 ) -> Result<(), String> {
     let mut draft = ConfigDraft::load(path)
         .map_err(|error| format!("Couldn't open {}: {error}", path.display()))?;
+    // Only `secondary_tasks` changes, so only its lines are rewritten: a file no window has
+    // open keeps its comments.
     if edit(&mut draft) {
         draft
-            .save(path)
+            .save_key(path, "secondary_tasks")
             .map_err(|error| format!("Couldn't save {}: {error}", path.display()))?;
     }
     Ok(())
@@ -618,6 +682,10 @@ impl ConfigBuilder {
         // Remember the editor side's size (the window less the YAML panel) for the next builder.
         // Only a change is written, so a drag is a handful of writes, not one per frame.
         let size_sub = cx.observe_window_bounds(window, |this, window, cx| {
+            // A maximized or full-screen size is the screen's, not a size the user chose.
+            if window.is_maximized() || window.is_fullscreen() {
+                return;
+            }
             let bounds = window.bounds().size;
             let editor_width = if this.chrome.yaml_visible() {
                 bounds.width - YAML_PANEL_WIDTH
@@ -629,16 +697,34 @@ impl ConfigBuilder {
                 f32::from(editor_width).round(),
                 f32::from(bounds.height).round()
             );
-            let stored = AppSettings::get(cx)
-                .values
-                .get(BUILDER_SIZE_KEY)
-                .map(|v| v.text().to_string());
-            if parse_size(&text).is_some() && stored.as_deref() != Some(text.as_str()) {
-                AppSettings::set_text(BUILDER_SIZE_KEY, text.into(), cx);
+            if parse_size(&text).is_none() {
+                return;
+            }
+            this.size_save = Some(cx.spawn(async move |_, cx| {
+                cx.background_executor().timer(SIZE_SAVE_DELAY).await;
+                cx.update(|cx| {
+                    let stored = AppSettings::get(cx)
+                        .values
+                        .get(BUILDER_SIZE_KEY)
+                        .map(|v| v.text().to_string());
+                    if stored.as_deref() != Some(text.as_str()) {
+                        AppSettings::set_text(BUILDER_SIZE_KEY, text.into(), cx);
+                    }
+                });
+            }));
+        });
+        let settings_sub = cx.observe_global::<AppSettings>(|this, cx| {
+            let inputs = ValidationInputs::read(cx);
+            if inputs != this.validation_inputs {
+                this.validation_inputs = inputs;
+                this.last_chain_scan = None;
+                this.revalidate(cx);
+                cx.notify();
             }
         });
         let _subscriptions = vec![
             size_sub,
+            settings_sub,
             cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change | InputEvent::Focus) {
                     let query = this.search.read(cx).value().trim().to_string();
@@ -704,6 +790,10 @@ impl ConfigBuilder {
             chain_error: None,
             collapsed_chain: HashSet::new(),
             last_chain_scan: None,
+            widget_subscriptions: HashMap::new(),
+            chain_scan: None,
+            validation_inputs: ValidationInputs::read(cx),
+            size_save: None,
             _subscriptions,
         }
     }
@@ -732,7 +822,8 @@ impl ConfigBuilder {
                 .default_value(seed)
         });
         let key = setting_key.to_string();
-        self._subscriptions.push(
+        self.widget_subscriptions.insert(
+            id.clone(),
             cx.subscribe(&input, move |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.commit(&key, cx);
@@ -826,35 +917,47 @@ impl ConfigBuilder {
         }
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("+ Add"));
         let key = setting_key.to_string();
-        self._subscriptions.push(cx.subscribe_in(
-            &input,
-            window,
-            move |this, state, event: &InputEvent, window, cx| {
-                let text = state.read(cx).value().to_string();
-                // §05: a comma commits too, so a pasted `tif, jp2, png` becomes three chips.
-                // Enter and blur commit whatever is left.
-                let (complete, rest) = match event {
-                    InputEvent::Change if text.contains(',') => {
-                        let (done, rest) = text.rsplit_once(',').unwrap_or((&text, ""));
-                        (done.to_string(), rest.to_string())
+        self.widget_subscriptions.insert(
+            id.clone(),
+            cx.subscribe_in(
+                &input,
+                window,
+                move |this, state, event: &InputEvent, window, cx| {
+                    let text = state.read(cx).value().to_string();
+                    // Emptying the field drops a refused value, and its message with it.
+                    if matches!(event, InputEvent::Change) && text.trim().is_empty() {
+                        if this.widget_errors.remove(&key).is_some() {
+                            this.revalidate(cx);
+                        }
+                        return;
                     }
-                    InputEvent::PressEnter { .. } | InputEvent::Blur => (text, String::new()),
-                    _ => return,
-                };
-                if complete.trim().is_empty() {
-                    return;
-                }
-                let mut refused = None;
-                for part in complete.split(',') {
-                    if let Err(bad) = this.push_chip(&key, part, cx) {
-                        refused = Some(bad);
+                    // §05: a comma commits too, so a pasted `tif, jp2, png` becomes three chips.
+                    // Enter and blur commit whatever is left.
+                    let (complete, rest) = match event {
+                        InputEvent::Change if text.contains(',') => {
+                            let (done, rest) = text.rsplit_once(',').unwrap_or((&text, ""));
+                            (done.to_string(), rest.to_string())
+                        }
+                        InputEvent::PressEnter { .. } | InputEvent::Blur => (text, String::new()),
+                        _ => return,
+                    };
+                    if complete.trim().is_empty() {
+                        return;
                     }
-                }
-                // A refused value stays in the field to be corrected, not silently dropped.
-                let keep = refused.unwrap_or(rest);
-                state.update(cx, |state, cx| state.set_value(keep, window, cx));
-            },
-        ));
+                    let refused = this.push_chips(&key, complete.split(','), cx);
+                    // Refused values stay in the field to be corrected, not silently dropped, and
+                    // so does anything typed after the last comma.
+                    let mut keep = refused.join(", ");
+                    if !rest.trim().is_empty() {
+                        if !keep.is_empty() {
+                            keep.push_str(", ");
+                        }
+                        keep.push_str(rest.trim_start());
+                    }
+                    state.update(cx, |state, cx| state.set_value(keep, window, cx));
+                },
+            ),
+        );
         self.inputs.insert(id, input.clone());
         input
     }
@@ -887,7 +990,8 @@ impl ConfigBuilder {
                 .min(0.)
         });
         let key = setting_key.to_string();
-        self._subscriptions.push(
+        self.widget_subscriptions.insert(
+            id.clone(),
             cx.subscribe(&input, move |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.commit(&key, cx);
@@ -920,7 +1024,8 @@ impl ConfigBuilder {
                 .default_value(seed)
         });
         let key = setting_key.to_string();
-        self._subscriptions.push(
+        self.widget_subscriptions.insert(
+            id.clone(),
             cx.subscribe(&input, move |this, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.commit(&key, cx);
@@ -951,9 +1056,9 @@ impl ConfigBuilder {
                 .default_value(seed)
         });
         let key = setting_key.to_string();
-        self._subscriptions.push(cx.subscribe(
-            &state,
-            move |this, state, event: &InputEvent, cx| {
+        self.widget_subscriptions.insert(
+            id.clone(),
+            cx.subscribe(&state, move |this, state, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     let text = state.read(cx).value().to_string();
                     match parse_yaml_value(&text) {
@@ -968,8 +1073,8 @@ impl ConfigBuilder {
                     }
                     this.revalidate(cx);
                 }
-            },
-        ));
+            }),
+        );
         self.textareas.insert(id, state.clone());
         state
     }
@@ -996,12 +1101,15 @@ impl ConfigBuilder {
             state.update(cx, |s, cx| s.set_selected_value(&value, window, cx));
         }
         let key = setting_key.to_string();
-        self._subscriptions.push(cx.subscribe(
-            &state,
-            move |this, _, _: &SelectEvent<SearchableVec<DetailSelectItem>>, cx| {
-                this.commit(&key, cx);
-            },
-        ));
+        self.widget_subscriptions.insert(
+            id.clone(),
+            cx.subscribe(
+                &state,
+                move |this, _, _: &SelectEvent<SearchableVec<DetailSelectItem>>, cx| {
+                    this.commit(&key, cx);
+                },
+            ),
+        );
         self.selects.insert(id, state.clone());
         state
     }
@@ -1028,6 +1136,8 @@ impl ConfigBuilder {
         self.selects
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
         self.textareas
+            .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
+        self.widget_subscriptions
             .retain(|id, _| id.as_ref() != key && !id.starts_with(&prefix));
         self.widget_errors.remove(key);
     }
@@ -1279,14 +1389,10 @@ impl ConfigBuilder {
         self.draft.mark_saved(&path);
         if was_new {
             let view = cx.entity().downgrade();
-            let windows = cx.global_mut::<ConfigBuilderWindows>();
-            windows.open.remove(&None);
-            windows.open.insert(
+            cx.global_mut::<ConfigBuilderWindows>().register(
                 Some(path.clone()),
-                OpenBuilder {
-                    window: window.window_handle(),
-                    view,
-                },
+                window.window_handle(),
+                view,
             );
         }
         let mut link_notice = None;
@@ -1577,7 +1683,7 @@ impl ConfigBuilder {
         // The builder footer and the main task/status bar are one piece of window chrome. Using
         // the same container and compact button skin keeps both outer and inner metrics aligned.
         StatusBarElement::new()
-            .h(px(34.))
+            .h(ui::tokens::STATUS_BAR_H)
             .px_3()
             .text_xs()
             .text_color(cx.theme().colors.foreground)

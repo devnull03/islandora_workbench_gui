@@ -98,6 +98,24 @@ impl ProcessControl {
     }
 }
 
+/// How long the output readers get to drain after the child exits, before stragglers in its
+/// process group are stopped.
+const DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Wait up to `grace` for every reader to finish.
+fn readers_finish(readers: &[&thread::JoinHandle<()>], grace: std::time::Duration) -> bool {
+    let deadline = std::time::Instant::now() + grace;
+    loop {
+        if readers.iter().all(|reader| reader.is_finished()) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 /// A child being streamed: its output, its stdin, and the means to stop it.
 pub struct StreamingProcess {
     pub lines: Receiver<StreamLine>,
@@ -218,11 +236,27 @@ pub fn spawn_command_streaming(mut cmd: Command) -> std::io::Result<StreamingPro
     // Wait thread: sends Done/Error when the child process exits — after both readers have
     // drained, because Workbench's last lines ("Contact sheet is at …", "CSV template saved at
     // …") are printed just before it exits and the UI stops reading at Done.
+    let pid = control.pid;
     thread::spawn(move || {
         let status = child.wait();
         exited.store(true, Ordering::SeqCst);
-        let _ = stdout_reader.join();
-        let _ = stderr_reader.join();
+        // Something Workbench started can outlive it holding the pipes open, and then the
+        // readers never see end-of-file. Give them a moment to drain, then end the rest of the
+        // process group so the run still finishes.
+        if !readers_finish(&[&stdout_reader, &stderr_reader], DRAIN_GRACE) {
+            #[cfg(unix)]
+            // SAFETY: as in `ProcessControl::interrupt`; the group outlives its leader only
+            // while a member is alive, which is the case being handled.
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+            #[cfg(not(unix))]
+            let _ = pid;
+        }
+        if readers_finish(&[&stdout_reader, &stderr_reader], DRAIN_GRACE) {
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+        }
         match status {
             Ok(s) => {
                 let _ = tx.send(StreamLine::Done(s.code().unwrap_or(-1)));
@@ -309,6 +343,26 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_background_grandchild_does_not_hold_the_run_open() {
+        let mut cmd = Command::new("sh");
+        // The grandchild inherits stdout and outlives the shell.
+        cmd.args(["-c", "sleep 30 & echo done"]);
+        let process = spawn_command_streaming(cmd).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match process.lines.recv_timeout(deadline - Instant::now()) {
+                Ok(StreamLine::Done(code)) => {
+                    assert_eq!(code, 0);
+                    break;
+                }
+                Ok(_) => continue,
+                Err(e) => panic!("the run never finished: {e}"),
+            }
+        }
+    }
+
+    #[cfg(unix)]
     #[test]
     fn interrupt_reaches_the_child_and_it_exits() {
         let mut cmd = Command::new("sh");

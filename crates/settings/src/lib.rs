@@ -769,16 +769,15 @@ impl SettingsWindow {
 /// Test passed, `Some(false)` when it failed, `None` when it was never tested or there is none.
 pub fn profile_status(settings: &AppSettings) -> (SharedString, Option<bool>) {
     let name = settings.active_profile_name();
-    let server = settings
-        .default_server
-        .as_ref()
-        .and_then(|url| {
-            settings
-                .server_configs
-                .iter()
-                .find(|s| &s.server_url == url)
-        })
-        .or_else(|| settings.server_configs.first());
+    // The main window's server: the default, or the first when none is set. A default that
+    // names a removed server has no health to show.
+    let server = match settings.default_server.as_ref() {
+        Some(url) => settings
+            .server_configs
+            .iter()
+            .find(|s| &s.server_url == url),
+        None => settings.server_configs.first(),
+    };
     let health = server
         .and_then(|s| s.last_check.as_ref())
         .map(CheckResult::is_ok);

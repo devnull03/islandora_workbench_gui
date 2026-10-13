@@ -42,9 +42,8 @@ impl ConfigBuilder {
             .last_chain_scan
             .is_none_or(|last| now.duration_since(last) >= Duration::from_secs(2))
         {
-            self.chain_nodes =
-                config::chain::child_nodes(&self.draft, workbench_dir(cx).as_deref());
             self.last_chain_scan = Some(now);
+            self.scan_chain(cx);
         }
 
         let (count, max_depth) = chain_stats(&self.chain_nodes, 1);
@@ -545,20 +544,8 @@ impl ConfigBuilder {
 
     fn link_into(&mut self, owner: Option<PathBuf>, path: PathBuf, cx: &mut Context<Self>) {
         let base = workbench_dir(cx);
-        // Judge the link against the owner as it stands — this draft, the owner's open
-        // window, or its file.
         let own = owner.as_deref().is_none_or(|owner| self.owns(owner));
-        let owner_draft = if own {
-            Some(self.draft.clone())
-        } else {
-            owner.as_deref().and_then(|owner| {
-                cx.global::<ConfigBuilderWindows>()
-                    .view_for(owner)
-                    .map(|view| view.read(cx).draft.clone())
-                    .or_else(|| ConfigDraft::load(owner).ok())
-            })
-        };
-        let Some(owner_draft) = owner_draft else {
+        let Some(owner_draft) = self.owner_draft(owner.as_deref(), cx) else {
             self.chain_error = Some("Couldn't read the config to link under.".into());
             cx.notify();
             return;
@@ -599,6 +586,17 @@ impl ConfigBuilder {
             window,
             cx,
             move |this, new, cx| {
+                // The new target gets the same loop check as a fresh link.
+                let base = workbench_dir(cx);
+                let error = match this.owner_draft(parent.as_deref(), cx) {
+                    Some(owner) => config::chain::link_error(&owner, &new, base.as_deref()),
+                    None => Some("Couldn't read the config that runs this one.".into()),
+                };
+                if let Some(error) = error {
+                    this.chain_error = Some(error.into());
+                    cx.notify();
+                    return;
+                }
                 let parent = parent.filter(|parent| !this.owns(parent));
                 this.edit_chain(
                     parent,
@@ -607,6 +605,41 @@ impl ConfigBuilder {
                 );
             },
         );
+    }
+
+    /// Re-read the chain below this draft on a background thread — it opens every linked file —
+    /// with the drafts open in other windows standing in for their files. Starting a new scan
+    /// drops the one in flight, so a stale result never lands after a fresh one.
+    fn scan_chain(&mut self, cx: &mut Context<Self>) {
+        let root = self.draft.clone();
+        let base = workbench_dir(cx);
+        let open = cx
+            .global::<ConfigBuilderWindows>()
+            .drafts(cx.entity_id(), cx);
+        let scan = cx
+            .background_executor()
+            .spawn(async move { config::chain::child_nodes_with(&root, base.as_deref(), &open) });
+        self.chain_scan = Some(cx.spawn(async move |this, cx| {
+            let nodes = scan.await;
+            this.update(cx, |this, cx| {
+                this.chain_nodes = nodes;
+                this.chain_scan = None;
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// The owner of a link as it stands: this draft, the owner's open window, or its file.
+    fn owner_draft(&self, owner: Option<&Path>, cx: &App) -> Option<ConfigDraft> {
+        match owner {
+            Some(owner) if !self.owns(owner) => cx
+                .global::<ConfigBuilderWindows>()
+                .view_for(owner)
+                .map(|view| view.read(cx).draft.clone())
+                .or_else(|| ConfigDraft::load(owner).ok()),
+            _ => Some(self.draft.clone()),
+        }
     }
 
     fn owns(&self, path: &Path) -> bool {

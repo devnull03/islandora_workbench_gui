@@ -234,7 +234,8 @@ pub fn validate(draft: &ConfigDraft, cx: &ValidationContext) -> Vec<Problem> {
             && !cx.skip_path_checks
             && let Some(raw) = value.as_str().filter(|s| !s.is_empty())
         {
-            problems.push(check_path(key, raw, cx.workbench_dir));
+            let input_dir = draft.values.get("input_dir").and_then(Value::as_str);
+            problems.push(check_path(key, raw, cx.workbench_dir, input_dir));
         }
         if def.shape == Shape::Url
             && let Some(raw) = value.as_str()
@@ -337,8 +338,18 @@ fn check_shape(key: &str, shape: Shape, value: &Value) -> Option<Problem> {
 /// Relative paths resolve the way Workbench resolves them — against its own folder, where the
 /// app runs it — and `~` is expanded as Workbench's `expanduser` does. A folder that does not
 /// exist yet is a warning, not an error: Workbench creates some of them itself.
-fn check_path(key: &str, raw: &str, workbench_dir: Option<&Path>) -> Problem {
-    let expanded = expand_home(raw);
+fn check_path(
+    key: &str,
+    raw: &str,
+    workbench_dir: Option<&Path>,
+    input_dir: Option<&str>,
+) -> Problem {
+    let mut expanded = expand_home(raw);
+    // Workbench joins `input_csv` onto `input_dir` (`os.path.join`, so an absolute `input_csv`
+    // wins), and runs from its own folder.
+    if key == "input_csv" && !expanded.is_absolute() {
+        expanded = expand_home(input_dir.unwrap_or("input_data")).join(expanded);
+    }
     let resolved = if expanded.is_absolute() {
         expanded
     } else if let Some(base) = workbench_dir {
@@ -350,6 +361,22 @@ fn check_path(key: &str, raw: &str, workbench_dir: Option<&Path>) -> Problem {
             "Relative to the Workbench folder (set it in Settings to check this path).",
         );
     };
+    // Inputs must already be there; anything else is written, so its folder must be.
+    if INPUT_PATHS.contains(&key) {
+        return if resolved.exists() {
+            Problem::new(
+                key,
+                Severity::Ok,
+                format!("Resolves to {}.", resolved.display()),
+            )
+        } else {
+            Problem::new(
+                key,
+                Severity::Warn,
+                format!("Resolves to {} — nothing is there yet.", resolved.display()),
+            )
+        };
+    }
     let dir = if raw.ends_with(['/', '\\']) {
         resolved.as_path()
     } else {
@@ -360,17 +387,14 @@ fn check_path(key: &str, raw: &str, workbench_dir: Option<&Path>) -> Problem {
             key,
             Severity::Warn,
             format!(
-                "Resolves to {} — the folder is read-only.",
+                "Resolves to {} — the folder is read-only, so Workbench can't write there.",
                 resolved.display()
             ),
         ),
         Ok(meta) if meta.is_dir() => Problem::new(
             key,
             Severity::Ok,
-            format!(
-                "Resolves to {} — folder exists, writable.",
-                resolved.display()
-            ),
+            format!("Resolves to {} — the folder exists.", resolved.display()),
         ),
         _ => Problem::new(
             key,
@@ -383,6 +407,9 @@ fn check_path(key: &str, raw: &str, workbench_dir: Option<&Path>) -> Problem {
         ),
     }
 }
+
+/// Path settings Workbench reads from rather than writes to.
+const INPUT_PATHS: &[&str] = &["input_dir", "input_csv"];
 
 /// `~` and `~/…` as Workbench's `os.path.expanduser` reads them.
 fn expand_home(raw: &str) -> std::path::PathBuf {
@@ -409,9 +436,12 @@ fn check_url(key: &str, raw: &str) -> Option<Problem> {
     if raw.is_empty() || raw.chars().all(|c| c.is_ascii_digit()) {
         return None;
     }
-    let rest = raw
-        .strip_prefix("http://")
-        .or_else(|| raw.strip_prefix("https://"));
+    // The scheme is case-insensitive (RFC 3986), so `HTTP://` is as good as `http://`.
+    let rest = ["http://", "https://"].iter().find_map(|scheme| {
+        raw.get(..scheme.len())
+            .filter(|head| head.eq_ignore_ascii_case(scheme))
+            .map(|_| &raw[scheme.len()..])
+    });
     match rest {
         Some(rest)
             if rest
@@ -653,7 +683,12 @@ mod tests {
 
     #[test]
     fn urls_are_uris_or_term_ids() {
-        for ok in ["http://pcdm.org/use#OriginalFile", "https://x.org", "17"] {
+        for ok in [
+            "http://pcdm.org/use#OriginalFile",
+            "https://x.org",
+            "17",
+            "HTTPS://X.org",
+        ] {
             assert!(check_url("media_use_tid", ok).is_none(), "{ok}");
         }
         for bad in ["pcdm.org/use", "http://", "ftp://x.org", "seventeen"] {
@@ -686,17 +721,34 @@ mod tests {
     fn paths_resolve_against_the_workbench_folder() {
         let tree = crate::config::test_support::TempTree::new();
         std::fs::create_dir_all(tree.root.join("logs")).unwrap();
-        let ok = check_path("log_file_path", "logs/wb.log", Some(&tree.root));
+        let ok = check_path("log_file_path", "logs/wb.log", Some(&tree.root), None);
         assert_eq!(ok.severity, Severity::Ok);
-        assert!(ok.message.contains("folder exists, writable"));
+        assert!(ok.message.contains("the folder exists"));
         assert!(
             ok.message
                 .contains(&tree.root.join("logs/wb.log").display().to_string())
         );
-        let missing = check_path("log_file_path", "nope/wb.log", Some(&tree.root));
+        let missing = check_path("log_file_path", "nope/wb.log", Some(&tree.root), None);
         assert_eq!(missing.severity, Severity::Warn);
-        let unknown = check_path("log_file_path", "x/wb.log", None);
+        let unknown = check_path("log_file_path", "x/wb.log", None, None);
         assert_eq!(unknown.severity, Severity::Ok);
+    }
+
+    /// `input_csv` sits inside `input_dir`, and must exist rather than merely have a folder.
+    #[test]
+    fn input_csv_resolves_inside_input_dir() {
+        let tree = crate::config::test_support::TempTree::new();
+        tree.write("in/meta.csv", "id\n");
+        let found = check_path("input_csv", "meta.csv", Some(&tree.root), Some("in"));
+        assert_eq!(found.severity, Severity::Ok);
+        assert!(
+            found
+                .message
+                .contains(&tree.root.join("in/meta.csv").display().to_string())
+        );
+        let default_dir = check_path("input_csv", "meta.csv", Some(&tree.root), None);
+        assert_eq!(default_dir.severity, Severity::Warn);
+        assert!(default_dir.message.contains("input_data"));
     }
 
     #[test]

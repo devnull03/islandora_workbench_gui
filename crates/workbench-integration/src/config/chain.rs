@@ -5,7 +5,7 @@
 //! implementing a slightly different walk.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -30,6 +30,24 @@ pub struct SecondaryConfigNode {
 /// `workbench_dir` is the base relative entries resolve against at run time — see
 /// [`resolve_secondary_task`]. Every function here takes it for the same reason.
 pub fn child_nodes(root: &ConfigDraft, workbench_dir: Option<&Path>) -> Vec<SecondaryConfigNode> {
+    child_nodes_with(root, workbench_dir, &[])
+}
+
+/// [`child_nodes`], reading each config in `open` from that draft instead of from disk, so the
+/// tree shows unsaved edits made in other builder windows.
+pub fn child_nodes_with(
+    root: &ConfigDraft,
+    workbench_dir: Option<&Path>,
+    open: &[ConfigDraft],
+) -> Vec<SecondaryConfigNode> {
+    let open: HashMap<PathBuf, &ConfigDraft> = open
+        .iter()
+        .filter_map(|draft| Some((identity(draft.path.as_deref()?), draft)))
+        .collect();
+    let walk = Walk {
+        workbench_dir,
+        open: &open,
+    };
     let mut ancestry = Vec::new();
     if let Some(path) = root.path.as_deref() {
         ancestry.push(identity(path));
@@ -37,7 +55,7 @@ pub fn child_nodes(root: &ConfigDraft, workbench_dir: Option<&Path>) -> Vec<Seco
     let mut nodes: Vec<SecondaryConfigNode> = root
         .resolved_secondary_tasks(workbench_dir)
         .into_iter()
-        .map(|path| load_node(path, &ancestry, workbench_dir))
+        .map(|path| walk.load_node(path, &ancestry))
         .collect();
     let mut counts = std::collections::HashMap::new();
     for node in &nodes {
@@ -129,65 +147,72 @@ fn discover(path: &Path) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-fn load_node(
-    path: PathBuf,
-    ancestry: &[PathBuf],
-    workbench_dir: Option<&Path>,
-) -> SecondaryConfigNode {
-    let key = identity(&path);
-    let label = path
-        .file_stem()
-        .map(|value| value.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.to_string_lossy().into_owned());
+/// What a walk of the chain reads from: the run-time base and the drafts open in windows.
+struct Walk<'a> {
+    workbench_dir: Option<&'a Path>,
+    open: &'a HashMap<PathBuf, &'a ConfigDraft>,
+}
 
-    if ancestry.contains(&key) {
-        return broken(path, label, "This link points back to an ancestor config.");
-    }
-    // People write the entry the way they think of the file — `create-items.config` for
-    // `create-items.config.yml`. Workbench does **not** resolve that (it opens the entry
-    // as-is and stops with "Configuration file not found"), so the node is broken; but the
-    // message names the file sitting right there rather than calling it moved or deleted.
-    let path = match discover(&path) {
-        Some(found) if found == path => found,
-        Some(found) => {
-            let name = found
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            return broken(
-                found,
-                label,
-                format!("Workbench needs the full file name — relink it as {name}."),
-            );
-        }
-        None => return broken(path, label, "This config was moved or deleted."),
-    };
+impl Walk<'_> {
+    fn load_node(&self, path: PathBuf, ancestry: &[PathBuf]) -> SecondaryConfigNode {
+        let key = identity(&path);
+        let label = path
+            .file_stem()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
 
-    let draft = match ConfigDraft::load(&path) {
-        Ok(draft) => draft,
-        Err(error) => {
-            return broken(path, label, format!("Couldn't read this config: {error}"));
+        if ancestry.contains(&key) {
+            return broken(path, label, "This link points back to an ancestor config.");
         }
-    };
-    let mut next_ancestry = ancestry.to_vec();
-    next_ancestry.push(key);
-    let children = draft
-        .resolved_secondary_tasks(workbench_dir)
-        .into_iter()
-        .map(|child| load_node(child, &next_ancestry, workbench_dir))
-        .collect();
-    SecondaryConfigNode {
-        path,
-        label,
-        task: draft
-            .values
-            .get("task")
-            .and_then(|value| value.as_str())
-            .map(str::to_owned),
-        settings: draft.values.len(),
-        children,
-        error: None,
-        times: 1,
+        // People write the entry the way they think of the file — `create-items.config` for
+        // `create-items.config.yml`. Workbench does **not** resolve that (it opens the entry
+        // as-is and stops with "Configuration file not found"), so the node is broken; but the
+        // message names the file sitting right there rather than calling it moved or deleted.
+        let path = match discover(&path) {
+            Some(found) if found == path => found,
+            Some(found) => {
+                let name = found
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                return broken(
+                    found,
+                    label,
+                    format!("Workbench needs the full file name — relink it as {name}."),
+                );
+            }
+            None => return broken(path, label, "This config was moved or deleted."),
+        };
+
+        let draft = match self.open.get(&key) {
+            Some(open) => (*open).clone(),
+            None => match ConfigDraft::load(&path) {
+                Ok(draft) => draft,
+                Err(error) => {
+                    return broken(path, label, format!("Couldn't read this config: {error}"));
+                }
+            },
+        };
+        let mut next_ancestry = ancestry.to_vec();
+        next_ancestry.push(key);
+        let children = draft
+            .resolved_secondary_tasks(self.workbench_dir)
+            .into_iter()
+            .map(|child| self.load_node(child, &next_ancestry))
+            .collect();
+        SecondaryConfigNode {
+            path,
+            label,
+            task: draft
+                .values
+                .get("task")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned),
+            settings: draft.values.len(),
+            children,
+            error: None,
+            times: 1,
+        }
     }
 }
 
@@ -222,7 +247,9 @@ fn reaches_path(
         .any(|child| same_path(&child, target) || reaches_path(&child, target, workbench_dir, seen))
 }
 
-pub(crate) fn identity(path: &Path) -> PathBuf {
+/// The file system's name for `path` — canonical when it exists — so two spellings of one
+/// file compare equal.
+pub fn identity(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| {
         if path.is_absolute() {
             path.to_path_buf()
@@ -264,6 +291,24 @@ mod tests {
         // was the builder resolving them against the config's folder while Workbench did not.
         let elsewhere = tree.root.join("workbench");
         assert!(child_nodes(&root, Some(&elsewhere))[0].error.is_some());
+    }
+
+    /// A config open in another window is read from its unsaved draft, not from disk.
+    #[test]
+    fn open_drafts_stand_in_for_their_files() {
+        let tree = TempTree::new();
+        tree.write("grand.yml", "task: update\n");
+        let child_path = tree.write("child.yml", "task: add_media\n");
+        let root_path = tree.write("root.yml", "task: create\nsecondary_tasks: [child.yml]\n");
+        let root = ConfigDraft::load(&root_path).unwrap();
+        let mut child = ConfigDraft::load(&child_path).unwrap();
+        child.values.insert(
+            "secondary_tasks".into(),
+            serde_yaml::from_str("[grand.yml]").unwrap(),
+        );
+        let nodes = child_nodes_with(&root, Some(&tree.root), &[child]);
+        assert_eq!(nodes[0].children[0].label, "grand");
+        assert!(child_nodes(&root, Some(&tree.root))[0].children.is_empty());
     }
 
     /// Workbench opens an entry as written; a missing `.yml` is a broken link, but one whose

@@ -157,6 +157,9 @@ and parity means all of it is reachable without a terminal. Step 3 now has:
   windowless child, so there Cancel kills (`taskkill /T /F`). The child's SIGINT disposition is
   reset before exec: an app started as a background job inherits SIGINT ignored, and a Python
   started that way never raises KeyboardInterrupt — found while testing under Xvfb.
+  When Workbench exits but something it started still holds the output pipes, the readers get
+  two seconds to drain and then the rest of the process group is killed, so the run still
+  finishes instead of hanging on "Running" (M2/M3 audit).
 - **Options** (folds away): `--csv_start_row` / `--csv_stop_row`, `--skip_user_prompts`, and
   `--contactsheet` on Check. Per session; never written into the config.
 - **More** menu: Get CSV template (`--get_csv_template`), Print effective config

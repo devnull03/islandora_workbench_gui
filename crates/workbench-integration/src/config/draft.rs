@@ -74,6 +74,30 @@ impl ConfigDraft {
         Ok(())
     }
 
+    /// Write only `key` into the file at `path`, keeping its comments and layout, when the file
+    /// is otherwise what this draft holds. Used for a chain edit to a config no window has open:
+    /// the edit touches `secondary_tasks`, so nothing else in the file should move. The patch
+    /// is re-parsed and must equal the draft; otherwise the whole draft is written.
+    pub fn save_key(&self, path: &Path, key: &str) -> anyhow::Result<()> {
+        let value = self.values.get(key).filter(|v| !v.is_null());
+        let patched = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| super::patch::set_top_level_value(&text, key, value))
+            .filter(|patched| {
+                serde_yaml::from_str::<IndexMap<String, Value>>(patched).is_ok_and(|parsed| {
+                    let expected: IndexMap<&String, &Value> =
+                        self.values.iter().filter(|(_, v)| !v.is_null()).collect();
+                    let parsed: IndexMap<&String, &Value> =
+                        parsed.iter().filter(|(_, v)| !v.is_null()).collect();
+                    parsed == expected
+                })
+            });
+        match patched {
+            Some(text) => Ok(std::fs::write(path, text)?),
+            None => self.save(path),
+        }
+    }
+
     /// Record that the file on disk is now this draft's own output, so there are no comments
     /// left to lose.
     pub fn mark_saved(&mut self, path: &Path) {
@@ -245,6 +269,31 @@ pub fn resolve_secondary_task(
 mod tests {
     use super::*;
     use crate::config::test_support::TempTree;
+
+    /// A chain edit to an unopened file rewrites `secondary_tasks` and nothing else.
+    #[test]
+    fn save_key_keeps_comments() {
+        let tree = TempTree::new();
+        let text =
+            "# ingest\ntask: create # the task\nsecondary_tasks:\n  - a.yml\nnodes_only: true\n";
+        let path = tree.write("root.yml", text);
+        let mut draft = ConfigDraft::load(&path).unwrap();
+        draft.values.insert(
+            "secondary_tasks".into(),
+            serde_yaml::from_str("[a.yml, b.yml]").unwrap(),
+        );
+        draft.save_key(&path, "secondary_tasks").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "# ingest\ntask: create # the task\nsecondary_tasks:\n- a.yml\n- b.yml\nnodes_only: true\n"
+        );
+        draft.values.shift_remove("secondary_tasks");
+        draft.save_key(&path, "secondary_tasks").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "# ingest\ntask: create # the task\nnodes_only: true\n"
+        );
+    }
 
     /// Q8: the builder needs to know a save will drop comments, and stop warning once it has
     /// written the file itself.

@@ -153,16 +153,16 @@ impl RenderOnce for SettingRow {
                     .w(LABEL_COL_W)
                     .flex_none()
                     .gap(GAP_MD)
-                    .when(modified, |col| {
-                        col.child(
-                            div()
-                                .w(MODIFIED_MARK_W)
-                                .flex_none()
-                                .self_stretch()
-                                .rounded(MODIFIED_MARK_W / 2.)
-                                .bg(colors.primary),
-                        )
-                    })
+                    // The mark's slot is always there, so a label does not shift sideways the
+                    // moment its row is edited, and modified and unmodified labels line up.
+                    .child(
+                        div()
+                            .w(MODIFIED_MARK_W)
+                            .flex_none()
+                            .self_stretch()
+                            .rounded(MODIFIED_MARK_W / 2.)
+                            .when(modified, |mark| mark.bg(colors.primary)),
+                    )
                     // §00: "Long keys wrap to two lines; the column does not grow." Without
                     // the clip a key like `rollback_file_include_node_id` runs straight over
                     // the control beside it, which is what the screenshots showed.
@@ -230,8 +230,10 @@ impl RenderOnce for SettingRow {
                             .children(self.reset.map(|reset| {
                                 div()
                                     .flex_none()
-                                    .opacity(0.)
-                                    .group_hover(ROW_GROUP, |style| style.opacity(1.))
+                                    // Invisible rather than transparent, so a row that is not
+                                    // hovered has no hidden button to click by accident.
+                                    .invisible()
+                                    .group_hover(ROW_GROUP, |style| style.visible())
                                     .child(reset)
                             }))
                             .children(self.trailing),

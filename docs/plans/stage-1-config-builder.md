@@ -111,7 +111,7 @@ pub fn validate(draft: &ConfigDraft) -> Vec<Problem>;
 Rules, all local:
 
 - shape conformance, and `required` (only `task`);
-- path settings — does the parent folder exist, is it writable (mockup `1b`'s check line);
+- path settings — does the parent folder exist, is it read-only (mockup `1b`'s check line); inputs (`input_dir`, `input_csv`) must exist;
 - a hand-written cross-field table, seeded from the mockup's own examples:
   - `timestamp_rollback: true` with empty `rollback_dir` → **Error** (without it the run cannot
     be undone),
@@ -233,10 +233,15 @@ workspace now follows the same upstream git components as qrate. The Settings ro
 `Settings2`; revisit it against the current icon catalogue when that row is next redesigned.
 
 **A new builder window is re-keyed after its first successful save.** The open-window registry
-removes its `None` entry and inserts the saved path with the same window handle. “New config” can
-therefore open a fresh draft, while Edit focuses the one live draft for that file. Linked-config
-existence checks are cached and refreshed at most every two seconds instead of calling `is_file`
-for every link on every frame.
+is a list of windows, each with the path it was opened with and that path's file-system identity
+(after the M2/M3 audit; it used to be a map keyed by the spelling, so `./a.yml` and `/x/a.yml`
+opened two windows on one file, and every unsaved draft shared the one `None` key — "New under"
+a second parent focused the first parent's draft). Saving a new draft re-registers its window
+under the saved path. The chain tree is rescanned at most every two seconds, on a background
+thread, with the drafts open in other windows standing in for their files so an unsaved link
+shows up at once; a newer scan cancels an older one. A chain edit to a file no window has open
+rewrites only its `secondary_tasks` lines (`ConfigDraft::save_key`), so the file keeps its
+comments. Relinking a broken node runs the same loop check as a new link.
 
 **Not built, deliberately:** keyboard navigation in the search palette (`↑↓`/Enter/Esc from
 mockup `1a` — it is click-and-Add today), drag-to-reorder in the chain list, and the
@@ -387,4 +392,16 @@ the catalogue.
   (`media_types`, `models`, `oembed_providers`, `media_types_override`) are *iterated as lists*
   upstream (`for types in config["media_types"]: types.items()`), and the builder used to write
   them back as a mapping — a config it saved would crash Workbench. The editor now writes the
-  list form and validation rejects the mapping form.
+  list form and validation rejects the mapping form. (M2/M3 audit: a new row, and the first row
+  of an empty setting, now also start in the list form; a hand-written mapping is converted
+  row for row rather than dropped.)
+- **M2/M3 audit, smaller fixes.** Comma-separated chips are judged as one batch: every
+  refused value stays in the field and is named in one message, and clearing the field clears
+  it. Validation re-runs when Settings change what it reads (the Workbench folder, a profile
+  switch, the two builder switches). The builder's size is saved once a resize settles, and
+  never while maximized. Path checks no longer claim a folder is writable from its read-only
+  bit alone; `input_csv` resolves inside `input_dir` (as `os.path.join` does upstream) and,
+  like `input_dir`, must exist rather than merely have a parent folder. A URL's scheme is
+  case-insensitive. The template preview uses the config's own `input_csv` name. Reset
+  buttons are hidden, not transparent, until the row is hovered, and the modified mark's slot
+  is always reserved so labels do not shift when a row is edited.

@@ -39,6 +39,47 @@ pub(crate) fn set_top_level_scalars(text: &str, entries: &[(&str, &str)]) -> Opt
     Some(lines.concat())
 }
 
+/// Return `text` with one top-level entry replaced by `key: value` in block style — or removed
+/// when `value` is `None` — leaving every other line alone. For values that are not scalars
+/// (a `secondary_tasks` list); `None` when the document is not something this can patch.
+pub(crate) fn set_top_level_value(
+    text: &str,
+    key: &str,
+    value: Option<&serde_yaml::Value>,
+) -> Option<String> {
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_owned).collect();
+    if !is_plain_block_mapping(&lines) {
+        return None;
+    }
+    let replacement: Vec<String> = match value {
+        Some(value) => {
+            let mut one = serde_yaml::Mapping::new();
+            one.insert(key.into(), value.clone());
+            serde_yaml::to_string(&one)
+                .ok()?
+                .lines()
+                .map(|line| format!("{line}{newline}"))
+                .collect()
+        }
+        None => Vec::new(),
+    };
+    match find_entry(&lines, key) {
+        Some((start, end)) => {
+            lines.splice(start..end, replacement);
+        }
+        None => {
+            if let Some(last) = lines.last_mut()
+                && !last.ends_with('\n')
+            {
+                last.push_str(newline);
+            }
+            lines.extend(replacement);
+        }
+    }
+    Some(lines.concat())
+}
+
 /// One document whose top level is a block mapping. A flow mapping (`{task: create}`), a
 /// second document, or an explicit end marker are all legal YAML this does not attempt.
 fn is_plain_block_mapping(lines: &[String]) -> bool {
@@ -80,7 +121,13 @@ fn find_entry(lines: &[String], key: &str) -> Option<(usize, usize)> {
         let line = &lines[end];
         let blank = line.trim().is_empty();
         let indented = line.starts_with([' ', '\t']);
-        if !(blank || indented) {
+        // A block sequence may sit at its key's own indent (`key:` then `- a` at column 0),
+        // which is how serde_yaml writes one.
+        let sequence_item = line == "-"
+            || line.starts_with("- ")
+            || line.starts_with("-\n")
+            || line.starts_with("-\r\n");
+        if !(blank || indented || sequence_item) {
             break;
         }
         end += 1;

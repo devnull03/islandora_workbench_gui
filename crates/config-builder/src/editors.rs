@@ -43,8 +43,11 @@ pub fn empty_value(shape: Shape) -> Value {
         Shape::Boolean => Value::Bool(false),
         // Unset, not 0: §04 says an empty number means "use the default".
         Shape::Integer => Value::Null,
-        Shape::Map | Shape::MapOfLists => Value::Mapping(Mapping::new()),
-        Shape::ListOfStrings
+        Shape::Map => Value::Mapping(Mapping::new()),
+        // Workbench iterates these as lists (`for x in config['media_types']`), so a new one
+        // starts as a list of one-key maps, never a mapping.
+        Shape::MapOfLists
+        | Shape::ListOfStrings
         | Shape::ListOfNumbers
         | Shape::ListOfOneKeyMaps
         | Shape::CommandList
@@ -178,9 +181,15 @@ pub(crate) fn template_preview(key: &str, raw: &str, draft: &ConfigDraft) -> Str
     };
     let start_row = text("csv_start_row", "0");
     let stop_row = text("csv_stop_row", "None");
+    // Upstream takes `os.path.splitext(config["input_csv"])[0]`: the name without its extension.
+    let input_csv = text("input_csv", "metadata.csv");
+    let input_csv_filename = std::path::Path::new(&input_csv)
+        .with_extension("")
+        .to_string_lossy()
+        .into_owned();
     let values = [
         ("config_filename", config_filename.as_str()),
-        ("input_csv_filename", "metadata"),
+        ("input_csv_filename", input_csv_filename.as_str()),
         ("csv_start_row", start_row.as_str()),
         ("csv_stop_row", stop_row.as_str()),
         ("parent_title", "Parent title"),
@@ -902,41 +911,45 @@ impl ConfigBuilder {
     /// §05: duplicates are dropped silently rather than flagged. Re-typing a value you already
     /// have is not an error worth a message — the set already says what you meant.
     ///
-    /// A list of numbers refuses a value that is not one (`Err` with the text, so the field can
-    /// keep it) and says so under the chips, rather than storing a word that validation would
-    /// later call a shape error.
-    pub(super) fn push_chip(
+    /// A list of numbers refuses a value that is not one and says so under the chips, rather
+    /// than storing a word that validation would later call a shape error. The refused parts
+    /// come back so the field can keep them for correcting. One message and one revalidation
+    /// cover the whole batch, so a good value after a bad one cannot hide the bad one's error.
+    pub(super) fn push_chips<'a>(
         &mut self,
         key: &str,
-        text: &str,
+        parts: impl IntoIterator<Item = &'a str>,
         cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Ok(());
-        }
+    ) -> Vec<String> {
         let Some(def) = workbench_integration::config::catalog::find(key) else {
-            return Ok(());
+            return Vec::new();
         };
         let numeric = def.shape == Shape::ListOfNumbers;
-        let chip = parse_scalar(text, numeric);
-        if numeric && !chip.is_number() {
-            self.widget_errors.insert(
+        let mut refused = Vec::new();
+        for text in parts.into_iter().map(str::trim).filter(|t| !t.is_empty()) {
+            let chip = parse_scalar(text, numeric);
+            if numeric && !chip.is_number() {
+                refused.push(text.to_string());
+                continue;
+            }
+            let entry = self.draft.values.entry(key.to_string());
+            let items = as_sequence(entry.or_insert_with(|| empty_value(def.shape)));
+            if !items.contains(&chip) {
+                items.push(chip);
+            }
+        }
+        match refused.as_slice() {
+            [] => self.widget_errors.remove(key),
+            [one] => self
+                .widget_errors
+                .insert(key.to_string(), format!("\"{one}\" is not a whole number.")),
+            many => self.widget_errors.insert(
                 key.to_string(),
-                format!("\"{text}\" is not a whole number."),
-            );
-            self.revalidate(cx);
-            return Err(text.to_string());
-        }
-        self.widget_errors.remove(key);
-        let entry = self.draft.values.entry(key.to_string());
-        let current = entry.or_insert_with(|| empty_value(def.shape));
-        let items = as_sequence(current);
-        if !items.contains(&chip) {
-            items.push(chip);
-        }
+                format!("{} are not whole numbers.", quoted_list(many)),
+            ),
+        };
         self.revalidate(cx);
-        Ok(())
+        refused
     }
 
     /// The shared editor behind every list and map shape: numbered rows, a remove button per
@@ -1164,23 +1177,30 @@ impl ConfigBuilder {
         let entry = self.draft.values.entry(key.to_string());
         let current = entry.or_insert_with(|| empty_value(def.shape));
         match def.shape {
-            Shape::Map | Shape::MapOfLists => {
-                let map = match current {
-                    Value::Mapping(m) => m,
-                    other => {
-                        *other = Value::Mapping(normalise_to_mapping(other));
-                        match other {
-                            Value::Mapping(m) => m,
-                            _ => unreachable!("just assigned a mapping"),
-                        }
-                    }
-                };
-                let blank = if def.shape == Shape::MapOfLists {
-                    Value::Sequence(vec![Value::String(String::new())])
-                } else {
-                    Value::String(String::new())
-                };
-                map.insert(Value::String(String::new()), blank);
+            Shape::Map => {
+                if !current.is_mapping() {
+                    *current = Value::Mapping(normalise_to_mapping(current));
+                }
+                if let Value::Mapping(map) = current {
+                    // A second blank key would collapse into the first; fill that one in first.
+                    map.entry(Value::String(String::new()))
+                        .or_insert_with(|| Value::String(String::new()));
+                }
+            }
+            Shape::MapOfLists => {
+                let rows = as_one_key_maps(current);
+                let has_blank = rows.iter().any(|row| {
+                    row.as_mapping()
+                        .is_some_and(|m| m.contains_key(Value::String(String::new())))
+                });
+                if !has_blank {
+                    let mut m = Mapping::new();
+                    m.insert(
+                        Value::String(String::new()),
+                        Value::Sequence(vec![Value::String(String::new())]),
+                    );
+                    rows.push(Value::Mapping(m));
+                }
             }
             Shape::ListOfOneKeyMaps => {
                 let mut m = Mapping::new();
@@ -1266,6 +1286,32 @@ fn as_sequence(value: &mut Value) -> &mut Vec<Value> {
     }
 }
 
+/// `"a", "b" and "c"`.
+fn quoted_list(items: &[String]) -> String {
+    let quoted: Vec<String> = items.iter().map(|item| format!("\"{item}\"")).collect();
+    match quoted.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+        _ => quoted.concat(),
+    }
+}
+
+/// A map-of-lists value as the list of one-key maps Workbench iterates, converting a
+/// hand-written mapping in place rather than dropping its rows.
+fn as_one_key_maps(value: &mut Value) -> &mut Vec<Value> {
+    if let Value::Mapping(map) = value {
+        let rows = map
+            .iter()
+            .map(|(k, v)| {
+                let mut one = Mapping::new();
+                one.insert(k.clone(), v.clone());
+                Value::Mapping(one)
+            })
+            .collect();
+        *value = Value::Sequence(rows);
+    }
+    as_sequence(value)
+}
+
 /// The list-of-one-key-maps form Workbench also accepts for a map, flattened into a mapping.
 fn normalise_to_mapping(value: &Value) -> Mapping {
     let mut out = Mapping::new();
@@ -1284,8 +1330,9 @@ fn normalise_to_mapping(value: &Value) -> Mapping {
 #[cfg(test)]
 mod tests {
     use super::{
-        ConfigDraft, Value, cell_value_typed, default_state, duplicate_key, parse_decimal,
-        parse_integer, parse_text_keeping_numbers, short_value, template_preview,
+        ConfigDraft, Value, as_one_key_maps, cell_value_typed, default_state, duplicate_key,
+        empty_value, parse_decimal, parse_integer, parse_text_keeping_numbers, short_value,
+        template_preview,
     };
     use workbench_integration::config::catalog;
 
@@ -1408,5 +1455,19 @@ mod tests {
         for unset in ["", " ", "-", "99999999999999999999999"] {
             assert_eq!(parse_integer(unset), Value::Null, "{unset:?}");
         }
+    }
+
+    /// Workbench loops over `media_types` and friends as lists, so the builder never writes the
+    /// mapping form, and converts one it reads without losing rows.
+    #[test]
+    fn map_of_lists_stays_a_list() {
+        assert!(empty_value(catalog::Shape::MapOfLists).is_sequence());
+        let mut value: Value = serde_yaml::from_str("image: [jpg, png]\nfile: [pdf]").unwrap();
+        let rows = as_one_key_maps(&mut value);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            serde_yaml::to_string(&value).unwrap(),
+            "- image:\n  - jpg\n  - png\n- file:\n  - pdf\n"
+        );
     }
 }
