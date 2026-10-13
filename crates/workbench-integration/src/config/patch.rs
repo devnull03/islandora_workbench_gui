@@ -105,11 +105,13 @@ fn is_key_line(line: &str, key: &str) -> bool {
 }
 
 /// `value` as a one-line YAML scalar that reads back as the same string under **both** YAML
-/// 1.2 (serde_yaml, this app) and YAML 1.1 (PyYAML, Workbench).
+/// 1.2 and YAML 1.1.
 ///
-/// Not the serializer's quoting: serde_yaml follows 1.2 and leaves `yes`, `on` or `1:20` bare,
-/// which PyYAML reads as a boolean or a sexagesimal number. Plain only for an unmistakable
-/// path- or URL-like string; everything else is single-quoted.
+/// Current Workbench loads configs with `ruamel.yaml` (1.2), but older releases used PyYAML
+/// (1.1), where a bare `yes`, `on` or `1:20` is a boolean or a sexagesimal number — and that
+/// is what serde_yaml's own quoting (1.2 rules) would leave bare. Plain only for an
+/// unmistakable path- or URL-like string; everything else is single-quoted, which every
+/// version reads as a string.
 fn render_scalar(value: &str) -> Option<String> {
     if value.contains(['\n', '\r']) {
         // None of the keys patched here can legitimately hold a line break.

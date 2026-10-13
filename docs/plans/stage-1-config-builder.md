@@ -277,8 +277,10 @@ with a unit test. Exit gate: build a config from scratch, link a child, pick a s
   CRLF — is untouched, and an unchanged file is not rewritten at all. The result is re-parsed
   and must equal "original plus exactly these keys"; a document the patcher declines (flow
   mapping, several documents) or misreads falls back to re-serializing, with a log warning.
-  Patched values are quoted for **YAML 1.1** as well as 1.2: Workbench reads configs with
-  PyYAML, where a bare `yes`, `on` or `1:20` is not a string. Q3 stays "keep editing in place";
+  Patched values are quoted so they read as strings under YAML 1.1 as well as 1.2: current
+  Workbench uses `ruamel.yaml` (1.2), but older releases used PyYAML (1.1), where a bare `yes`,
+  `on` or `1:20` is not a string. (The 1.3 commit message says Workbench uses PyYAML; that is
+  only true of older releases.) Q3 stays "keep editing in place";
   running from a generated copy is still the long-term option. For the builder (Q8), the
   minimum option: `ConfigDraft.source_has_comments` records that a loaded file has comments so
   the builder can ask before its first save drops them (the prompt lands with the confirm
