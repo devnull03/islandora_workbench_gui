@@ -36,11 +36,10 @@
     },
 
     "input_csv": {
-      "locked": true,
       "shape": "file_path",
       "browse": "file",
       "group": "Input",
-      "description": "The processed sheet. Written by the app at run time."
+      "description": "The CSV this config reads, inside input_dir. For the config you run, step 1's processed sheet replaces it."
     },
     "input_dir": {
       "shape": "file_path",

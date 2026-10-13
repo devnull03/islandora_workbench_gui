@@ -220,8 +220,8 @@ mod tests {
 
         assert_eq!(
             locked().count(),
-            3,
-            "host, credentials_file_path, input_csv"
+            2,
+            "host, credentials_file_path (input_csv is settable: a chain child reads its own)"
         );
         assert!(addable().all(|s| !s.locked));
 

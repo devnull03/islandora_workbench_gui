@@ -432,3 +432,10 @@ the generator had inferred from a `False`/`{}`/`"1"` default are fixed to what t
 `field_for_remote_filename` (strings), `http_backoff_factor` (decimal); `csv_rows_to_process`
 takes YAML because it may be a list or a file path. Each matches the docs' own examples.
 Console-output settings moved to Logging, the delete prompt to Prompts.
+
+**`input_csv` is a normal setting again (parity pass).** It was in the locked "supplied by the
+app" band, but the app only replaces the `input_csv` of the config being run (with step 1's
+processed sheet); every secondary config in a chain reads its own, which the docs' paged
+content workflows depend on and which the builder could not set. It is now an ordinary row
+(path-checked inside `input_dir`); `host` and `credentials_file_path`, which the run writes into
+the whole chain, stay in the band.

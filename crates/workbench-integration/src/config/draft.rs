@@ -24,7 +24,9 @@ pub struct ConfigDraft {
 }
 
 /// Written by the app at run time, so the builder never edits them (mockup `1a`'s locked band).
-pub const APP_SUPPLIED: [&str; 3] = ["host", "credentials_file_path", "input_csv"];
+/// `input_csv` used to be here too, but only the config you run has it replaced (by step 1's
+/// sheet); a secondary config in a chain always reads its own, so it has to be settable.
+pub const APP_SUPPLIED: [&str; 2] = ["host", "credentials_file_path"];
 
 impl ConfigDraft {
     pub fn load(path: &Path) -> anyhow::Result<Self> {

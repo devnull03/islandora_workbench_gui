@@ -612,9 +612,14 @@ mod tests {
     /// P0-11: app-supplied keys in a file are not a warning with nowhere to show it.
     #[test]
     fn app_supplied_keys_in_a_file_raise_nothing() {
-        let draft = ConfigDraft::from_yaml("task: create\nhost: https://x.org\ninput_csv: a.csv\n")
-            .unwrap();
+        let draft = ConfigDraft::from_yaml(
+            "task: create\nhost: https://x.org\ncredentials_file_path: /c.yml\n",
+        )
+        .unwrap();
         assert!(validate(&draft, &ValidationContext::default()).is_empty());
+        // input_csv is an ordinary setting now; a file that sets it is fine.
+        let draft = ConfigDraft::from_yaml("task: create\ninput_csv: a.csv\n").unwrap();
+        assert!(errors(&draft).is_empty());
     }
 
     /// Upstream `check_input`: these tasks exit without their setting.

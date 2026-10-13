@@ -15,11 +15,10 @@
       "key": "input_csv",
       "shape": "file_path",
       "default": "metadata.csv",
-      "description": "The processed sheet. Written by the app at run time.",
+      "description": "The CSV this config reads, inside input_dir. For the config you run, step 1's processed sheet replaces it.",
       "group": "Input",
       "required": false,
-      "browse": "file",
-      "locked": true
+      "browse": "file"
     },
     {
       "key": "media_use_tid",

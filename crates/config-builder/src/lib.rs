@@ -2017,7 +2017,7 @@ fn save_tooltip(problems: &[Problem]) -> SharedString {
 
 /// Where a locked setting's value comes from, in the words `1a` uses.
 ///
-/// A `match` rather than catalogue data: three keys, and the answer is about how *this app* runs
+/// A `match` rather than catalogue data: two keys, and the answer is about how *this app* runs
 /// Workbench, which the generated catalogue has no business knowing.
 ///
 /// A file loaded from disk may already set one of them. That is said here, in the band, rather
@@ -2029,10 +2029,6 @@ fn locked_source(key: &str, in_file: Option<&Value>) -> String {
         "host" => "Ingest server".into(),
         "credentials_file_path" if set_in_file => "set in file — replaced from app settings".into(),
         "credentials_file_path" => "App settings".into(),
-        // Plan Q2: the CSV step 1 produced, when it ran this session; otherwise the file's
-        // own `input_csv` stands.
-        "input_csv" if set_in_file => "set in file — used unless step 1 processes a source".into(),
-        "input_csv" => "Processed CSV from step 1".into(),
         _ => "The app".into(),
     }
 }
@@ -2316,10 +2312,5 @@ mod tests {
         let url = Value::String("https://x.org".into());
         assert_eq!(locked_source("host", None), "Ingest server");
         assert!(locked_source("host", Some(&url)).starts_with("set in file"));
-        assert!(locked_source("input_csv", Some(&url)).contains("unless step 1"));
-        assert_eq!(
-            locked_source("input_csv", Some(&Value::Null)),
-            "Processed CSV from step 1"
-        );
     }
 }
