@@ -24,6 +24,23 @@ pub enum InputSource<'a> {
     GoogleSheet(&'a str),
     /// A CSV already on this machine.
     CsvFile(&'a Path),
+    /// An Excel or OpenDocument spreadsheet on this machine, and the worksheet to read (the
+    /// first when `None`) — Workbench's own Excel input (`excel_worksheet`), but converted
+    /// here, so the built-in preprocessor and scripts get a CSV like any other source.
+    Spreadsheet {
+        path: &'a Path,
+        worksheet: Option<&'a str>,
+    },
+}
+
+/// Whether `path` names a spreadsheet the [`InputSource::Spreadsheet`] source reads.
+pub fn is_spreadsheet(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        matches!(
+            e.to_ascii_lowercase().as_str(),
+            "xlsx" | "xlsm" | "xls" | "ods"
+        )
+    })
 }
 
 /// What turns the source rows into `metadata.csv`.
@@ -87,12 +104,75 @@ fn acquire(source: InputSource<'_>, output_dir: &Path) -> Result<PathBuf> {
             anyhow::ensure!(path.is_file(), "no CSV at {}", path.display());
             Ok(path.to_path_buf())
         }
+        InputSource::Spreadsheet { path, worksheet } => {
+            let csv = spreadsheet_to_csv(path, worksheet)?;
+            let dest = output_dir.join("source.csv");
+            std::fs::write(&dest, csv).with_context(|| format!("write {}", dest.display()))?;
+            Ok(dest)
+        }
         InputSource::GoogleSheet(url) => {
             let csv = fetch_sheet(url)?;
             let dest = output_dir.join("source.csv");
             std::fs::write(&dest, csv).with_context(|| format!("write {}", dest.display()))?;
             Ok(dest)
         }
+    }
+}
+
+/// One worksheet as CSV text: every row, cells quoted where CSV needs it. Numbers that are whole
+/// are written without a trailing `.0`, as a person typing them into a CSV would.
+fn spreadsheet_to_csv(path: &Path, worksheet: Option<&str>) -> Result<String> {
+    use calamine::{Data, Reader, open_workbook_auto};
+    let mut book = open_workbook_auto(path)
+        .with_context(|| format!("Couldn't open the spreadsheet {}", path.display()))?;
+    let names = book.sheet_names().to_vec();
+    let name = match worksheet.map(str::trim).filter(|w| !w.is_empty()) {
+        Some(wanted) => names
+            .iter()
+            .find(|n| n.as_str() == wanted)
+            .cloned()
+            .with_context(|| {
+                format!(
+                    "{} has no worksheet called \"{wanted}\" (it has: {})",
+                    path.display(),
+                    names.join(", ")
+                )
+            })?,
+        None => names
+            .first()
+            .cloned()
+            .with_context(|| format!("{} has no worksheets", path.display()))?,
+    };
+    let range = book
+        .worksheet_range(&name)
+        .with_context(|| format!("Couldn't read the worksheet \"{name}\""))?;
+    let mut out = String::new();
+    for row in range.rows() {
+        let cells: Vec<String> = row
+            .iter()
+            .map(|cell| {
+                let text = match cell {
+                    Data::Empty => String::new(),
+                    Data::Float(f) if f.fract() == 0.0 && f.abs() < 1e15 => {
+                        format!("{}", *f as i64)
+                    }
+                    other => other.to_string(),
+                };
+                csv_field(&text)
+            })
+            .collect();
+        out.push_str(&cells.join(","));
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// A CSV field, quoted when it holds a comma, a quote or a line break.
+fn csv_field(text: &str) -> String {
+    if text.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", text.replace('"', "\"\""))
+    } else {
+        text.to_string()
     }
 }
 
@@ -233,6 +313,15 @@ fn capture(mut cmd: Command) -> Result<String> {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn csv_fields_are_quoted_only_when_needed() {
+        assert_eq!(super::csv_field("plain"), "plain");
+        assert_eq!(super::csv_field("a, b"), "\"a, b\"");
+        assert_eq!(super::csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert!(super::is_spreadsheet(std::path::Path::new("/x/Items.XLSX")));
+        assert!(!super::is_spreadsheet(std::path::Path::new("/x/items.csv")));
+    }
+
     #[test]
     fn a_sheet_link_keeps_its_worksheet() {
         let base = "https://docs.google.com/spreadsheets/d/abc123/edit";

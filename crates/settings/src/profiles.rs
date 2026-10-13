@@ -24,6 +24,7 @@ pub const PROFILE_KEYS: &[&str] = &[
     "input_source",
     "gdrive_link",
     "source_csv",
+    "source_worksheet",
     "ingest_files_dir",
     "preprocessor",
     "preprocess_scripts_dir",

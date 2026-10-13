@@ -237,3 +237,8 @@ pages, 12 not applicable to a front end) measured 88% and listed the gaps; these
   number, which is what Workbench compares with Drupal's `target_id` (a quoted "17" matched
   nothing).
 - *Exports.* After an export task the last-run strip opens `export_csv_file_path`.
+- *Spreadsheets.* The second input source is "CSV or spreadsheet": an `.xlsx`, `.xlsm`, `.xls` or
+  `.ods` path shows a Worksheet field (empty reads the first) and is converted to CSV in Rust
+  (`calamine`) before the processor runs, so the built-in preprocessor and scripts work on it
+  like any CSV. This covers Workbench's own Excel input (`excel_worksheet`) from step 1.
+  The worksheet is a profile setting (`source_worksheet`).

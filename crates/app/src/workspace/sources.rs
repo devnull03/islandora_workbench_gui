@@ -55,8 +55,8 @@ pub fn source_items() -> Vec<DetailSelectItem> {
         DetailSelectItem::new(SOURCE_SHEET, "Google Sheet → CSV")
             .subtitle("Fetch a published sheet")
             .tag("plugin"),
-        DetailSelectItem::new(SOURCE_CSV, "CSV file")
-            .subtitle("A CSV already on this machine")
+        DetailSelectItem::new(SOURCE_CSV, "CSV or spreadsheet")
+            .subtitle("A CSV, Excel or OpenDocument file on this machine")
             .tag("plugin")
             .divider_above(true),
     ]

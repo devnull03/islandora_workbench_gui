@@ -50,7 +50,8 @@ pub use config::{APP_SUPPLIED, ConfigDraft, WorkbenchConfigHandler};
 
 pub use check::{ServerCheck, check_server};
 pub use preprocess::{
-    InputSource, PreprocessJob, PreprocessResult, ProcessResult, Processor, run as run_preprocess,
+    InputSource, PreprocessJob, PreprocessResult, ProcessResult, Processor, is_spreadsheet,
+    run as run_preprocess,
 };
 pub use provision::provision_workbench;
 

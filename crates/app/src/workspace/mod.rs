@@ -22,7 +22,8 @@ use gpui_component::{
     v_flex,
 };
 use workbench_integration::{
-    InputSource, PreprocessJob, config::ConfigDraft, language_url_from_server_base, run_preprocess,
+    InputSource, PreprocessJob, config::ConfigDraft, is_spreadsheet, language_url_from_server_base,
+    run_preprocess,
 };
 
 use settings::AppSettings;
@@ -105,6 +106,8 @@ pub struct Workspace {
     /// not lose the URL you already pasted, and the two persist under their own settings keys.
     gdrive_link: Entity<InputState>,
     source_csv: Entity<InputState>,
+    /// The worksheet to read when `source_csv` names a spreadsheet; empty for the first.
+    source_worksheet: Entity<InputState>,
     ingest_files_dir: Entity<InputState>,
     input_source_select: Entity<SelectState<Vec<DetailSelectItem>>>,
     processor_select: Entity<SelectState<Vec<DetailSelectItem>>>,
@@ -131,8 +134,11 @@ impl Workspace {
     pub fn new(log_viewer: Entity<LogViewer>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let gdrive_link = cx.new(|cx| InputState::new(window, cx).placeholder("Sheet URL..."));
 
-        let source_csv =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Path to a CSV file..."));
+        let source_csv = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Path to a CSV or spreadsheet file...")
+        });
+        let source_worksheet =
+            cx.new(|cx| InputState::new(window, cx).placeholder("first worksheet"));
 
         let ingest_files_dir =
             cx.new(|cx| InputState::new(window, cx).placeholder("Directory for ingest files..."));
@@ -161,6 +167,7 @@ impl Workspace {
             };
         restore(&gdrive_link, "gdrive_link", window, cx);
         restore(&source_csv, "source_csv", window, cx);
+        restore(&source_worksheet, "source_worksheet", window, cx);
         restore(&ingest_files_dir, "ingest_files_dir", window, cx);
 
         let saved_source = AppSettings::get(cx)
@@ -224,6 +231,16 @@ impl Workspace {
                     this.forget_processed();
                     let val = this.source_csv.read(cx).value();
                     AppSettings::set_text("source_csv", val, cx);
+                    cx.notify();
+                }
+            }),
+        );
+        _subscriptions.push(
+            cx.subscribe(&source_worksheet, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.forget_processed();
+                    let val = this.source_worksheet.read(cx).value();
+                    AppSettings::set_text("source_worksheet", val, cx);
                     cx.notify();
                 }
             }),
@@ -319,6 +336,7 @@ impl Workspace {
             focus_handle: cx.focus_handle(),
             gdrive_link,
             source_csv,
+            source_worksheet,
             ingest_files_dir,
             input_source_select,
             processor_select,
@@ -419,6 +437,7 @@ impl Workspace {
         for (state, key) in [
             (self.gdrive_link.clone(), "gdrive_link"),
             (self.source_csv.clone(), "source_csv"),
+            (self.source_worksheet.clone(), "source_worksheet"),
             (self.ingest_files_dir.clone(), "ingest_files_dir"),
         ] {
             let value = text(key, cx);
@@ -597,6 +616,7 @@ impl Workspace {
         cx.notify();
         let source_key = self.source_key(cx);
         let source_value = self.source_field(cx).read(cx).value().to_string();
+        let worksheet = self.source_worksheet.read(cx).value().trim().to_string();
         let processor = self.processor_choice(cx);
         let config_path = self
             .saved_config_select
@@ -637,8 +657,14 @@ impl Workspace {
         cx.spawn_in(window, async move |_, cx| {
             let result = cx
                 .background_spawn(async move {
-                    let source = if source_key == SOURCE_CSV {
-                        InputSource::CsvFile(Path::new(&source_value))
+                    let path = Path::new(&source_value);
+                    let source = if source_key == SOURCE_CSV && is_spreadsheet(path) {
+                        InputSource::Spreadsheet {
+                            path,
+                            worksheet: Some(worksheet.as_str()),
+                        }
+                    } else if source_key == SOURCE_CSV {
+                        InputSource::CsvFile(path)
                     } else {
                         InputSource::GoogleSheet(&source_value)
                     };

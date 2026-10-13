@@ -27,25 +27,48 @@ impl Workspace {
         let is_csv = self.source_key(cx) == SOURCE_CSV;
         let state = self.source_field(cx).clone();
 
-        LabeledField::new(if is_csv { "Source CSV" } else { "Sheet URL" }).child(
-            FieldRow::new(Input::new(&state).w_full().disabled(!idle)).when(is_csv, |row| {
-                row.child(
-                    app_button("browse-source-csv")
-                        .icon(IconName::FolderOpen)
-                        .outline()
-                        .disabled(!idle)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            ui::pick_into(
-                                window,
-                                cx,
-                                &this.source_csv,
-                                "Select the source CSV",
-                                false,
-                            );
-                        })),
-                )
-            }),
-        )
+        // A spreadsheet is read one worksheet at a time; say which (empty: the first).
+        let spreadsheet = is_csv
+            && workbench_integration::is_spreadsheet(std::path::Path::new(
+                state.read(cx).value().trim(),
+            ));
+        let worksheet = spreadsheet.then(|| {
+            LabeledField::new("Worksheet")
+                .child(Input::new(&self.source_worksheet).w_full().disabled(!idle))
+        });
+        v_flex()
+            .w_full()
+            .gap_3()
+            .child(
+                LabeledField::new(if is_csv {
+                    "Source CSV or spreadsheet"
+                } else {
+                    "Sheet URL"
+                })
+                .child(
+                    FieldRow::new(Input::new(&state).w_full().disabled(!idle)).when(
+                        is_csv,
+                        |row| {
+                            row.child(
+                                app_button("browse-source-csv")
+                                    .icon(IconName::FolderOpen)
+                                    .outline()
+                                    .disabled(!idle)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        ui::pick_into(
+                                            window,
+                                            cx,
+                                            &this.source_csv,
+                                            "Select the source CSV or spreadsheet",
+                                            false,
+                                        );
+                                    })),
+                            )
+                        },
+                    ),
+                ),
+            )
+            .children(worksheet)
     }
 
     /// The profile bar above step 1 (`2c`, `3c`): eyebrow, dropdown, Manage profiles. Hidden
